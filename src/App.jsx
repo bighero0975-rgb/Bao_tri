@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter } from 'lucide-react';
 
 // --- MOCK DATA ---
@@ -26,6 +26,67 @@ const INITIAL_LOGS = [
   }
 ];
 
+// --- COMPONENT CAMERA THẬT (Không dùng thư viện ngoài) ---
+const NativeCameraScanner = ({ onScan }) => {
+  const videoRef = useRef(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let stream = null;
+
+    const startCamera = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { facingMode: 'environment' } 
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (err) {
+        console.error("Lỗi camera:", err);
+        setError("Không thể truy cập camera. Vui lòng cho phép quyền truy cập.");
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  return (
+    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+      {error ? (
+        <div className="text-white text-center p-4">
+          <AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" />
+          <p>{error}</p>
+        </div>
+      ) : (
+        <video 
+          ref={videoRef} 
+          autoPlay 
+          playsInline 
+          className="absolute w-full h-full object-cover"
+        />
+      )}
+      
+      {/* Khung quét */}
+      <div className="absolute inset-0 border-[50px] border-black/50 flex items-center justify-center pointer-events-none z-10">
+        <div className="w-64 h-64 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]">
+          <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
+        </div>
+      </div>
+      
+      <p className="absolute bottom-20 text-white text-sm bg-black/50 px-4 py-2 rounded-full z-20">
+        Đang sử dụng Camera thật
+      </p>
+    </div>
+  );
+};
+
 export default function App() {
   // --- STATE ---
   const [user, setUser] = useState(null); 
@@ -34,7 +95,6 @@ export default function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [showQrCode, setShowQrCode] = useState(false);
   
   // State cho Google Sheet
   const [googleSheetUrl, setGoogleSheetUrl] = useState(localStorage.getItem('gs_url') || '');
@@ -58,14 +118,17 @@ export default function App() {
     setSelectedMachine(null);
   };
 
-  const handleScanSuccess = (machineId) => {
-    const machine = machines.find(m => m.id === machineId);
+  const handleScanSuccess = (id) => {
+    if (!id) return;
+
+    const machine = machines.find(m => m.id === id);
     if (machine) {
       setSelectedMachine(machine);
-      setShowQrCode(false);
       setView('details');
     } else {
-      showNotification('Không tìm thấy mã máy này!', 'error');
+      if (typeof id === 'string' && id.length > 2) {
+          showNotification(`Không tìm thấy mã: ${id}`, 'error');
+      }
     }
   };
 
@@ -277,7 +340,6 @@ export default function App() {
     </div>
   );
 
-  // Home View - Cập nhật để tách 2 nút
   const HomeView = () => (
     <div className="flex flex-col items-center justify-center h-full space-y-8 p-6 relative">
       <div className="absolute top-4 right-4 flex items-center space-x-3">
@@ -289,7 +351,6 @@ export default function App() {
         <h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1>
       </div>
       
-      {/* Tách thành 2 nút riêng biệt */}
       <div className="w-full max-w-xs space-y-4">
           <button 
             onClick={() => setView('scanner')} 
@@ -314,11 +375,10 @@ export default function App() {
     </div>
   );
 
-  // Scanner View - Chỉ còn giao diện Camera
+  // Scanner View with REAL CAMERA (Native)
   const ScannerView = () => {
     return (
       <div className="flex flex-col h-full bg-black relative">
-        {/* Header Back Button */}
         <div className="absolute top-0 left-0 right-0 p-4 z-20">
           <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
             <ArrowLeft className="w-5 h-5" />
@@ -326,42 +386,32 @@ export default function App() {
           </button>
         </div>
 
-        {/* Camera Simulation (Visual only) */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             <div className="w-64 h-64 border-2 border-white/50 rounded-3xl relative">
-               <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -mt-1 -ml-1"></div>
-               <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -mt-1 -mr-1"></div>
-               <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -mb-1 -ml-1"></div>
-               <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl -mb-1 -mr-1"></div>
-               <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/50 animate-pulse"></div>
-             </div>
-             <p className="absolute mt-80 text-white/80 text-sm font-medium">Di chuyển camera đến mã QR</p>
-        </div>
-
-        {/* Mock Buttons for Demo purpose - Hidden in real app */}
-        <div className="absolute bottom-8 left-0 right-0 px-6 z-20">
-             <p className="text-white/50 text-xs text-center mb-2">Demo: Nhấn để giả lập quét thành công</p>
-             <div className="flex gap-2 overflow-x-auto pb-2">
-                 {machines.map(m => (
-                     <button 
-                        key={m.id} 
-                        onClick={() => handleScanSuccess(m.id)}
-                        className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10"
-                     >
-                        {m.name}
-                     </button>
-                 ))}
-             </div>
+        <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+            {/* Native Camera Component - Displays Video Feed */}
+            <NativeCameraScanner />
+            
+            {/* Demo/Fallback controls since decoding isn't built-in to native <video> */}
+             <div className="absolute bottom-8 left-0 right-0 px-6 z-20">
+                 <p className="text-white/50 text-xs text-center mb-2">Chế độ Camera: Bấm tên máy để mô phỏng quét</p>
+                 <div className="flex gap-2 overflow-x-auto pb-2">
+                     {machines.map(m => (
+                         <button 
+                            key={m.id} 
+                            onClick={() => handleScanSuccess(m.id)}
+                            className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10"
+                         >
+                            {m.name}
+                         </button>
+                     ))}
+                 </div>
+            </div>
         </div>
       </div>
     );
   };
 
-  // Manual Select View - Giao diện tìm kiếm mới
   const ManualSelectView = () => {
     const [searchTerm, setSearchTerm] = useState('');
-    
-    // Filter logic
     const filteredMachines = machines.filter(m => 
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       m.id.toLowerCase().includes(searchTerm.toLowerCase())
