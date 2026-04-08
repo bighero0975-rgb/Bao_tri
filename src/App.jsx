@@ -5,8 +5,7 @@ import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, Use
 // --- MOCK DATA ---
 const USERS = [
   { username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
-  { username: 'tech', password: '123', name: 'KTV Nguyễn Văn A', role: 'maintenance' },
-  { username: 'tech2', password: '123', name: 'KTV Trần Thị B', role: 'maintenance' }
+  { username: 'tech', password: '', name: 'Kỹ Thuật Viên', role: 'maintenance' }
 ];
 
 // Thay thế danh sách thiết bị của bạn vào đây
@@ -248,7 +247,7 @@ export default function App() {
       id: Date.now(),
       machineId: selectedMachine.id,
       date: new Date().toISOString().split('T')[0],
-      technician: user.name, 
+      technician: newLog.technicianName || user.name, 
       ...newLog
     };
     
@@ -290,8 +289,7 @@ export default function App() {
     const [password, setPassword] = useState('');
     const [isAdminView, setIsAdminView] = useState(false);
 
-    // Lọc ra danh sách những người là Kỹ thuật viên (không cần pass)
-    const techUsers = USERS.filter(u => u.role === 'maintenance');
+    const techUser = USERS.find(u => u.role === 'maintenance');
 
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 bg-slate-900 text-white animate-fade-in overflow-y-auto">
@@ -310,22 +308,18 @@ export default function App() {
                 Dành cho Kỹ thuật viên
               </h3>
               
-              {/* Danh sách KTV bấm vào là đăng nhập luôn */}
-              {techUsers.map((tech) => (
-                <button 
-                  key={tech.username}
-                  onClick={() => handleTechLogin(tech)} 
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-slate-700 p-2 rounded-full">
-                      <User className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <span className="font-medium text-lg">{tech.name}</span>
+              <button 
+                onClick={() => handleTechLogin(techUser)} 
+                className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="bg-slate-700 p-2 rounded-full">
+                    <User className="w-5 h-5 text-blue-400" />
                   </div>
-                  <ArrowLeft className="w-5 h-5 rotate-180 text-slate-500" />
-                </button>
-              ))}
+                  <span className="font-medium text-lg">Đăng nhập KTV</span>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-500" />
+              </button>
 
               <div className="pt-6 border-t border-slate-800">
                 <button 
@@ -384,6 +378,13 @@ export default function App() {
                 <div className="flex items-center space-x-3">
                   <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div>
                   <div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất CSV</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất CSV</p></div>
                 </div>
                 <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
@@ -480,11 +481,9 @@ export default function App() {
           newMachinesList.forEach(newM => {
               const existingIndex = updatedMachines.findIndex(item => item.id === newM.id);
               if (existingIndex > -1) {
-                  // Ghi đè thông tin thiết bị đã có
                   updatedMachines[existingIndex] = { ...updatedMachines[existingIndex], ...newM };
                   updatedCount++;
               } else {
-                  // Thêm thiết bị mới
                   updatedMachines.push(newM);
                   addedCount++;
               }
@@ -547,6 +546,223 @@ export default function App() {
               ))
             ) : (
               <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // --- THÊM LẠI COMPONENT INVENTORY VIEW ---
+  const InventoryView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [newItem, setNewItem] = useState({ name: '', unit: '', quantity: '' });
+    const fileInputRef = useRef(null);
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', unit: '', quantity: '' });
+
+    const filteredInventory = inventory.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleAddOrUpdate = () => {
+      if (!newItem.name || !newItem.unit || !newItem.quantity) {
+        showNotification('Vui lòng nhập đủ thông tin!', 'error');
+        return;
+      }
+      const existingIndex = inventory.findIndex(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+      if (existingIndex > -1) {
+        const newInv = [...inventory];
+        newInv[existingIndex].quantity += Number(newItem.quantity);
+        newInv[existingIndex].unit = newItem.unit;
+        setInventory(newInv);
+        showNotification(`Đã cộng thêm ${newItem.quantity} vào ${newItem.name}`);
+      } else {
+        setInventory([...inventory, {
+          id: 'P-' + Date.now(),
+          name: newItem.name,
+          unit: newItem.unit,
+          quantity: Number(newItem.quantity)
+        }]);
+        showNotification('Đã thêm vật tư mới vào kho!');
+      }
+      setNewItem({ name: '', unit: '', quantity: '' }); 
+    };
+
+    const startEdit = (item) => {
+        setEditingId(item.id);
+        setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity });
+    };
+
+    const saveEdit = () => {
+        if (!editForm.name || !editForm.unit || editForm.quantity === '') {
+            showNotification('Vui lòng nhập đủ thông tin!', 'error');
+            return;
+        }
+        const updated = inventory.map(item => 
+            item.id === editingId 
+                ? { ...item, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) } 
+                : item
+        );
+        setInventory(updated);
+        setEditingId(null);
+        showNotification('Đã cập nhật vật tư thành công!');
+    };
+
+    const handleExportCSV = () => {
+      const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
+      const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
+      const csvContent = "\ufeff" + [
+        headers.join(','), 
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `Ton_Kho_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showNotification('Đã tải xuống file Ton_Kho.csv');
+    };
+
+    const handleImportCSV = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const text = event.target.result;
+          const lines = text.split('\n');
+          if (lines.length < 2) throw new Error("File trống hoặc sai định dạng");
+          const newInvList = [];
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
+            if (cols.length >= 4) {
+               newInvList.push({ id: cols[0], name: cols[1], unit: cols[2], quantity: Number(cols[3]) || 0 });
+            }
+          }
+          let updatedInventory = [...inventory];
+          let addedCount = 0;
+          let updatedCount = 0;
+          newInvList.forEach(newItem => {
+              let existingIndex = updatedInventory.findIndex(item => item.id === newItem.id);
+              if (existingIndex === -1) {
+                  existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
+              }
+              if (existingIndex > -1) {
+                  updatedInventory[existingIndex].quantity = newItem.quantity; 
+                  updatedInventory[existingIndex].unit = newItem.unit;
+                  updatedCount++;
+              } else {
+                  updatedInventory.push({
+                      id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+                      name: newItem.name, unit: newItem.unit, quantity: newItem.quantity
+                  });
+                  addedCount++;
+              }
+          });
+          setInventory(updatedInventory);
+          showNotification(`Đã cập nhật: ${updatedCount} mã, Thêm mới: ${addedCount} mã`, 'success');
+        } catch (err) {
+          console.error(err);
+          showNotification('Lỗi đọc file. Đảm bảo file đúng định dạng CSV.', 'error');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = null; 
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                  <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+                  <h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2>
+              </div>
+          </div>
+
+          {user.role === 'admin' && (
+            <div className="flex gap-2">
+                <button onClick={handleExportCSV} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+                    <Download className="w-4 h-4 text-blue-600" /> Tải File (.csv)
+                </button>
+                <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
+                <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
+                    <Upload className="w-4 h-4 text-green-600" /> Nhập Kho (.csv)
+                </button>
+            </div>
+          )}
+          
+          <div className="relative">
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+              <input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {user.role === 'admin' && (
+            <div className="bg-slate-100/50 p-3 rounded-xl border border-dashed border-slate-300 mb-2">
+              <h3 className="text-[11px] uppercase font-bold text-slate-500 mb-2">Thêm nhanh thủ công</h3>
+              <div className="flex flex-col gap-2">
+                <input placeholder="Tên vật tư (VD: Dầu nhớt)" className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                <div className="flex gap-2">
+                    <input placeholder="Đơn vị" className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
+                    <input placeholder="SL" type="number" className="w-1/4 p-2 border border-slate-300 rounded-lg text-sm bg-white" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} />
+                    <button onClick={handleAddOrUpdate} className="w-1/4 bg-slate-800 text-white p-2 rounded-lg font-medium text-sm hover:bg-slate-700 flex justify-center items-center shadow-sm"><Plus className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
+              <span>Danh sách tồn kho ({filteredInventory.length})</span>
+          </div>
+          
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            {filteredInventory.length > 0 ? (
+              filteredInventory.map((item, index) => (
+                <div key={item.id} className={`p-4 flex flex-col ${index !== filteredInventory.length -1 ? 'border-b border-slate-100' : ''}`}>
+                  {editingId === item.id ? (
+                    <div className="flex flex-col gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-inner">
+                      <input className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên vật tư" />
+                      <div className="flex gap-2">
+                          <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} placeholder="Đơn vị" />
+                          <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} placeholder="Số lượng" />
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => setEditingId(null)} className="px-4 py-1.5 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors">Hủy</button>
+                          <button onClick={saveEdit} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">Lưu</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h4 className="font-bold text-slate-800">{item.name}</h4>
+                        <p className="text-xs text-slate-500 font-mono mt-0.5">{item.id}</p>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <div className="text-right">
+                          <span className={`font-bold text-lg ${item.quantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>{item.quantity}</span>
+                          <span className="text-sm text-slate-500 ml-1">{item.unit}</span>
+                          {item.quantity < 10 && <p className="text-[10px] text-red-500 font-medium">Sắp hết</p>}
+                        </div>
+                        {user.role === 'admin' && (
+                          <button onClick={() => startEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy vật tư.</div>
             )}
           </div>
         </div>
