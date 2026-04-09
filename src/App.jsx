@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database } from 'lucide-react';
-// KHÔNG import jsQR ở đây để tránh lỗi biên dịch (Build Error) trên Vercel/Stackblitz
 
 // --- MOCK DATA ---
 const USERS = [
@@ -8,15 +7,11 @@ const USERS = [
   { username: 'tech', password: '', name: 'Kỹ Thuật Viên', role: 'maintenance' }
 ];
 
-// Thay thế danh sách thiết bị của bạn vào đây
 const INITIAL_MACHINES = [
   { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A - Khu vực 2', department: 'Xưởng Cơ Khí', status: 'operational' },
   { id: 'M-102', name: 'Máy Ép Nhựa Thủy Lực', model: 'Haitian Mars II', location: 'Xưởng B - Cổng chính', department: 'Xưởng Ép Nhựa', status: 'maintenance' },
   { id: 'M-103', name: 'Hệ Thống Băng Tải Tự Động', model: 'Conveyor Pro X', location: 'Kho Thành Phẩm', department: 'Phòng Kho vận', status: 'broken' },
-  { id: 'M-104', name: 'Cánh Tay Robot Hàn', model: 'Kuka KR-16', location: 'Xưởng C - Dây chuyền 1', department: 'Xưởng Cơ Khí', status: 'operational' },
-  
-  // Bạn có thể copy/paste theo cấu trúc này để thêm hàng trăm máy khác:
-  // { id: 'MÃ THIẾT BỊ', name: 'TÊN', model: 'MODEL', location: 'VỊ TRÍ', department: 'ĐƠN VỊ SỬ DỤNG', status: 'operational' },
+  { id: 'M-104', name: 'Cánh Tay Robot Hàn', model: 'Kuka KR-16', location: 'Xưởng C - Dây chuyền 1', department: 'Xưởng Cơ Khí', status: 'operational' }
 ];
 
 const INITIAL_LOGS = [
@@ -44,7 +39,6 @@ const NativeCameraScanner = ({ onScan }) => {
   const [error, setError] = useState(null);
   const [isJsQRLoaded, setIsJsQRLoaded] = useState(false);
 
-  // Tải thư viện jsQR từ CDN một cách an toàn
   useEffect(() => {
     if (window.jsQR) {
         setIsJsQRLoaded(true);
@@ -67,7 +61,7 @@ const NativeCameraScanner = ({ onScan }) => {
     const startCamera = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment' } // Bắt buộc dùng camera sau
+          video: { facingMode: 'environment' }
         });
         
         if (videoRef.current) {
@@ -93,19 +87,13 @@ const NativeCameraScanner = ({ onScan }) => {
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
             
             if (ctx) {
-                // Đổ hình ảnh từ video sang canvas để phân tích
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Gọi bộ giải mã jsQR
-                const code = window.jsQR(imageData.data, imageData.width, imageData.height, {
-                  inversionAttempts: "dontInvert",
-                });
+                const code = window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
     
                 if (code && code.data) {
-                  // Đã quét thành công
                   onScan(code.data);
-                  return; // Dừng vòng lặp quét
+                  return;
                 }
             }
         }
@@ -116,42 +104,26 @@ const NativeCameraScanner = ({ onScan }) => {
     startCamera();
 
     return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-      if (animationFrameId) {
-        cancelAnimationFrame(animationFrameId);
-      }
+      if (stream) { stream.getTracks().forEach(track => track.stop()); }
+      if (animationFrameId) { cancelAnimationFrame(animationFrameId); }
     };
   }, [isJsQRLoaded, onScan]);
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
       {error ? (
-        <div className="text-white text-center p-4 z-20">
-          <AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" />
-          <p>{error}</p>
-        </div>
+        <div className="text-white text-center p-4 z-20"><AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" /><p>{error}</p></div>
       ) : (
         <>
-            <video 
-              ref={videoRef} 
-              playsInline 
-              muted
-              className="absolute w-full h-full object-cover"
-            />
-            {/* Canvas ẩn bắt buộc phải có để phân tích hình ảnh */}
+            <video ref={videoRef} playsInline muted className="absolute w-full h-full object-cover" />
             <canvas ref={canvasRef} className="hidden" />
         </>
       )}
-      
-      {/* Khung quét */}
       <div className="absolute inset-0 border-[50px] border-black/50 flex items-center justify-center pointer-events-none z-10">
         <div className="w-64 h-64 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]">
           <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
         </div>
       </div>
-      
       <p className="absolute bottom-20 text-white text-sm bg-black/50 px-4 py-2 rounded-full z-20 backdrop-blur-sm">
         {isJsQRLoaded ? "Đang quét mã QR..." : "Đang tải bộ giải mã..."}
       </p>
@@ -160,7 +132,6 @@ const NativeCameraScanner = ({ onScan }) => {
 };
 
 export default function App() {
-  // --- STATE ---
   const [user, setUser] = useState(null); 
   const [view, setView] = useState('login'); 
   const [machines, setMachines] = useState(INITIAL_MACHINES);
@@ -168,10 +139,8 @@ export default function App() {
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
-  
   const [googleSheetUrl, setGoogleSheetUrl] = useState(localStorage.getItem('gs_url') || '');
 
-  // --- ACTIONS ---
   const handleLogin = (username, password) => {
     const foundUser = USERS.find(u => u.username === username && u.password === password);
     if (foundUser) {
@@ -206,16 +175,13 @@ export default function App() {
       showNotification(`Quét thành công: ${machine.name}`);
     } else {
       if (typeof id === 'string' && id.length > 2) {
-          if (!notification) {
-            showNotification(`Mã không hợp lệ: ${id}`, 'error');
-          }
+          if (!notification) { showNotification(`Mã không hợp lệ: ${id}`, 'error'); }
       }
     }
   };
 
   const saveToGoogleSheet = async (logData) => {
     if (!googleSheetUrl) return;
-
     try {
       const formData = new FormData();
       formData.append('id', logData.id);
@@ -226,16 +192,11 @@ export default function App() {
       formData.append('type', logData.type);
       formData.append('note', logData.note);
       formData.append('status', logData.status);
-      
       const partsStr = logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ');
       formData.append('parts', partsStr);
       formData.append('images_count', logData.images.length); 
 
-      await fetch(googleSheetUrl, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors'
-      });
+      await fetch(googleSheetUrl, { method: 'POST', body: formData, mode: 'no-cors' });
       console.log("Đã gửi dữ liệu lên Google Sheet");
     } catch (error) {
       console.error("Lỗi gửi Google Sheet:", error);
@@ -274,7 +235,6 @@ export default function App() {
     } else {
         showNotification('Đã lưu cục bộ (Chưa cấu hình Google Sheet)', 'success');
     }
-
     setView('details');
   };
 
@@ -288,7 +248,6 @@ export default function App() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [isAdminView, setIsAdminView] = useState(false);
-
     const techUser = USERS.find(u => u.role === 'maintenance');
 
     return (
@@ -308,34 +267,23 @@ export default function App() {
                 Dành cho Kỹ thuật viên
               </h3>
               
-              <button 
-                onClick={() => handleTechLogin(techUser)} 
-                className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700"
-              >
+              <button onClick={() => handleTechLogin(techUser)} className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700">
                 <div className="flex items-center space-x-3">
-                  <div className="bg-slate-700 p-2 rounded-full">
-                    <User className="w-5 h-5 text-blue-400" />
-                  </div>
+                  <div className="bg-slate-700 p-2 rounded-full"><User className="w-5 h-5 text-blue-400" /></div>
                   <span className="font-medium text-lg">Đăng nhập KTV</span>
                 </div>
                 <ArrowLeft className="w-5 h-5 rotate-180 text-slate-500" />
               </button>
 
               <div className="pt-6 border-t border-slate-800">
-                <button 
-                  onClick={() => setIsAdminView(true)} 
-                  className="w-full bg-transparent border border-slate-700 text-slate-300 hover:text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center"
-                >
+                <button onClick={() => setIsAdminView(true)} className="w-full bg-transparent border border-slate-700 text-slate-300 hover:text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center">
                   <Lock className="w-4 h-4 mr-2" /> Đăng nhập Quản trị (Admin)
                 </button>
               </div>
             </div>
           ) : (
             <div className="space-y-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative">
-              <button 
-                onClick={() => setIsAdminView(false)} 
-                className="absolute -top-4 -left-4 bg-slate-700 p-2 rounded-full hover:bg-slate-600 transition-colors shadow-lg"
-              >
+              <button onClick={() => setIsAdminView(false)} className="absolute -top-4 -left-4 bg-slate-700 p-2 rounded-full hover:bg-slate-600 transition-colors shadow-lg">
                 <ArrowLeft className="w-5 h-5 text-white" />
               </button>
               <h3 className="text-lg font-bold text-center mb-4">Đăng nhập Admin</h3>
@@ -375,39 +323,19 @@ export default function App() {
           <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị</h3>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
              <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div>
-                  <div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất CSV</p></div>
-                </div>
-                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất CSV</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div>
-                  <div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất CSV</p></div>
-                </div>
-                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất CSV</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('qr_print')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div>
-                  <div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div>
-                </div>
-                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div>
-                  <div className="text-left"><p className="font-medium text-slate-800">Cấu hình Google Sheet</p><p className="text-xs text-slate-500">Kết nối cơ sở dữ liệu báo cáo</p></div>
-                </div>
-                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cấu hình Google Sheet</p><p className="text-xs text-slate-500">Kết nối cơ sở dữ liệu báo cáo</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><QrCode className="w-5 h-5" /></div>
-                  <div className="text-left"><p className="font-medium text-slate-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-slate-500">Vào giao diện quét & chọn máy</p></div>
-                </div>
-                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><QrCode className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-slate-500">Vào giao diện quét & chọn máy</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
           </div>
         </div>
@@ -427,12 +355,7 @@ export default function App() {
     const handleExportCSV = () => {
       const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
       const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
-      
-      const csvContent = "\ufeff" + [
-        headers.join(','), 
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n');
-      
+      const csvContent = "\ufeff" + [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -441,7 +364,6 @@ export default function App() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       showNotification('Đã tải xuống file Danh_Sach_Thiet_Bi.csv');
     };
 
@@ -452,17 +374,22 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const text = event.target.result;
+          // Fix lỗi \r của Windows
+          const text = event.target.result.replace(/\r/g, '');
           const lines = text.split('\n');
           if (lines.length < 2) throw new Error("File trống hoặc sai định dạng");
+          
+          // Fix lỗi Excel lưu CSV bằng dấu chấm phẩy (;) ở khu vực Việt Nam
+          const separator = lines[0].includes(';') ? ';' : ',';
           
           const newMachinesList = [];
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
             
-            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
-            if (cols.length >= 2) {
+            const cols = line.split(separator).map(c => c.replace(/^"|"$/g, '').trim());
+            // Chỉ thêm nếu dòng đó có chứa ID (cột 1)
+            if (cols.length >= 2 && cols[0]) {
                newMachinesList.push({
                    id: cols[0],
                    name: cols[1],
@@ -553,7 +480,6 @@ export default function App() {
     );
   };
 
-  // --- THÊM LẠI COMPONENT INVENTORY VIEW ---
   const InventoryView = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [newItem, setNewItem] = useState({ name: '', unit: '', quantity: '' });
@@ -561,15 +487,10 @@ export default function App() {
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({ name: '', unit: '', quantity: '' });
 
-    const filteredInventory = inventory.filter(item => 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
     const handleAddOrUpdate = () => {
-      if (!newItem.name || !newItem.unit || !newItem.quantity) {
-        showNotification('Vui lòng nhập đủ thông tin!', 'error');
-        return;
-      }
+      if (!newItem.name || !newItem.unit || !newItem.quantity) { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
       const existingIndex = inventory.findIndex(i => i.name.toLowerCase() === newItem.name.toLowerCase());
       if (existingIndex > -1) {
         const newInv = [...inventory];
@@ -578,12 +499,7 @@ export default function App() {
         setInventory(newInv);
         showNotification(`Đã cộng thêm ${newItem.quantity} vào ${newItem.name}`);
       } else {
-        setInventory([...inventory, {
-          id: 'P-' + Date.now(),
-          name: newItem.name,
-          unit: newItem.unit,
-          quantity: Number(newItem.quantity)
-        }]);
+        setInventory([...inventory, { id: 'P-' + Date.now(), name: newItem.name, unit: newItem.unit, quantity: Number(newItem.quantity) }]);
         showNotification('Đã thêm vật tư mới vào kho!');
       }
       setNewItem({ name: '', unit: '', quantity: '' }); 
@@ -595,15 +511,8 @@ export default function App() {
     };
 
     const saveEdit = () => {
-        if (!editForm.name || !editForm.unit || editForm.quantity === '') {
-            showNotification('Vui lòng nhập đủ thông tin!', 'error');
-            return;
-        }
-        const updated = inventory.map(item => 
-            item.id === editingId 
-                ? { ...item, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) } 
-                : item
-        );
+        if (!editForm.name || !editForm.unit || editForm.quantity === '') { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
+        const updated = inventory.map(item => item.id === editingId ? { ...item, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) } : item);
         setInventory(updated);
         setEditingId(null);
         showNotification('Đã cập nhật vật tư thành công!');
@@ -612,10 +521,7 @@ export default function App() {
     const handleExportCSV = () => {
       const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
       const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
-      const csvContent = "\ufeff" + [
-        headers.join(','), 
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n');
+      const csvContent = "\ufeff" + [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -633,15 +539,19 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
-          const text = event.target.result;
+          // Fix lỗi tương tự cho Kho vật tư (lọc \r và tự nhận diện dấu ngăn cách)
+          const text = event.target.result.replace(/\r/g, '');
           const lines = text.split('\n');
           if (lines.length < 2) throw new Error("File trống hoặc sai định dạng");
+          
+          const separator = lines[0].includes(';') ? ';' : ',';
+
           const newInvList = [];
           for (let i = 1; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
-            const cols = line.split(',').map(c => c.replace(/^"|"$/g, '').trim());
-            if (cols.length >= 4) {
+            const cols = line.split(separator).map(c => c.replace(/^"|"$/g, '').trim());
+            if (cols.length >= 4 && cols[0]) {
                newInvList.push({ id: cols[0], name: cols[1], unit: cols[2], quantity: Number(cols[3]) || 0 });
             }
           }
@@ -650,18 +560,14 @@ export default function App() {
           let updatedCount = 0;
           newInvList.forEach(newItem => {
               let existingIndex = updatedInventory.findIndex(item => item.id === newItem.id);
-              if (existingIndex === -1) {
-                  existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
-              }
+              if (existingIndex === -1) existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
+              
               if (existingIndex > -1) {
                   updatedInventory[existingIndex].quantity = newItem.quantity; 
                   updatedInventory[existingIndex].unit = newItem.unit;
                   updatedCount++;
               } else {
-                  updatedInventory.push({
-                      id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-                      name: newItem.name, unit: newItem.unit, quantity: newItem.quantity
-                  });
+                  updatedInventory.push({ id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, name: newItem.name, unit: newItem.unit, quantity: newItem.quantity });
                   addedCount++;
               }
           });
@@ -680,28 +586,16 @@ export default function App() {
       <div className="flex flex-col h-full bg-slate-50">
         <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                  <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
-                  <h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2>
-              </div>
+              <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2></div>
           </div>
-
           {user.role === 'admin' && (
             <div className="flex gap-2">
-                <button onClick={handleExportCSV} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
-                    <Download className="w-4 h-4 text-blue-600" /> Tải File (.csv)
-                </button>
+                <button onClick={handleExportCSV} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Download className="w-4 h-4 text-blue-600" /> Tải File (.csv)</button>
                 <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
-                <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
-                    <Upload className="w-4 h-4 text-green-600" /> Nhập Kho (.csv)
-                </button>
+                <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Upload className="w-4 h-4 text-green-600" /> Nhập Kho (.csv)</button>
             </div>
           )}
-          
-          <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-          </div>
+          <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -719,9 +613,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
-              <span>Danh sách tồn kho ({filteredInventory.length})</span>
-          </div>
+          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách tồn kho ({filteredInventory.length})</span></div>
           
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             {filteredInventory.length > 0 ? (
@@ -741,29 +633,19 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="font-bold text-slate-800">{item.name}</h4>
-                        <p className="text-xs text-slate-500 font-mono mt-0.5">{item.id}</p>
-                      </div>
+                      <div><h4 className="font-bold text-slate-800">{item.name}</h4><p className="text-xs text-slate-500 font-mono mt-0.5">{item.id}</p></div>
                       <div className="flex items-center space-x-3">
                         <div className="text-right">
-                          <span className={`font-bold text-lg ${item.quantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>{item.quantity}</span>
-                          <span className="text-sm text-slate-500 ml-1">{item.unit}</span>
+                          <span className={`font-bold text-lg ${item.quantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>{item.quantity}</span><span className="text-sm text-slate-500 ml-1">{item.unit}</span>
                           {item.quantity < 10 && <p className="text-[10px] text-red-500 font-medium">Sắp hết</p>}
                         </div>
-                        {user.role === 'admin' && (
-                          <button onClick={() => startEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200">
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
+                        {user.role === 'admin' && (<button onClick={() => startEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200"><Edit className="w-4 h-4" /></button>)}
                       </div>
                     </div>
                   )}
                 </div>
               ))
-            ) : (
-              <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy vật tư.</div>
-            )}
+            ) : (<div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy vật tư.</div>)}
           </div>
         </div>
       </div>
@@ -772,23 +654,10 @@ export default function App() {
 
   const SettingsView = () => (
     <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b border-slate-100 flex items-center space-x-3">
-        <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-        <h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2>
-      </div>
+      <div className="p-4 border-b border-slate-100 flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2></div>
       <div className="p-6 space-y-4">
-        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800">
-          <strong>Hướng dẫn:</strong>
-          <ul className="list-disc ml-4 mt-2 space-y-1">
-             <li>Tạo Google Sheet mới & Apps Script.</li>
-             <li>Triển khai dưới dạng Web App (Access: Anyone).</li>
-             <li>Dán URL vào ô bên dưới.</li>
-          </ul>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script URL</label>
-          <input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://script.google.com/macros/s/..." />
-        </div>
+        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800"><strong>Hướng dẫn:</strong><ul className="list-disc ml-4 mt-2 space-y-1"><li>Tạo Google Sheet mới & Apps Script.</li><li>Triển khai dưới dạng Web App (Access: Anyone).</li><li>Dán URL vào ô bên dưới.</li></ul></div>
+        <div><label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script URL</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://script.google.com/macros/s/..." /></div>
         <button onClick={() => { localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình!'); setView('dashboard'); }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">Lưu Cấu Hình</button>
       </div>
     </div>
@@ -796,22 +665,11 @@ export default function App() {
 
   const QrPrintView = () => (
     <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b border-slate-100 flex items-center justify-between no-print">
-        <div className="flex items-center space-x-3">
-            <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-            <h2 className="font-bold text-slate-800">In mã QR</h2>
-        </div>
-        <button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm"><Printer className="w-4 h-4" /> <span>In Ngay</span></button>
-      </div>
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between no-print"><div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">In mã QR</h2></div><button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm"><Printer className="w-4 h-4" /> <span>In Ngay</span></button></div>
       <div className="flex-1 overflow-y-auto p-8 bg-slate-100 print:bg-white print:p-0">
         <div className="grid grid-cols-2 gap-8 print:grid-cols-3 print:gap-4">
             {machines.map(m => (
-                <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black">
-                    <h3 className="font-bold text-lg mb-2">{m.name}</h3>
-                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} alt={m.name} className="w-32 h-32 object-contain" />
-                    <p className="font-mono text-sm mt-2 font-bold">{m.id}</p>
-                    <p className="text-xs text-slate-500">{m.model}</p>
-                </div>
+                <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black"><h3 className="font-bold text-lg mb-2">{m.name}</h3><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} alt={m.name} className="w-32 h-32 object-contain" /><p className="font-mono text-sm mt-2 font-bold">{m.id}</p><p className="text-xs text-slate-500">{m.model}</p></div>
             ))}
         </div>
       </div>
@@ -821,25 +679,12 @@ export default function App() {
 
   const HomeView = () => (
     <div className="flex flex-col items-center justify-center h-full space-y-8 p-6 relative">
-      <div className="absolute top-4 right-4 flex items-center space-x-3">
-        {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Dashboard</button>}
-        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-5 h-5" /></button>
-      </div>
-      <div className="text-center space-y-2">
-        <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg"><Wrench className="w-12 h-12 text-white" /></div>
-        <h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1>
-      </div>
-      
+      <div className="absolute top-4 right-4 flex items-center space-x-3">{user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Dashboard</button>}<button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-5 h-5" /></button></div>
+      <div className="text-center space-y-2"><div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg"><Wrench className="w-12 h-12 text-white" /></div><h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1></div>
       <div className="w-full max-w-xs space-y-4">
-          <button onClick={() => setView('scanner')} className="w-full bg-slate-900 text-white py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform">
-            <QrCode className="w-6 h-6" /> <span className="font-semibold text-lg">Quét Mã QR</span>
-          </button>
-          <button onClick={() => setView('manual_select')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform">
-            <ListFilter className="w-6 h-6 text-slate-500" /> <span className="font-semibold text-lg">Chọn Thủ Công</span>
-          </button>
-          <button onClick={() => setView('inventory')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform">
-            <Boxes className="w-6 h-6 text-orange-500" /> <span className="font-semibold text-lg">Kho Vật Tư</span>
-          </button>
+          <button onClick={() => setView('scanner')} className="w-full bg-slate-900 text-white py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform"><QrCode className="w-6 h-6" /> <span className="font-semibold text-lg">Quét Mã QR</span></button>
+          <button onClick={() => setView('manual_select')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><ListFilter className="w-6 h-6 text-slate-500" /> <span className="font-semibold text-lg">Chọn Thủ Công</span></button>
+          <button onClick={() => setView('inventory')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><Boxes className="w-6 h-6 text-orange-500" /> <span className="font-semibold text-lg">Kho Vật Tư</span></button>
       </div>
       <p className="text-sm text-slate-400 text-center">Chọn phương thức để bắt đầu bảo trì</p>
     </div>
@@ -848,19 +693,10 @@ export default function App() {
   const ScannerView = () => {
     return (
       <div className="flex flex-col h-full bg-black relative">
-        <div className="absolute top-0 left-0 right-0 p-4 z-20">
-          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm"><ArrowLeft className="w-5 h-5" /><span>Quay lại</span></button>
-        </div>
+        <div className="absolute top-0 left-0 right-0 p-4 z-20"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm"><ArrowLeft className="w-5 h-5" /><span>Quay lại</span></button></div>
         <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
             <NativeCameraScanner onScan={handleScanSuccess} />
-            <div className="absolute bottom-8 left-0 right-0 px-6 z-20">
-                 <p className="text-white/50 text-xs text-center mb-2">Nếu không quét được, hãy chọn máy bên dưới:</p>
-                 <div className="flex gap-2 overflow-x-auto pb-2">
-                     {machines.map(m => (
-                         <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10">{m.name}</button>
-                     ))}
-                 </div>
-            </div>
+            <div className="absolute bottom-8 left-0 right-0 px-6 z-20"><p className="text-white/50 text-xs text-center mb-2">Nếu không quét được, hãy chọn máy bên dưới:</p><div className="flex gap-2 overflow-x-auto pb-2">{machines.map(m => (<button key={m.id} onClick={() => handleScanSuccess(m.id)} className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10">{m.name}</button>))}</div></div>
         </div>
       </div>
     );
@@ -873,14 +709,8 @@ export default function App() {
     return (
       <div className="flex flex-col h-full bg-slate-50">
          <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-            <div className="flex items-center space-x-3 mb-4">
-                <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
-                <h2 className="font-bold text-slate-800 text-lg">Tìm kiếm thiết bị</h2>
-            </div>
-            <div className="relative">
-                <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                <input type="text" placeholder="Nhập tên hoặc mã máy..." className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
-            </div>
+            <div className="flex items-center space-x-3 mb-4"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Tìm kiếm thiết bị</h2></div>
+            <div className="relative"><Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" /><input type="text" placeholder="Nhập tên hoặc mã máy..." className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus /></div>
          </div>
          <div className="flex-1 overflow-y-auto p-4 space-y-3">
              <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredMachines.length})</span></div>
@@ -889,10 +719,7 @@ export default function App() {
                 <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="w-full p-4 bg-white border border-slate-200 hover:border-blue-500 rounded-xl flex items-center justify-between group transition-all shadow-sm active:scale-[0.98]">
                   <div className="flex items-center space-x-4 text-left">
                     <div className={`w-2 h-12 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-                    <div>
-                      <div className="font-bold text-slate-800 text-lg">{m.name}</div>
-                      <div className="text-sm text-slate-500 font-mono flex items-center mt-1"><span className="bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-600 mr-2">{m.id}</span><MapPin className="w-3 h-3 mr-1" /><span className="truncate max-w-[150px]">{m.location}</span></div>
-                    </div>
+                    <div><div className="font-bold text-slate-800 text-lg">{m.name}</div><div className="text-sm text-slate-500 font-mono flex items-center mt-1"><span className="bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-600 mr-2">{m.id}</span><MapPin className="w-3 h-3 mr-1" /><span className="truncate max-w-[150px]">{m.location}</span></div></div>
                   </div>
                   <div className="text-slate-300 group-hover:text-blue-600 transition-colors"><div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center bg-slate-50 group-hover:bg-blue-50 group-hover:border-blue-200">&rarr;</div></div>
                 </button>
@@ -911,14 +738,7 @@ export default function App() {
             <div className="flex items-center justify-between mb-2"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800">Chi tiết thiết bị</h2><div className="w-8"></div></div>
             <h1 className="text-xl font-bold text-slate-900">{selectedMachine.name}</h1>
             <p className="text-slate-500 text-sm flex items-center mt-1"><MapPin className="w-3 h-3 mr-1"/> {selectedMachine.location}</p>
-            
-            {/* Hiển thị thêm Đơn vị sử dụng nếu có */}
-            {selectedMachine.department && (
-              <div className="mt-2 inline-flex items-center bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium">
-                <User className="w-3 h-3 mr-1.5" />
-                Đơn vị: {selectedMachine.department}
-              </div>
-            )}
+            {selectedMachine.department && (<div className="mt-2 inline-flex items-center bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium"><User className="w-3 h-3 mr-1.5" />Đơn vị: {selectedMachine.department}</div>)}
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
             <button onClick={() => setView('form')} className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-lg"><Wrench className="w-5 h-5" /><span className="font-semibold">Cập nhật / Bảo trì</span></button>
@@ -974,10 +794,7 @@ export default function App() {
                         <option value="">-- Chọn vật tư trong kho --</option>
                         {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity} {item.unit})</option>))}
                     </select>
-                    <div className="flex gap-2">
-                        <input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-slate-100 text-slate-500" value={tempPart.unit} />
-                        <input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
-                    </div>
+                    <div className="flex gap-2"><input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-slate-100 text-slate-500" value={tempPart.unit} /><input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} /></div>
                     <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-medium text-sm mt-1 hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" /> Thêm vào báo cáo</button>
                 </div>
                 <div className="space-y-2">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
