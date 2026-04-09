@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database } from 'lucide-react';
 
+// --- Hàm tải thư viện xử lý Excel tự động (SheetJS) ---
+const loadXLSX = async () => {
+  if (window.XLSX) return window.XLSX;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+    script.onload = () => resolve(window.XLSX);
+    script.onerror = () => reject(new Error("Lỗi tải thư viện đọc Excel"));
+    document.body.appendChild(script);
+  });
+};
+
 // --- MOCK DATA ---
 const USERS = [
   { username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
@@ -32,7 +44,7 @@ const INITIAL_INVENTORY = [
   { id: 'P-106', name: 'Giẻ lau công nghiệp', unit: 'Kg', quantity: 30 }
 ];
 
-// --- COMPONENT CAMERA THẬT (Sử dụng jsQR qua CDN) ---
+// --- COMPONENT CAMERA THẬT ---
 const NativeCameraScanner = ({ onScan }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -40,10 +52,7 @@ const NativeCameraScanner = ({ onScan }) => {
   const [isJsQRLoaded, setIsJsQRLoaded] = useState(false);
 
   useEffect(() => {
-    if (window.jsQR) {
-        setIsJsQRLoaded(true);
-        return;
-    }
+    if (window.jsQR) { setIsJsQRLoaded(true); return; }
     const script = document.createElement('script');
     script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
     script.async = true;
@@ -54,16 +63,12 @@ const NativeCameraScanner = ({ onScan }) => {
 
   useEffect(() => {
     if (!isJsQRLoaded) return;
-
     let stream = null;
     let animationFrameId;
 
     const startCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { facingMode: 'environment' }
-        });
-        
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.setAttribute("playsinline", true);
@@ -71,7 +76,6 @@ const NativeCameraScanner = ({ onScan }) => {
           requestAnimationFrame(tick);
         }
       } catch (err) {
-        console.error("Lỗi camera:", err);
         setError("Không thể truy cập camera. Vui lòng cấp quyền trong cài đặt trình duyệt.");
       }
     };
@@ -80,17 +84,14 @@ const NativeCameraScanner = ({ onScan }) => {
       if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
         const video = videoRef.current;
         const canvas = canvasRef.current;
-
         if (canvas && window.jsQR) {
             canvas.height = video.videoHeight;
             canvas.width = video.videoWidth;
             const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            
             if (ctx) {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-    
                 if (code && code.data) {
                   onScan(code.data);
                   return;
@@ -102,7 +103,6 @@ const NativeCameraScanner = ({ onScan }) => {
     };
 
     startCamera();
-
     return () => {
       if (stream) { stream.getTracks().forEach(track => track.stop()); }
       if (animationFrameId) { cancelAnimationFrame(animationFrameId); }
@@ -323,10 +323,10 @@ export default function App() {
           <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị</h3>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
              <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất CSV</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất CSV</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('qr_print')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <div className="flex items-center space-x-3"><div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
@@ -345,6 +345,7 @@ export default function App() {
 
   const MachineManagementView = () => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const fileInputRef = useRef(null);
 
     const filteredMachines = machines.filter(m => 
@@ -352,98 +353,123 @@ export default function App() {
       m.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleExportCSV = () => {
-      const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
-      const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
-      const csvContent = "\ufeff" + [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showNotification('Đã tải xuống file Danh_Sach_Thiet_Bi.csv');
+    // XUẤT FILE EXCEL THIẾT BỊ
+    const handleExportExcel = async () => {
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
+        const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
+        
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_Sach_May");
+        
+        XLSX.writeFile(workbook, `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showNotification('Đã xuất file Excel thành công!');
+      } catch (err) {
+        showNotification('Lỗi khi xuất file Excel', 'error');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    const handleImportCSV = (e) => {
+    // NHẬP FILE EXCEL THIẾT BỊ
+    const handleImportExcel = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          // Fix lỗi \r của Windows
-          const text = event.target.result.replace(/\r/g, '');
-          const lines = text.split('\n');
-          if (lines.length < 2) throw new Error("File trống hoặc sai định dạng");
-          
-          // Fix lỗi Excel lưu CSV bằng dấu chấm phẩy (;) ở khu vực Việt Nam
-          const separator = lines[0].includes(';') ? ';' : ',';
-          
-          const newMachinesList = [];
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
             
-            const cols = line.split(separator).map(c => c.replace(/^"|"$/g, '').trim());
-            // Chỉ thêm nếu dòng đó có chứa ID (cột 1)
-            if (cols.length >= 2 && cols[0]) {
-               newMachinesList.push({
-                   id: cols[0],
-                   name: cols[1],
-                   model: cols[2] || '',
-                   location: cols[3] || '',
-                   department: cols[4] || '',
-                   status: cols[5] || 'operational'
-               });
-            }
-          }
-
-          let updatedMachines = [...machines];
-          let addedCount = 0;
-          let updatedCount = 0;
-
-          newMachinesList.forEach(newM => {
-              const existingIndex = updatedMachines.findIndex(item => item.id === newM.id);
-              if (existingIndex > -1) {
-                  updatedMachines[existingIndex] = { ...updatedMachines[existingIndex], ...newM };
-                  updatedCount++;
-              } else {
-                  updatedMachines.push(newM);
-                  addedCount++;
+            // Chuyển sheet thành mảng 2 chiều (bỏ qua dòng trắng)
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+            
+            if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
+            
+            const newMachinesList = [];
+            // Bỏ qua dòng tiêu đề (index 0)
+            for (let i = 1; i < rows.length; i++) {
+              const cols = rows[i];
+              if (!cols || cols.length === 0) continue;
+              
+              const id = cols[0] ? String(cols[0]).trim() : '';
+              if (id) {
+                 newMachinesList.push({
+                     id: id,
+                     name: cols[1] ? String(cols[1]).trim() : '',
+                     model: cols[2] ? String(cols[2]).trim() : '',
+                     location: cols[3] ? String(cols[3]).trim() : '',
+                     department: cols[4] ? String(cols[4]).trim() : '',
+                     status: cols[5] ? String(cols[5]).trim() : 'operational'
+                 });
               }
-          });
+            }
 
-          setMachines(updatedMachines);
-          showNotification(`Đã cập nhật: ${updatedCount} máy, Thêm mới: ${addedCount} máy`, 'success');
-        } catch (err) {
-          console.error(err);
-          showNotification('Lỗi đọc file. Đảm bảo file đúng định dạng CSV.', 'error');
-        }
-      };
-      reader.readAsText(file);
+            let updatedMachines = [...machines];
+            let addedCount = 0;
+            let updatedCount = 0;
+
+            newMachinesList.forEach(newM => {
+                const existingIndex = updatedMachines.findIndex(item => item.id === newM.id);
+                if (existingIndex > -1) {
+                    updatedMachines[existingIndex] = { ...updatedMachines[existingIndex], ...newM };
+                    updatedCount++;
+                } else {
+                    updatedMachines.push(newM);
+                    addedCount++;
+                }
+            });
+
+            setMachines(updatedMachines);
+            showNotification(`Đã cập nhật: ${updatedCount} máy, Thêm mới: ${addedCount} máy`, 'success');
+          } catch (err) {
+            console.error(err);
+            showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (err) {
+        showNotification('Lỗi tải bộ giải mã Excel', 'error');
+        setIsLoading(false);
+      }
       e.target.value = null; 
     };
 
     return (
       <div className="flex flex-col h-full bg-slate-50">
         <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm space-y-4">
-          <div className="flex items-center space-x-3">
-              <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
-              <h2 className="font-bold text-slate-800 text-lg">Quản lý Thiết Bị</h2>
+          <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                  <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+                  <h2 className="font-bold text-slate-800 text-lg">Quản lý Thiết Bị</h2>
+              </div>
+              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
           </div>
 
-          <div className="flex gap-2">
-              <button onClick={handleExportCSV} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
-                  <Download className="w-4 h-4 text-blue-600" /> Tải Xuống (.csv)
-              </button>
-              
-              <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
-              <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm">
-                  <Upload className="w-4 h-4 text-green-600" /> Nhập File (.csv)
-              </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+                <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50">
+                    <Download className="w-4 h-4 text-blue-600" /> Tải File (.xlsx)
+                </button>
+                
+                <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
+                <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50">
+                    <Upload className="w-4 h-4 text-green-600" /> Nhập File (.xlsx)
+                </button>
+            </div>
           </div>
           
           <div className="relative">
@@ -482,6 +508,7 @@ export default function App() {
 
   const InventoryView = () => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const [newItem, setNewItem] = useState({ name: '', unit: '', quantity: '' });
     const fileInputRef = useRef(null);
     const [editingId, setEditingId] = useState(null);
@@ -518,67 +545,104 @@ export default function App() {
         showNotification('Đã cập nhật vật tư thành công!');
     };
 
-    const handleExportCSV = () => {
-      const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
-      const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
-      const csvContent = "\ufeff" + [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", `Ton_Kho_${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showNotification('Đã tải xuống file Ton_Kho.csv');
+    // XUẤT FILE EXCEL KHO VẬT TƯ
+    const handleExportExcel = async () => {
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
+        const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
+        
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "KhoVatTu");
+        
+        XLSX.writeFile(workbook, `Ton_Kho_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showNotification('Đã xuất file Excel thành công!');
+      } catch (err) {
+        showNotification('Lỗi khi xuất file Excel', 'error');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    const handleImportCSV = (e) => {
+    // NHẬP FILE EXCEL KHO VẬT TƯ
+    const handleImportExcel = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        try {
-          // Fix lỗi tương tự cho Kho vật tư (lọc \r và tự nhận diện dấu ngăn cách)
-          const text = event.target.result.replace(/\r/g, '');
-          const lines = text.split('\n');
-          if (lines.length < 2) throw new Error("File trống hoặc sai định dạng");
-          
-          const separator = lines[0].includes(';') ? ';' : ',';
 
-          const newInvList = [];
-          for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const cols = line.split(separator).map(c => c.replace(/^"|"$/g, '').trim());
-            if (cols.length >= 4 && cols[0]) {
-               newInvList.push({ id: cols[0], name: cols[1], unit: cols[2], quantity: Number(cols[3]) || 0 });
-            }
-          }
-          let updatedInventory = [...inventory];
-          let addedCount = 0;
-          let updatedCount = 0;
-          newInvList.forEach(newItem => {
-              let existingIndex = updatedInventory.findIndex(item => item.id === newItem.id);
-              if (existingIndex === -1) existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+            if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
+            
+            const newInvList = [];
+            for (let i = 1; i < rows.length; i++) {
+              const cols = rows[i];
+              if (!cols || cols.length === 0) continue;
               
-              if (existingIndex > -1) {
-                  updatedInventory[existingIndex].quantity = newItem.quantity; 
-                  updatedInventory[existingIndex].unit = newItem.unit;
-                  updatedCount++;
-              } else {
-                  updatedInventory.push({ id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, name: newItem.name, unit: newItem.unit, quantity: newItem.quantity });
-                  addedCount++;
+              const id = cols[0] ? String(cols[0]).trim() : '';
+              const name = cols[1] ? String(cols[1]).trim() : '';
+              const unit = cols[2] ? String(cols[2]).trim() : '';
+              const qty = cols[3] !== undefined ? Number(cols[3]) : 0;
+
+              // Chấp nhận nếu có Tên hoặc ID
+              if (name || id) {
+                 newInvList.push({ 
+                     id: id, 
+                     name: name, 
+                     unit: unit, 
+                     quantity: isNaN(qty) ? 0 : qty 
+                 });
               }
-          });
-          setInventory(updatedInventory);
-          showNotification(`Đã cập nhật: ${updatedCount} mã, Thêm mới: ${addedCount} mã`, 'success');
-        } catch (err) {
-          console.error(err);
-          showNotification('Lỗi đọc file. Đảm bảo file đúng định dạng CSV.', 'error');
-        }
-      };
-      reader.readAsText(file);
+            }
+
+            let updatedInventory = [...inventory];
+            let addedCount = 0;
+            let updatedCount = 0;
+
+            newInvList.forEach(newItem => {
+                let existingIndex = updatedInventory.findIndex(item => item.id === newItem.id && newItem.id !== '');
+                if (existingIndex === -1) existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
+                
+                if (existingIndex > -1) {
+                    updatedInventory[existingIndex].quantity = newItem.quantity; 
+                    updatedInventory[existingIndex].unit = newItem.unit;
+                    updatedCount++;
+                } else {
+                    updatedInventory.push({ 
+                        id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, 
+                        name: newItem.name, 
+                        unit: newItem.unit, 
+                        quantity: newItem.quantity 
+                    });
+                    addedCount++;
+                }
+            });
+            setInventory(updatedInventory);
+            showNotification(`Đã cập nhật: ${updatedCount} mã, Thêm mới: ${addedCount} mã`, 'success');
+          } catch (err) {
+            console.error(err);
+            showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (err) {
+        showNotification('Lỗi tải bộ giải mã Excel', 'error');
+        setIsLoading(false);
+      }
       e.target.value = null; 
     };
 
@@ -587,12 +651,15 @@ export default function App() {
         <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2></div>
+              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
           </div>
           {user.role === 'admin' && (
-            <div className="flex gap-2">
-                <button onClick={handleExportCSV} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Download className="w-4 h-4 text-blue-600" /> Tải File (.csv)</button>
-                <input type="file" accept=".csv" className="hidden" ref={fileInputRef} onChange={handleImportCSV} />
-                <button onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Upload className="w-4 h-4 text-green-600" /> Nhập Kho (.csv)</button>
+            <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                    <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 text-blue-600" /> Tải File (.xlsx)</button>
+                    <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
+                    <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 text-green-600" /> Nhập Kho (.xlsx)</button>
+                </div>
             </div>
           )}
           <div className="relative"><Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" /><input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
