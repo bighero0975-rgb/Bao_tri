@@ -753,11 +753,28 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
   
   const handleImageUpload = (e) => {
       const file = e.target.files[0];
-      if (file) {
-          const reader = new FileReader();
-          reader.onloadend = () => { setFormData(prev => ({...prev, images: [...prev.images, reader.result]})); };
-          reader.readAsDataURL(file);
-      }
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+              // TẠO BỘ NÉN ẢNH ĐỂ TRÁNH QUÁ TẢI KHI GỬI TỪ ĐIỆN THOẠI
+              const canvas = document.createElement('canvas');
+              const MAX_WIDTH = 800; // Giới hạn chiều rộng ảnh 800px
+              const scaleSize = MAX_WIDTH / img.width;
+              canvas.width = MAX_WIDTH;
+              canvas.height = img.height * scaleSize;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              
+              // Nén thành định dạng JPEG với chất lượng 60%
+              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
+              setFormData(prev => ({...prev, images: [...prev.images, compressedBase64]}));
+          };
+          img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
   };
 
   const removeImage = (index) => {
@@ -964,20 +981,27 @@ export default function App() {
   const pushToGoogleSheet = async (logData) => {
     if (!googleSheetUrl) return;
     try {
-      const formData = new FormData();
-      formData.append('id', logData.id);
-      formData.append('machineId', logData.machineId);
-      formData.append('machineName', selectedMachine.name);
-      formData.append('date', logData.date);
-      formData.append('technician', logData.technician);
-      formData.append('type', logData.type);
-      formData.append('note', logData.note);
-      formData.append('status', logData.status);
-      const partsStr = logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ');
-      formData.append('parts', partsStr);
-      formData.append('images_count', logData.images.length); 
+      // ĐÓNG GÓI DỮ LIỆU DẠNG JSON ĐỂ CHỞ ĐƯỢC ẢNH VÀ TRÁNH LỖI CORS
+      const payload = {
+        id: logData.id,
+        machineId: logData.machineId,
+        machineName: selectedMachine.name,
+        date: logData.date,
+        technician: logData.technician,
+        type: logData.type,
+        note: logData.note,
+        status: logData.status,
+        parts: logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', '),
+        images: logData.images // Gửi kèm mảng ảnh đã nén
+      };
 
-      await fetch(googleSheetUrl, { method: 'POST', body: formData, mode: 'no-cors' });
+      await fetch(googleSheetUrl, { 
+        method: 'POST', 
+        body: JSON.stringify(payload),
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8', 
+        }
+      });
       console.log("Đã xuất báo cáo lên Google Sheet");
     } catch (error) {
       console.error("Lỗi gửi Google Sheet:", error);
