@@ -1,7 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud } from 'lucide-react';
 
-// --- Hàm tải thư viện xử lý Excel tự động (SheetJS) ---
+// --- FIREBASE CLOUD DATABASE SETUP ---
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
+
+const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+
+// --- Hàm tải thư viện xử lý Excel (SheetJS) ---
 const loadXLSX = async () => {
   if (window.XLSX) return window.XLSX;
   return new Promise((resolve, reject) => {
@@ -13,7 +25,7 @@ const loadXLSX = async () => {
   });
 };
 
-// --- MOCK DATA ---
+// --- MOCK DATA MẶC ĐỊNH ---
 const USERS = [
   { username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
   { username: 'tech', password: '', name: 'Kỹ Thuật Viên', role: 'maintenance' }
@@ -26,22 +38,11 @@ const INITIAL_MACHINES = [
   { id: 'M-104', name: 'Cánh Tay Robot Hàn', model: 'Kuka KR-16', location: 'Xưởng C - Dây chuyền 1', department: 'Xưởng Cơ Khí', status: 'operational' }
 ];
 
-const INITIAL_LOGS = [
-  { 
-    id: 1, machineId: 'M-101', date: '2023-10-15', technician: 'KTV Nguyễn Văn A', type: 'Bảo trì định kỳ', 
-    note: 'Thay dầu, kiểm tra trục chính. Máy hoạt động tốt.', 
-    parts: [{ name: 'Dầu máy CNC', unit: 'Lít', quantity: 5 }], 
-    images: [] 
-  }
-];
-
 const INITIAL_INVENTORY = [
   { id: 'P-101', name: 'Dầu máy CNC', unit: 'Lít', quantity: 45 },
   { id: 'P-102', name: 'Mỡ bò bôi trơn', unit: 'Hộp', quantity: 20 },
   { id: 'P-103', name: 'Ốc vít M8', unit: 'Cái', quantity: 500 },
-  { id: 'P-104', name: 'Cảm biến quang Omron', unit: 'Cái', quantity: 8 },
-  { id: 'P-105', name: 'Dây Curoa B-45', unit: 'Sợi', quantity: 15 },
-  { id: 'P-106', name: 'Giẻ lau công nghiệp', unit: 'Kg', quantity: 30 }
+  { id: 'P-104', name: 'Cảm biến quang Omron', unit: 'Cái', quantity: 8 }
 ];
 
 // --- COMPONENT CAMERA THẬT ---
@@ -134,13 +135,91 @@ const NativeCameraScanner = ({ onScan }) => {
 export default function App() {
   const [user, setUser] = useState(null); 
   const [view, setView] = useState('login'); 
-  const [machines, setMachines] = useState(INITIAL_MACHINES);
-  const [logs, setLogs] = useState(INITIAL_LOGS);
-  const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
-  const [googleSheetUrl, setGoogleSheetUrl] = useState(localStorage.getItem('gs_url') || '');
+  
+  // DỮ LIỆU ĐƯỢC ĐỒNG BỘ TỪ ĐÁM MÂY (CLOUD)
+  const [machines, setMachines] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [inventory, setInventory] = useState([]);
+  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
+  const [fbUser, setFbUser] = useState(null);
+  const [isCloudSyncing, setIsCloudSyncing] = useState(true);
 
+  // --- KẾT NỐI ĐÁM MÂY (FIREBASE CLOUD) ---
+  useEffect(() => {
+    if (!auth) {
+        setIsCloudSyncing(false);
+        return;
+    }
+    const initAuth = async () => { await signInAnonymously(auth); };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setFbUser);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!fbUser || !db) return;
+
+    // Lắng nghe Thiết bị (Machines)
+    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setMachines(data);
+      if (selectedMachine) {
+          const updatedSelected = data.find(m => m.id === selectedMachine.id);
+          if (updatedSelected) setSelectedMachine(updatedSelected);
+      }
+    }, console.error);
+
+    // Lắng nghe Tồn kho (Inventory)
+    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setInventory(data);
+    }, console.error);
+
+    // Lắng nghe Lịch sử (Logs)
+    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+      setLogs(data.sort((a,b) => b.id - a.id)); // Sắp xếp mới nhất lên đầu
+    }, console.error);
+
+    // Lắng nghe Cài đặt (Settings)
+    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snapshot) => {
+      const settingsData = snapshot.docs.find(doc => doc.id === 'general');
+      if (settingsData) setGoogleSheetUrl(settingsData.data().gs_url || '');
+      setIsCloudSyncing(false);
+    }, console.error);
+
+    return () => {
+       unsubMachines();
+       unsubInventory();
+       unsubLogs();
+       unsubSettings();
+    };
+  }, [fbUser, selectedMachine]);
+
+  // --- CÁC HÀM CẬP NHẬT DỮ LIỆU LÊN ĐÁM MÂY ---
+  const saveMachineToCloud = async (machine) => {
+    if (!fbUser || !db) return;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', machine.id), machine);
+  };
+
+  const saveInventoryToCloud = async (item) => {
+    if (!fbUser || !db) return;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', item.id), item);
+  };
+
+  const saveLogToCloud = async (logEntry) => {
+    if (!fbUser || !db) return;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry);
+  };
+
+  const saveSettingsToCloud = async (url) => {
+    if (!fbUser || !db) return;
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { gs_url: url });
+  };
+
+  // --- ACTIONS ---
   const handleLogin = (username, password) => {
     const foundUser = USERS.find(u => u.username === username && u.password === password);
     if (foundUser) {
@@ -180,7 +259,7 @@ export default function App() {
     }
   };
 
-  const saveToGoogleSheet = async (logData) => {
+  const pushToGoogleSheet = async (logData) => {
     if (!googleSheetUrl) return;
     try {
       const formData = new FormData();
@@ -197,13 +276,13 @@ export default function App() {
       formData.append('images_count', logData.images.length); 
 
       await fetch(googleSheetUrl, { method: 'POST', body: formData, mode: 'no-cors' });
-      console.log("Đã gửi dữ liệu lên Google Sheet");
+      console.log("Đã xuất báo cáo lên Google Sheet");
     } catch (error) {
       console.error("Lỗi gửi Google Sheet:", error);
     }
   };
 
-  const handleSaveLog = (newLog) => {
+  const handleSaveLog = async (newLog) => {
     const logEntry = {
       id: Date.now(),
       machineId: selectedMachine.id,
@@ -212,28 +291,31 @@ export default function App() {
       ...newLog
     };
     
-    setLogs([logEntry, ...logs]);
+    // 1. Lưu Log lên Đám mây
+    await saveLogToCloud(logEntry);
     
-    const updatedMachines = machines.map(m => 
-      m.id === selectedMachine.id ? { ...m, status: newLog.status === 'Hoàn thành' ? 'operational' : 'maintenance' } : m
-    );
-    setMachines(updatedMachines);
-    setSelectedMachine(updatedMachines.find(m => m.id === selectedMachine.id));
+    // 2. Cập nhật Trạng thái Máy lên Đám mây
+    const updatedMachine = { 
+        ...selectedMachine, 
+        status: newLog.status === 'Hoàn thành' ? 'operational' : 'maintenance' 
+    };
+    await saveMachineToCloud(updatedMachine);
 
-    const updatedInventory = [...inventory];
-    newLog.parts.forEach(usedPart => {
-        const itemIndex = updatedInventory.findIndex(i => i.name === usedPart.name);
-        if (itemIndex > -1) {
-            updatedInventory[itemIndex].quantity = Math.max(0, updatedInventory[itemIndex].quantity - Number(usedPart.quantity));
+    // 3. Trừ Tồn Kho trên Đám mây
+    for (const usedPart of newLog.parts) {
+        const cloudPart = inventory.find(i => i.name === usedPart.name);
+        if (cloudPart) {
+            const newQty = Math.max(0, cloudPart.quantity - Number(usedPart.quantity));
+            await saveInventoryToCloud({ ...cloudPart, quantity: newQty });
         }
-    });
-    setInventory(updatedInventory);
+    }
 
+    // 4. Gửi về Google Sheet nếu có
     if (googleSheetUrl) {
-        saveToGoogleSheet(logEntry);
-        showNotification('Đã lưu & đồng bộ lên Google Sheet!', 'success');
+        pushToGoogleSheet(logEntry);
+        showNotification('Đã lưu & đồng bộ toàn hệ thống!', 'success');
     } else {
-        showNotification('Đã lưu cục bộ (Chưa cấu hình Google Sheet)', 'success');
+        showNotification('Đã lưu lên Đám mây thành công!', 'success');
     }
     setView('details');
   };
@@ -258,7 +340,7 @@ export default function App() {
               <Wrench className="w-12 h-12 text-white" />
             </div>
             <h1 className="text-3xl font-bold">TechMaintain</h1>
-            <p className="text-slate-400">Hệ thống quản lý bảo trì</p>
+            <p className="text-slate-400">Hệ thống quản lý bảo trì Đám Mây</p>
           </div>
           
           {!isAdminView ? (
@@ -298,6 +380,12 @@ export default function App() {
               <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-lg">Đăng Nhập</button>
             </div>
           )}
+          
+          {/* Status Indicator */}
+          <div className="flex justify-center items-center gap-2 mt-8 text-xs text-slate-500">
+             <Cloud className={`w-4 h-4 ${isCloudSyncing ? 'animate-pulse text-blue-500' : 'text-green-500'}`} />
+             <span>{isCloudSyncing ? 'Đang kết nối Đám mây...' : 'Đã kết nối dữ liệu Đám mây'}</span>
+          </div>
         </div>
       </div>
     );
@@ -312,7 +400,7 @@ export default function App() {
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
         <div className="grid grid-cols-2 gap-3">
            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm col-span-2">
-              <p className="text-blue-600 text-xs uppercase font-bold">Tổng thiết bị</p>
+              <p className="text-blue-600 text-xs uppercase font-bold flex items-center justify-between">Tổng thiết bị <Cloud className="w-4 h-4 text-blue-400" /></p>
               <p className="text-2xl font-bold text-blue-800">{machines.length}</p>
            </div>
            <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm"><p className="text-green-600 text-xs font-bold uppercase">Tốt</p><p className="text-2xl font-bold text-green-800 mt-1">{machines.filter(m => m.status === 'operational').length}</p></div>
@@ -332,7 +420,7 @@ export default function App() {
                 <div className="flex items-center space-x-3"><div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-                <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cấu hình Google Sheet</p><p className="text-xs text-slate-500">Kết nối cơ sở dữ liệu báo cáo</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+                <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cài đặt Đám Mây</p><p className="text-xs text-slate-500">Kết nối Sheet, Dữ liệu mẫu</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
                 <div className="flex items-center space-x-3"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><QrCode className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-slate-500">Vào giao diện quét & chọn máy</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
@@ -353,7 +441,6 @@ export default function App() {
       m.id.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // XUẤT FILE EXCEL THIẾT BỊ
     const handleExportExcel = async () => {
       try {
         setIsLoading(true);
@@ -375,7 +462,6 @@ export default function App() {
       }
     };
 
-    // NHẬP FILE EXCEL THIẾT BỊ
     const handleImportExcel = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -385,20 +471,17 @@ export default function App() {
         const XLSX = await loadXLSX();
         const reader = new FileReader();
         
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           try {
             const data = new Uint8Array(event.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
             
-            // Chuyển sheet thành mảng 2 chiều (bỏ qua dòng trắng)
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-            
             if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
             
             const newMachinesList = [];
-            // Bỏ qua dòng tiêu đề (index 0)
             for (let i = 1; i < rows.length; i++) {
               const cols = rows[i];
               if (!cols || cols.length === 0) continue;
@@ -416,23 +499,18 @@ export default function App() {
               }
             }
 
-            let updatedMachines = [...machines];
             let addedCount = 0;
             let updatedCount = 0;
 
-            newMachinesList.forEach(newM => {
-                const existingIndex = updatedMachines.findIndex(item => item.id === newM.id);
-                if (existingIndex > -1) {
-                    updatedMachines[existingIndex] = { ...updatedMachines[existingIndex], ...newM };
-                    updatedCount++;
-                } else {
-                    updatedMachines.push(newM);
-                    addedCount++;
-                }
+            // Đẩy tất cả dữ liệu lên Đám mây
+            const promises = newMachinesList.map(newM => {
+                const existingIndex = machines.findIndex(item => item.id === newM.id);
+                if (existingIndex > -1) updatedCount++; else addedCount++;
+                return saveMachineToCloud({ ...(machines[existingIndex] || {}), ...newM });
             });
 
-            setMachines(updatedMachines);
-            showNotification(`Đã cập nhật: ${updatedCount} máy, Thêm mới: ${addedCount} máy`, 'success');
+            await Promise.all(promises);
+            showNotification(`Đã đồng bộ lên Cloud: Cập nhật ${updatedCount}, Thêm mới ${addedCount}`, 'success');
           } catch (err) {
             console.error(err);
             showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
@@ -456,7 +534,7 @@ export default function App() {
                   <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
                   <h2 className="font-bold text-slate-800 text-lg">Quản lý Thiết Bị</h2>
               </div>
-              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
+              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang đồng bộ...</span>}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -480,7 +558,7 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
-              <span>Danh sách thiết bị ({filteredMachines.length})</span>
+              <span>Danh sách thiết bị Đám Mây ({filteredMachines.length})</span>
           </div>
           
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -498,7 +576,7 @@ export default function App() {
                 </div>
               ))
             ) : (
-              <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị.</div>
+              <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị. Hãy tải dữ liệu mẫu ở phần Cài đặt.</div>
             )}
           </div>
         </div>
@@ -516,18 +594,18 @@ export default function App() {
 
     const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const handleAddOrUpdate = () => {
+    const handleAddOrUpdate = async () => {
       if (!newItem.name || !newItem.unit || !newItem.quantity) { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
-      const existingIndex = inventory.findIndex(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-      if (existingIndex > -1) {
-        const newInv = [...inventory];
-        newInv[existingIndex].quantity += Number(newItem.quantity);
-        newInv[existingIndex].unit = newItem.unit;
-        setInventory(newInv);
+      
+      const existingItem = inventory.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+      if (existingItem) {
+        const newQty = existingItem.quantity + Number(newItem.quantity);
+        await saveInventoryToCloud({ ...existingItem, quantity: newQty, unit: newItem.unit });
         showNotification(`Đã cộng thêm ${newItem.quantity} vào ${newItem.name}`);
       } else {
-        setInventory([...inventory, { id: 'P-' + Date.now(), name: newItem.name, unit: newItem.unit, quantity: Number(newItem.quantity) }]);
-        showNotification('Đã thêm vật tư mới vào kho!');
+        const newId = 'P-' + Date.now();
+        await saveInventoryToCloud({ id: newId, name: newItem.name, unit: newItem.unit, quantity: Number(newItem.quantity) });
+        showNotification('Đã lưu vật tư mới lên Đám mây!');
       }
       setNewItem({ name: '', unit: '', quantity: '' }); 
     };
@@ -537,15 +615,17 @@ export default function App() {
         setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity });
     };
 
-    const saveEdit = () => {
+    const saveEdit = async () => {
         if (!editForm.name || !editForm.unit || editForm.quantity === '') { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
-        const updated = inventory.map(item => item.id === editingId ? { ...item, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) } : item);
-        setInventory(updated);
+        
+        const existingItem = inventory.find(i => i.id === editingId);
+        if (existingItem) {
+            await saveInventoryToCloud({ ...existingItem, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) });
+            showNotification('Đã cập nhật trên Đám mây thành công!');
+        }
         setEditingId(null);
-        showNotification('Đã cập nhật vật tư thành công!');
     };
 
-    // XUẤT FILE EXCEL KHO VẬT TƯ
     const handleExportExcel = async () => {
       try {
         setIsLoading(true);
@@ -566,7 +646,6 @@ export default function App() {
       }
     };
 
-    // NHẬP FILE EXCEL KHO VẬT TƯ
     const handleImportExcel = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -576,7 +655,7 @@ export default function App() {
         const XLSX = await loadXLSX();
         const reader = new FileReader();
         
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
           try {
             const data = new Uint8Array(event.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
@@ -596,41 +675,32 @@ export default function App() {
               const unit = cols[2] ? String(cols[2]).trim() : '';
               const qty = cols[3] !== undefined ? Number(cols[3]) : 0;
 
-              // Chấp nhận nếu có Tên hoặc ID
               if (name || id) {
-                 newInvList.push({ 
-                     id: id, 
-                     name: name, 
-                     unit: unit, 
-                     quantity: isNaN(qty) ? 0 : qty 
-                 });
+                 newInvList.push({ id: id, name: name, unit: unit, quantity: isNaN(qty) ? 0 : qty });
               }
             }
 
-            let updatedInventory = [...inventory];
             let addedCount = 0;
             let updatedCount = 0;
 
-            newInvList.forEach(newItem => {
-                let existingIndex = updatedInventory.findIndex(item => item.id === newItem.id && newItem.id !== '');
-                if (existingIndex === -1) existingIndex = updatedInventory.findIndex(item => item.name.toLowerCase() === newItem.name.toLowerCase());
+            const promises = newInvList.map(newItem => {
+                let existingItem = inventory.find(item => item.id === newItem.id && newItem.id !== '');
+                if (!existingItem) existingItem = inventory.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
                 
-                if (existingIndex > -1) {
-                    updatedInventory[existingIndex].quantity = newItem.quantity; 
-                    updatedInventory[existingIndex].unit = newItem.unit;
+                if (existingItem) {
                     updatedCount++;
+                    return saveInventoryToCloud({ ...existingItem, quantity: newItem.quantity, unit: newItem.unit });
                 } else {
-                    updatedInventory.push({ 
-                        id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, 
-                        name: newItem.name, 
-                        unit: newItem.unit, 
-                        quantity: newItem.quantity 
-                    });
                     addedCount++;
+                    return saveInventoryToCloud({ 
+                        id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, 
+                        name: newItem.name, unit: newItem.unit, quantity: newItem.quantity 
+                    });
                 }
             });
-            setInventory(updatedInventory);
-            showNotification(`Đã cập nhật: ${updatedCount} mã, Thêm mới: ${addedCount} mã`, 'success');
+
+            await Promise.all(promises);
+            showNotification(`Đã đồng bộ Cloud: Cập nhật ${updatedCount}, Thêm mới ${addedCount}`, 'success');
           } catch (err) {
             console.error(err);
             showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
@@ -651,7 +721,7 @@ export default function App() {
         <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2></div>
-              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
+              {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang đồng bộ...</span>}
           </div>
           {user.role === 'admin' && (
             <div className="flex flex-col gap-2">
@@ -680,7 +750,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách tồn kho ({filteredInventory.length})</span></div>
+          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách tồn kho Đám Mây ({filteredInventory.length})</span></div>
           
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
             {filteredInventory.length > 0 ? (
@@ -712,23 +782,54 @@ export default function App() {
                   )}
                 </div>
               ))
-            ) : (<div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy vật tư.</div>)}
+            ) : (<div className="p-8 text-center text-slate-400 text-sm">Kho trống. Tải dữ liệu mẫu ở phần Cài đặt.</div>)}
           </div>
         </div>
       </div>
     );
   };
 
-  const SettingsView = () => (
-    <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b border-slate-100 flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2></div>
-      <div className="p-6 space-y-4">
-        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800"><strong>Hướng dẫn:</strong><ul className="list-disc ml-4 mt-2 space-y-1"><li>Tạo Google Sheet mới & Apps Script.</li><li>Triển khai dưới dạng Web App (Access: Anyone).</li><li>Dán URL vào ô bên dưới.</li></ul></div>
-        <div><label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script URL</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://script.google.com/macros/s/..." /></div>
-        <button onClick={() => { localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình!'); setView('dashboard'); }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg">Lưu Cấu Hình</button>
-      </div>
-    </div>
-  );
+  const SettingsView = () => {
+      const handleSeedData = async () => {
+          if (!fbUser || !db) return;
+          showNotification('Đang khởi tạo dữ liệu mẫu...', 'success');
+          
+          try {
+              for (const m of INITIAL_MACHINES) { await saveMachineToCloud(m); }
+              for (const i of INITIAL_INVENTORY) { await saveInventoryToCloud(i); }
+              showNotification('Đã nạp xong dữ liệu mẫu lên Đám mây!', 'success');
+          } catch(e) {
+              showNotification('Lỗi khi nạp dữ liệu', 'error');
+          }
+      };
+
+      return (
+        <div className="flex flex-col h-full bg-white">
+          <div className="p-4 border-b border-slate-100 flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">Cài đặt Hệ thống</h2></div>
+          <div className="p-6 space-y-8">
+            
+            {/* Seed Data Section */}
+            <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">Khởi tạo dữ liệu Đám Mây</h3>
+                <p className="text-xs text-slate-500 mb-3">Nếu đây là lần đầu bạn mở App và danh sách máy đang trống, hãy bấm nút dưới đây để nạp dữ liệu mẫu ban đầu (Máy CNC, Robot hàn...) vào hệ thống dùng chung.</p>
+                <button onClick={handleSeedData} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-700 flex items-center justify-center gap-2">
+                    <Cloud className="w-5 h-5" /> Nạp Dữ Liệu Mẫu
+                </button>
+            </div>
+
+            {/* Google Sheet Config */}
+            <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">Xuất Báo Cáo Google Sheet</h3>
+                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800 mb-3">
+                <strong>Hướng dẫn:</strong><ul className="list-disc ml-4 mt-1 space-y-1 text-xs"><li>Tạo Google Sheet mới & Apps Script.</li><li>Triển khai dưới dạng Web App (Access: Anyone).</li><li>Dán URL vào ô bên dưới.</li></ul></div>
+                <div><label className="block text-xs font-medium text-slate-500 mb-1">Google Apps Script URL</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
+                <button onClick={() => { saveSettingsToCloud(googleSheetUrl); showNotification('Đã lưu URL lên Cloud!'); setView('dashboard'); }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md mt-3">Lưu URL Google Sheet</button>
+            </div>
+
+          </div>
+        </div>
+      );
+  };
 
   const QrPrintView = () => (
     <div className="flex flex-col h-full bg-white">
@@ -753,7 +854,7 @@ export default function App() {
           <button onClick={() => setView('manual_select')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><ListFilter className="w-6 h-6 text-slate-500" /> <span className="font-semibold text-lg">Chọn Thủ Công</span></button>
           <button onClick={() => setView('inventory')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><Boxes className="w-6 h-6 text-orange-500" /> <span className="font-semibold text-lg">Kho Vật Tư</span></button>
       </div>
-      <p className="text-sm text-slate-400 text-center">Chọn phương thức để bắt đầu bảo trì</p>
+      <p className="text-sm text-slate-400 text-center">Hệ thống Cloud đồng bộ tự động</p>
     </div>
   );
 
@@ -855,7 +956,7 @@ export default function App() {
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label><input type="text" className="w-full p-3 rounded-lg border border-slate-300 bg-slate-50" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." /></div>
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Loại công việc</label><select className="w-full p-3 rounded-lg border border-slate-300" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo trì định kỳ</option><option>Sửa chữa sự cố</option><option>Thay thế linh kiện</option></select></div>
             <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ kho)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ kho Cloud)</label>
                 <div className="flex flex-col gap-2 mb-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
                     <select className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white" value={tempPart.name} onChange={(e) => { const selectedItem = inventory.find(i => i.name === e.target.value); setTempPart({ ...tempPart, name: e.target.value, unit: selectedItem ? selectedItem.unit : '' }); }}>
                         <option value="">-- Chọn vật tư trong kho --</option>
@@ -876,7 +977,7 @@ export default function App() {
             <div><label className="block text-sm font-medium text-slate-700 mb-1">Mô tả chi tiết</label><textarea rows="4" className="w-full p-3 rounded-lg border border-slate-300" placeholder="Mô tả công việc..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea></div>
             <div className="grid grid-cols-2 gap-3"><button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700' : ''}`}><CheckCircle className="w-5 h-5" /> <span>Xong</span></button><button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 ${formData.status === 'Cần theo dõi' ? 'bg-yellow-50 border-yellow-500 text-yellow-700' : ''}`}><AlertCircle className="w-5 h-5" /> <span>Chưa xong</span></button></div>
         </div>
-        <div className="p-4 border-t border-slate-100 bg-slate-50"><button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg">Lưu Báo Cáo</button></div>
+        <div className="p-4 border-t border-slate-100 bg-slate-50"><button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"><Cloud className="w-5 h-5" /> Lưu Lên Đám Mây</button></div>
       </div>
     );
   };
