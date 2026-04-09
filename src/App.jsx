@@ -3,7 +3,7 @@ import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, Use
 
 // --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
 const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -152,7 +152,17 @@ export default function App() {
         setIsCloudSyncing(false);
         return;
     }
-    const initAuth = async () => { await signInAnonymously(auth); };
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Lỗi xác thực Firebase:", error);
+      }
+    };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setFbUser);
     return () => unsubscribe();
