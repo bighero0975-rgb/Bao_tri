@@ -10,12 +10,12 @@ import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'fi
 // 🔴 BƯỚC QUAN TRỌNG CHO VERCEL: ĐIỀN CẤU HÌNH FIREBASE CỦA RIÊNG BẠN VÀO ĐÂY
 // ============================================================================
 const myFirebaseConfig = {
-  apiKey: "", 
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: ""
+  apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
+  authDomain: "techmaintain-app.firebaseapp.com",
+  projectId: "techmaintain-app",
+  storageBucket: "techmaintain-app.firebasestorage.app",
+  messagingSenderId: "202386593017",
+  appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
 // Hệ thống ưu tiên dùng cấu hình của bạn, nếu không có sẽ tự tìm cấu hình Canvas
@@ -186,7 +186,10 @@ export default function App() {
     }
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+        if (isCustomConfigured) {
+          // Bỏ qua token của môi trường ảo, đăng nhập trực tiếp vào Firebase của bạn
+          await signInAnonymously(auth);
+        } else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
           await signInWithCustomToken(auth, __initial_auth_token);
         } else {
           await signInAnonymously(auth);
