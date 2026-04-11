@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Eye, Trash2, Edit, Boxes, Download, Upload, Database, Cloud, CloudOff } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Eye, Trash2, Edit, Boxes, Download, Upload, Database, Cloud, CloudOff, Users } from 'lucide-react';
 
 // --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
@@ -28,6 +28,18 @@ const loadXLSX = async () => {
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
     script.onload = () => resolve(window.XLSX);
     script.onerror = () => reject(new Error("Lỗi tải thư viện đọc Excel"));
+    document.body.appendChild(script);
+  });
+};
+
+// --- Hàm tải thư viện quét mã QR Camera ---
+const loadHtml5QrCode = async () => {
+  if (window.Html5Qrcode) return window.Html5Qrcode;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = "https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js";
+    script.onload = () => resolve(window.Html5Qrcode);
+    script.onerror = () => reject(new Error("Lỗi tải thư viện quét QR"));
     document.body.appendChild(script);
   });
 };
@@ -62,6 +74,12 @@ const INITIAL_INVENTORY = [
   { id: 'P-104', name: 'Cảm biến quang Omron', unit: 'Cái', quantity: 8 }
 ];
 
+const INITIAL_TECHNICIANS = [
+  { id: 'T-1', name: 'Quản Lý Trưởng' },
+  { id: 'T-2', name: 'KTV Nguyễn Văn A' },
+  { id: 'T-3', name: 'KTV Trần Thị B' }
+];
+
 export default function App() {
   // --- STATE ---
   const [user, setUser] = useState(null); 
@@ -69,6 +87,7 @@ export default function App() {
   const [machines, setMachines] = useState(INITIAL_MACHINES);
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
+  const [technicians, setTechnicians] = useState(INITIAL_TECHNICIANS);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
   const [showQrCode, setShowQrCode] = useState(false);
@@ -126,7 +145,15 @@ export default function App() {
       }
     });
 
-    return () => { unsubMachines(); unsubLogs(); unsubInventory(); };
+    const unsubTechnicians = onSnapshot(collection(db, 'technicians'), (snapshot) => {
+      if (snapshot.empty) {
+        INITIAL_TECHNICIANS.forEach(t => setDoc(doc(db, 'technicians', t.id), t));
+      } else {
+        setTechnicians(snapshot.docs.map(d => d.data()));
+      }
+    });
+
+    return () => { unsubMachines(); unsubLogs(); unsubInventory(); unsubTechnicians(); };
   }, [fbUser]);
 
   // --- ACTIONS ---
@@ -199,6 +226,24 @@ export default function App() {
     }
     
     if (isCloudSynced) await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
+  };
+
+  const handleUpdateTechnician = async (tech) => {
+    const existingIndex = technicians.findIndex(t => t.id === tech.id);
+    if (existingIndex > -1) {
+      const newList = [...technicians];
+      newList[existingIndex] = tech;
+      setTechnicians(newList);
+    } else {
+      setTechnicians([tech, ...technicians]);
+    }
+    if (isCloudSynced) await setDoc(doc(db, 'technicians', tech.id), tech);
+  };
+
+  const handleDeleteTechnician = async (id) => {
+    setTechnicians(technicians.filter(t => t.id !== id));
+    showNotification('Đã xóa nhân sự', 'success');
+    if (isCloudSynced) await deleteDoc(doc(db, 'technicians', id));
   };
 
   const saveToGoogleSheet = async (logData) => {
@@ -392,6 +437,13 @@ export default function App() {
                 <div className="flex items-center space-x-3">
                   <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div>
                   <div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Thêm/Sửa/Xóa, Nhập xuất Excel</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('technicians')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600"><Users className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Quản lý Nhân sự</p><p className="text-xs text-slate-500">Thêm/Sửa/Xóa người thực hiện</p></div>
                 </div>
                 <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
@@ -885,40 +937,133 @@ export default function App() {
   );
 
   const ScannerView = () => {
+    const [isCameraReady, setIsCameraReady] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
+    const lastScannedRef = useRef(null);
+    const html5QrCodeRef = useRef(null);
+
+    useEffect(() => {
+      const initScanner = async () => {
+        try {
+          const Html5Qrcode = await loadHtml5QrCode();
+          const html5QrCode = new Html5Qrcode("qr-reader");
+          html5QrCodeRef.current = html5QrCode;
+          
+          await html5QrCode.start(
+            { facingMode: "environment" }, 
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 }
+            },
+            (decodedText) => {
+              // Xử lý khi quét thành công
+              if (decodedText !== lastScannedRef.current) {
+                lastScannedRef.current = decodedText;
+                const machine = machines.find(m => m.id === decodedText);
+                
+                if (machine) {
+                  // Nếu mã QR khớp với một thiết bị, dừng camera và chuyển trang
+                  html5QrCode.stop().then(() => {
+                    handleScanSuccess(decodedText);
+                  }).catch(console.error);
+                } else {
+                  // Nếu quét được mã QR nhưng không phải của máy nào trong hệ thống
+                  showNotification(`Mã không hợp lệ: ${decodedText}`, 'error');
+                  setTimeout(() => { lastScannedRef.current = null; }, 3000); // 3 giây sau mới quét lại mã này
+                }
+              }
+            },
+            (errorMessage) => {
+               // Bỏ qua các lỗi frame trong lúc đang tìm mã
+            }
+          );
+          setIsCameraReady(true);
+        } catch (err) {
+          console.error("Camera error:", err);
+          setErrorMsg('Không thể mở Camera. Vui lòng kiểm tra và cấp quyền!');
+        }
+      };
+
+      initScanner();
+
+      // Dọn dẹp: Tắt camera khi người dùng rời khỏi trang này
+      return () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+          html5QrCodeRef.current.stop().catch(console.error);
+        }
+      };
+    }, []);
+
     return (
       <div className="flex flex-col h-full bg-black relative">
-        <div className="absolute top-0 left-0 right-0 p-4 z-20">
-          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
+        <div className="absolute top-0 left-0 right-0 p-4 z-30">
+          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/50 px-4 py-2 rounded-full backdrop-blur-md hover:bg-black/70 transition-colors">
             <ArrowLeft className="w-5 h-5" />
-            <span>Quay lại</span>
+            <span className="font-medium">Quay lại</span>
           </button>
         </div>
 
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-             <div className="w-64 h-64 border-2 border-white/50 rounded-3xl relative">
-               <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -mt-1 -ml-1"></div>
-               <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -mt-1 -mr-1"></div>
-               <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -mb-1 -ml-1"></div>
-               <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl -mb-1 -mr-1"></div>
-               <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/50 animate-pulse"></div>
+        {/* Khung chứa Camera */}
+        <div className="absolute inset-0 bg-slate-900 flex items-center justify-center overflow-hidden">
+           {/* id="qr-reader" là bắt buộc để thư viện chèn thẻ <video> vào đây */}
+           <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full"></div>
+           
+           {!isCameraReady && !errorMsg && (
+             <div className="absolute text-white flex flex-col items-center">
+               <Camera className="w-8 h-8 mb-2 animate-pulse text-blue-400" />
+               <p>Đang yêu cầu quyền Camera...</p>
              </div>
-             <p className="absolute mt-80 text-white/80 text-sm font-medium">Di chuyển camera đến mã QR</p>
+           )}
+           {errorMsg && (
+             <p className="absolute text-red-400 text-center px-6 font-medium bg-black/80 p-4 rounded-xl border border-red-500/30 backdrop-blur-md">
+               {errorMsg}
+             </p>
+           )}
         </div>
 
-        <div className="absolute bottom-8 left-0 right-0 px-6 z-20">
-             <p className="text-white/50 text-xs text-center mb-2">Demo: Nhấn để giả lập quét thành công</p>
-             <div className="flex gap-2 overflow-x-auto pb-2">
-                 {machines.map(m => (
-                     <button 
-                        key={m.id} 
-                        onClick={() => handleScanSuccess(m.id)}
-                        className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10"
-                     >
-                        {m.name}
-                     </button>
-                 ))}
-             </div>
+        {/* Khung UI đè lên (Overlay) làm đẹp */}
+        <div className="absolute inset-0 pointer-events-none z-20 flex flex-col items-center justify-center shadow-[inset_0_0_0_2000px_rgba(0,0,0,0.5)]">
+           <div className="w-64 h-64 relative">
+             {/* 4 Góc bo */}
+             <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
+             <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>
+             <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl"></div>
+             <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-blue-500 rounded-br-2xl"></div>
+             
+             {/* Tia Laser chạy dọc */}
+             {isCameraReady && <div className="absolute top-0 left-0 w-full h-0.5 bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)] animate-[scan_2s_ease-in-out_infinite]"></div>}
+           </div>
+           <p className="text-white/90 text-sm font-medium mt-8 bg-black/50 px-4 py-1.5 rounded-full backdrop-blur-md">Di chuyển camera đến mã QR</p>
         </div>
+
+        {/* Vẫn giữ lại Nút ấn thủ công phòng khi camera lỗi */}
+        <div className="absolute bottom-8 left-0 right-0 px-6 z-30">
+           <p className="text-white/70 text-xs text-center mb-3 font-medium">Hoặc chọn máy (Demo thủ công):</p>
+           <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+               {machines.map(m => (
+                   <button 
+                      key={m.id} 
+                      onClick={() => {
+                         if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+                             html5QrCodeRef.current.stop().catch(console.error);
+                         }
+                         handleScanSuccess(m.id);
+                      }}
+                      className="whitespace-nowrap bg-slate-800/80 hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-sm backdrop-blur-md border border-slate-700 transition-colors shadow-lg"
+                   >
+                      {m.name}
+                   </button>
+               ))}
+           </div>
+        </div>
+        
+        <style>{`
+          @keyframes scan {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+          }
+        `}</style>
       </div>
     );
   };
@@ -1198,6 +1343,7 @@ export default function App() {
     const initialForm = editingLog || { technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] };
     const [formData, setFormData] = useState(initialForm);
     const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+    const [showTechDropdown, setShowTechDropdown] = useState(false);
 
     const addPart = () => { 
         if(tempPart.name && tempPart.quantity) { 
@@ -1255,9 +1401,39 @@ export default function App() {
         
         {/* KHU VỰC NHẬP LIỆU CÓ THỂ CUỘN */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
-            <div>
+            <div className="relative">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label>
-                <input type="text" className="w-full p-3 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." />
+                <input 
+                    type="text" 
+                    className="w-full p-3 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                    value={formData.technicianName} 
+                    onChange={e => {
+                        setFormData({...formData, technicianName: e.target.value});
+                        setShowTechDropdown(true);
+                    }} 
+                    onFocus={() => setShowTechDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowTechDropdown(false), 200)}
+                    placeholder="Gõ để tìm hoặc nhập tên mới..." 
+                />
+                
+                {/* DROPDOWN CHỌN NHÂN SỰ */}
+                {showTechDropdown && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
+                        {technicians.filter(t => t.name.toLowerCase().includes(formData.technicianName.toLowerCase())).length > 0 ? (
+                            technicians.filter(t => t.name.toLowerCase().includes(formData.technicianName.toLowerCase())).map(t => (
+                                <div 
+                                    key={t.id} 
+                                    onClick={() => setFormData({...formData, technicianName: t.name})} 
+                                    className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-0 text-slate-700 flex items-center"
+                                >
+                                    <User className="w-4 h-4 mr-2 text-slate-400" /> {t.name}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="p-3 text-slate-500 text-sm italic">Sẽ lưu dạng tên nhân sự mới</div>
+                        )}
+                    </div>
+                )}
             </div>
             
             <div>
@@ -1342,6 +1518,87 @@ export default function App() {
     );
   };
 
+  const TechnicianManagementView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [newName, setNewName] = useState('');
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '' });
+
+    const filteredTechs = technicians.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const handleAdd = () => {
+      if (!newName) return showNotification('Vui lòng nhập tên!', 'error');
+      const newId = 'T-' + Date.now();
+      handleUpdateTechnician({ id: newId, name: newName });
+      showNotification('Đã thêm nhân sự!');
+      setNewName('');
+    };
+
+    const saveEdit = () => {
+      if (!editForm.name) return showNotification('Tên không được để trống!', 'error');
+      const existingTech = technicians.find(t => t.id === editingId);
+      if (existingTech) {
+        handleUpdateTechnician({ ...existingTech, name: editForm.name });
+        showNotification('Đã cập nhật tên!');
+      }
+      setEditingId(null);
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
+          <div className="flex items-center space-x-3">
+             <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+             <h2 className="font-bold text-slate-800 text-lg">Quản lý Nhân sự (KTV)</h2>
+          </div>
+          <div className="relative">
+             <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+             <input type="text" placeholder="Tìm kiếm tên..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="bg-slate-100/50 p-3 rounded-xl border border-dashed border-slate-300 mb-2">
+            <h3 className="text-[11px] uppercase font-bold text-slate-500 mb-2">Thêm KTV / Người thực hiện</h3>
+            <div className="flex gap-2">
+              <input placeholder="Nhập họ tên đầy đủ..." className="flex-1 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newName} onChange={e => setNewName(e.target.value)} />
+              <button onClick={handleAdd} className="bg-slate-800 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-700 flex justify-center items-center shadow-sm"><Plus className="w-4 h-4 mr-1" /> Thêm</button>
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredTechs.length})</span></div>
+          
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            {filteredTechs.length > 0 ? (
+              filteredTechs.map((t, index) => (
+                <div key={t.id} className={`p-4 flex flex-col ${index !== filteredTechs.length -1 ? 'border-b border-slate-100' : ''}`}>
+                  {editingId === t.id ? (
+                    <div className="flex flex-col gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-inner">
+                      <input className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({name: e.target.value})} placeholder="Tên KTV" />
+                      <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => handleDeleteTechnician(t.id)} className="mr-auto p-1.5 bg-red-50 text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                          <button onClick={() => setEditingId(null)} className="px-4 py-1.5 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg">Hủy</button>
+                          <button onClick={saveEdit} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg shadow-sm">Lưu</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-3">
+                         <div className="bg-slate-100 p-2 rounded-full"><User className="w-4 h-4 text-slate-500" /></div>
+                         <h4 className="font-semibold text-slate-800 text-base">{t.name}</h4>
+                      </div>
+                      <button onClick={() => {setEditingId(t.id); setEditForm({name: t.name});}} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200"><Edit className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (<div className="p-8 text-center text-slate-400 text-sm">Chưa có dữ liệu.</div>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (!user) return <div className="max-w-md mx-auto h-[100dvh] w-full bg-slate-900 overflow-hidden font-sans relative"><LoginView /></div>;
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-slate-100 shadow-2xl overflow-hidden font-sans text-slate-800 flex flex-col relative">
@@ -1357,6 +1614,7 @@ export default function App() {
         {view === 'details' && <DetailsView />}
         {view === 'form' && <LogFormView />}
         {view === 'inventory' && <InventoryView />}
+        {view === 'technicians' && <TechnicianManagementView />}
       </div>
       {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-xl shadow-2xl flex items-center space-x-3 z-50 animate-fade-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
     </div>
