@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Eye, Trash2, Edit, Boxes, Download, Upload, Database, Cloud, CloudOff } from 'lucide-react';
 
 // --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
-// ============================================================================
-// 🔴 BƯỚC QUAN TRỌNG CHO VERCEL: ĐIỀN CẤU HÌNH FIREBASE CỦA RIÊNG BẠN VÀO ĐÂY
-// ============================================================================
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
   authDomain: "techmaintain-app.firebaseapp.com",
@@ -18,17 +15,10 @@ const myFirebaseConfig = {
   appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
-// Hệ thống ưu tiên dùng cấu hình của bạn, nếu không có sẽ tự tìm cấu hình Canvas
-const isCustomConfigured = myFirebaseConfig.apiKey && myFirebaseConfig.apiKey !== "";
-const firebaseConfig = isCustomConfigured 
-    ? myFirebaseConfig 
-    : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
-
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
-const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
-const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
-// ============================================================================
+const app = initializeApp(myFirebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+// -------------------------------------
 
 // --- Hàm tải thư viện xử lý Excel (SheetJS) ---
 const loadXLSX = async () => {
@@ -45,14 +35,24 @@ const loadXLSX = async () => {
 // --- MOCK DATA MẶC ĐỊNH ---
 const USERS = [
   { username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
-  { username: 'tech', password: '', name: 'Kỹ Thuật Viên', role: 'maintenance' }
+  { username: 'tech', password: '123', name: 'KTV Nguyễn Văn A', role: 'maintenance' },
+  { username: 'tech2', password: '123', name: 'KTV Trần Thị B', role: 'maintenance' }
 ];
 
 const INITIAL_MACHINES = [
-  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A - Khu vực 2', department: 'Xưởng Cơ Khí', status: 'operational' },
-  { id: 'M-102', name: 'Máy Ép Nhựa Thủy Lực', model: 'Haitian Mars II', location: 'Xưởng B - Cổng chính', department: 'Xưởng Ép Nhựa', status: 'maintenance' },
-  { id: 'M-103', name: 'Hệ Thống Băng Tải Tự Động', model: 'Conveyor Pro X', location: 'Kho Thành Phẩm', department: 'Phòng Kho vận', status: 'broken' },
-  { id: 'M-104', name: 'Cánh Tay Robot Hàn', model: 'Kuka KR-16', location: 'Xưởng C - Dây chuyền 1', department: 'Xưởng Cơ Khí', status: 'operational' }
+  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A - Khu vực 2', status: 'operational' },
+  { id: 'M-102', name: 'Máy Ép Nhựa Thủy Lực', model: 'Haitian Mars II', location: 'Xưởng B - Cổng chính', status: 'maintenance' },
+  { id: 'M-103', name: 'Hệ Thống Băng Tải Tự Động', model: 'Conveyor Pro X', location: 'Kho Thành Phẩm', status: 'broken' },
+  { id: 'M-104', name: 'Cánh Tay Robot Hàn', model: 'Kuka KR-16', location: 'Xưởng C - Dây chuyền 1', status: 'operational' }
+];
+
+const INITIAL_LOGS = [
+  { 
+    id: 1, machineId: 'M-101', date: '2023-10-15', technician: 'KTV Nguyễn Văn A', type: 'Bảo trì định kỳ', 
+    note: 'Thay dầu, kiểm tra trục chính. Máy hoạt động tốt.', 
+    parts: [{ name: 'Dầu máy CNC', unit: 'Lít', quantity: 5 }], 
+    images: [] 
+  }
 ];
 
 const INITIAL_INVENTORY = [
@@ -62,883 +62,75 @@ const INITIAL_INVENTORY = [
   { id: 'P-104', name: 'Cảm biến quang Omron', unit: 'Cái', quantity: 8 }
 ];
 
-// --- COMPONENT CAMERA THẬT ---
-const NativeCameraScanner = ({ onScan }) => {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const [error, setError] = useState(null);
-  const [isJsQRLoaded, setIsJsQRLoaded] = useState(false);
-
-  useEffect(() => {
-    if (window.jsQR) { setIsJsQRLoaded(true); return; }
-    const script = document.createElement('script');
-    script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js";
-    script.async = true;
-    script.onload = () => setIsJsQRLoaded(true);
-    script.onerror = () => setError("Không tải được bộ giải mã QR. Vui lòng kiểm tra mạng.");
-    document.body.appendChild(script);
-  }, []);
-
-  useEffect(() => {
-    if (!isJsQRLoaded) return;
-    let stream = null;
-    let animationFrameId;
-
-    const startCamera = async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", true);
-          videoRef.current.play();
-          requestAnimationFrame(tick);
-        }
-      } catch (err) {
-        setError("Không thể truy cập camera. Vui lòng cấp quyền trong cài đặt trình duyệt.");
-      }
-    };
-
-    const tick = () => {
-      if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        if (canvas && window.jsQR) {
-            canvas.height = video.videoHeight;
-            canvas.width = video.videoWidth;
-            const ctx = canvas.getContext("2d", { willReadFrequently: true });
-            if (ctx) {
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const code = window.jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "dontInvert" });
-                if (code && code.data) {
-                  onScan(code.data);
-                  return;
-                }
-            }
-        }
-      }
-      animationFrameId = requestAnimationFrame(tick);
-    };
-
-    startCamera();
-    return () => {
-      if (stream) { stream.getTracks().forEach(track => track.stop()); }
-      if (animationFrameId) { cancelAnimationFrame(animationFrameId); }
-    };
-  }, [isJsQRLoaded, onScan]);
-
-  return (
-    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
-      {error ? (
-        <div className="text-white text-center p-4 z-20"><AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" /><p>{error}</p></div>
-      ) : (
-        <>
-            <video ref={videoRef} playsInline muted className="absolute w-full h-full object-cover" />
-            <canvas ref={canvasRef} className="hidden" />
-        </>
-      )}
-      <div className="absolute inset-0 border-[50px] border-black/50 flex items-center justify-center pointer-events-none z-10">
-        <div className="w-64 h-64 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]">
-          <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
-        </div>
-      </div>
-      <p className="absolute bottom-20 text-white text-sm bg-black/50 px-4 py-2 rounded-full z-20 backdrop-blur-sm">
-        {isJsQRLoaded ? "Đang quét mã QR..." : "Đang tải bộ giải mã..."}
-      </p>
-    </div>
-  );
-};
-
-// ============================================================================
-// CÁC THÀNH PHẦN GIAO DIỆN (ĐƯỢC TÁCH RỜI ĐỂ CHỐNG GIẬT LAG & MẤT FOCUS)
-// ============================================================================
-
-const LoginView = ({ handleLogin, handleTechLogin, isCloudSyncing }) => {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [isAdminView, setIsAdminView] = useState(false);
-  const techUser = USERS.find(u => u.role === 'maintenance');
-
-  return (
-    <div className="flex flex-col items-center justify-center h-full p-6 bg-slate-900 text-white animate-fade-in overflow-y-auto">
-      <div className="w-full max-w-xs space-y-8 my-auto">
-        <div className="text-center space-y-2">
-          <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg shadow-blue-500/30">
-            <Wrench className="w-12 h-12 text-white" />
-          </div>
-          <h1 className="text-3xl font-bold">TechMaintain</h1>
-          <p className="text-slate-400">Hệ thống quản lý bảo trì</p>
-        </div>
-        
-        {!isAdminView ? (
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider text-center mb-4">
-              Dành cho Kỹ thuật viên
-            </h3>
-            
-            <button onClick={() => handleTechLogin(techUser)} className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700">
-              <div className="flex items-center space-x-3">
-                <div className="bg-slate-700 p-2 rounded-full"><User className="w-5 h-5 text-blue-400" /></div>
-                <span className="font-medium text-lg">Đăng nhập KTV</span>
-              </div>
-              <ArrowLeft className="w-5 h-5 rotate-180 text-slate-500" />
-            </button>
-
-            <div className="pt-6 border-t border-slate-800">
-              <button onClick={() => setIsAdminView(true)} className="w-full bg-transparent border border-slate-700 text-slate-300 hover:text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center">
-                <Lock className="w-4 h-4 mr-2" /> Đăng nhập Quản trị (Admin)
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative">
-            <button onClick={() => setIsAdminView(false)} className="absolute -top-4 -left-4 bg-slate-700 p-2 rounded-full hover:bg-slate-600 transition-colors shadow-lg">
-              <ArrowLeft className="w-5 h-5 text-white" />
-            </button>
-            <h3 className="text-lg font-bold text-center mb-4">Đăng nhập Admin</h3>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Tài khoản</label>
-              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none text-white" placeholder="admin" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none text-white" placeholder="***" />
-            </div>
-            <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-lg">Đăng Nhập</button>
-          </div>
-        )}
-        
-        <div className="flex justify-center items-center gap-2 mt-8 text-xs font-medium">
-           {isCloudSyncing ? (
-               <><Cloud className="w-4 h-4 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối Đám mây...</span></>
-           ) : db ? (
-               <><Cloud className="w-4 h-4 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></>
-           ) : (
-               <><CloudOff className="w-4 h-4 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></>
-           )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const DashboardView = ({ user, machines, handleLogout, setView }) => (
-  <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
-    <div className="bg-white p-4 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
-      <div><h1 className="font-bold text-xl text-slate-800">Dashboard</h1><p className="text-xs text-slate-500">Xin chào, {user.name}</p></div>
-      <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-2"><LogOut className="w-5 h-5" /></button>
-    </div>
-    <div className="flex-1 overflow-y-auto p-4 space-y-6">
-      <div className="grid grid-cols-2 gap-3">
-         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm col-span-2">
-            <p className="text-blue-600 text-xs uppercase font-bold flex items-center justify-between">
-                Tổng thiết bị 
-                {db ? <Cloud className="w-4 h-4 text-blue-500" /> : <CloudOff className="w-4 h-4 text-yellow-500" />}
-            </p>
-            <p className="text-2xl font-bold text-blue-800">{machines.length}</p>
-         </div>
-         <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm"><p className="text-green-600 text-xs font-bold uppercase">Tốt</p><p className="text-2xl font-bold text-green-800 mt-1">{machines.filter(m => m.status === 'operational').length}</p></div>
-         <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm"><p className="text-red-600 text-xs font-bold uppercase">Lỗi</p><p className="text-2xl font-bold text-red-800 mt-1">{machines.filter(m => m.status === 'broken').length}</p></div>
-      </div>
-      
-      <div>
-        <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị</h3>
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-           <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('qr_print')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cài đặt Hệ thống</p><p className="text-xs text-slate-500">Cấu hình Firebase, Nạp dữ liệu</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
-              <div className="flex items-center space-x-3"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><QrCode className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-slate-500">Vào giao diện quét & chọn máy</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-const MachineManagementView = ({ machines, setView, showNotification, saveMachineData }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const filteredMachines = machines.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleExportExcel = async () => {
-    try {
-      setIsLoading(true);
-      const XLSX = await loadXLSX();
-      const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
-      const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
-      
-      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_Sach_May");
-      
-      XLSX.writeFile(workbook, `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
-      showNotification('Đã xuất file Excel thành công!');
-    } catch (err) {
-      showNotification('Lỗi khi xuất file Excel', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleImportExcel = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      setIsLoading(true);
-      const XLSX = await loadXLSX();
-      const reader = new FileReader();
-      
-      reader.onload = async (event) => {
-        try {
-          const data = new Uint8Array(event.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          
-          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-          if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
-          
-          const newMachinesList = [];
-          for (let i = 1; i < rows.length; i++) {
-            const cols = rows[i];
-            if (!cols || cols.length === 0) continue;
-            const id = cols[0] ? String(cols[0]).trim() : '';
-            if (id) {
-               newMachinesList.push({
-                   id: id, name: cols[1] ? String(cols[1]).trim() : '', model: cols[2] ? String(cols[2]).trim() : '', location: cols[3] ? String(cols[3]).trim() : '', department: cols[4] ? String(cols[4]).trim() : '', status: cols[5] ? String(cols[5]).trim() : 'operational'
-               });
-            }
-          }
-
-          let addedCount = 0; let updatedCount = 0;
-          const promises = newMachinesList.map(newM => {
-              const existingIndex = machines.findIndex(item => item.id === newM.id);
-              if (existingIndex > -1) updatedCount++; else addedCount++;
-              return saveMachineData({ ...(machines[existingIndex] || {}), ...newM });
-          });
-          await Promise.all(promises);
-          showNotification(`Đã đồng bộ: Cập nhật ${updatedCount}, Thêm mới ${addedCount}`, 'success');
-        } catch (err) {
-          showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } catch (err) {
-      showNotification('Lỗi tải bộ giải mã Excel', 'error');
-      setIsLoading(false);
-    }
-    e.target.value = null; 
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50">
-      <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-                <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
-                <h2 className="font-bold text-slate-800 text-lg">Quản lý Thiết Bị</h2>
-            </div>
-            {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
-              <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50">
-                  <Download className="w-4 h-4 text-blue-600" /> Tải File
-              </button>
-              
-              <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
-              <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50">
-                  <Upload className="w-4 h-4 text-green-600" /> Nhập File
-              </button>
-          </div>
-        </div>
-        
-        <div className="relative">
-            <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
-            <input type="text" placeholder="Tìm kiếm mã hoặc tên máy..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
-            <span>Danh sách thiết bị ({filteredMachines.length})</span>
-        </div>
-        
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-          {filteredMachines.length > 0 ? (
-            filteredMachines.map((m, index) => (
-              <div key={m.id} className={`p-4 flex justify-between items-center ${index !== filteredMachines.length -1 ? 'border-b border-slate-100' : ''}`}>
-                <div>
-                  <h4 className="font-bold text-slate-800">{m.name}</h4>
-                  <div className="text-xs text-slate-500 font-mono mt-1 flex items-center">
-                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 mr-2">{m.id}</span>
-                      {m.department && <span className="truncate max-w-[150px]">- {m.department}</span>}
-                  </div>
-                </div>
-                <div className={`w-3 h-3 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-              </div>
-            ))
-          ) : (
-            <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị. Hãy tải file Excel lên.</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const InventoryView = ({ inventory, setView, showNotification, saveInventoryData, user }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [newItem, setNewItem] = useState({ name: '', unit: '', quantity: '' });
-  const fileInputRef = useRef(null);
-  const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', unit: '', quantity: '' });
-
-  const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  const handleAddOrUpdate = async () => {
-    if (!newItem.name || !newItem.unit || !newItem.quantity) { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
-    
-    const existingItem = inventory.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
-    if (existingItem) {
-      const newQty = existingItem.quantity + Number(newItem.quantity);
-      await saveInventoryData({ ...existingItem, quantity: newQty, unit: newItem.unit });
-      showNotification(`Đã cộng thêm ${newItem.quantity} vào ${newItem.name}`);
-    } else {
-      const newId = 'P-' + Date.now();
-      await saveInventoryData({ id: newId, name: newItem.name, unit: newItem.unit, quantity: Number(newItem.quantity) });
-      showNotification('Đã lưu vật tư mới!');
-    }
-    setNewItem({ name: '', unit: '', quantity: '' }); 
-  };
-
-  const startEdit = (item) => {
-      setEditingId(item.id);
-      setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity });
-  };
-
-  const saveEdit = async () => {
-      if (!editForm.name || !editForm.unit || editForm.quantity === '') { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
-      
-      const existingItem = inventory.find(i => i.id === editingId);
-      if (existingItem) {
-          await saveInventoryData({ ...existingItem, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) });
-          showNotification('Đã cập nhật thành công!');
-      }
-      setEditingId(null);
-  };
-
-  const handleExportExcel = async () => {
-    try {
-      setIsLoading(true);
-      const XLSX = await loadXLSX();
-      const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
-      const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
-      
-      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "KhoVatTu");
-      
-      XLSX.writeFile(workbook, `Ton_Kho_${new Date().toISOString().split('T')[0]}.xlsx`);
-      showNotification('Đã xuất file Excel thành công!');
-    } catch (err) {
-      showNotification('Lỗi khi xuất file Excel', 'error');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleImportExcel = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      setIsLoading(true);
-      const XLSX = await loadXLSX();
-      const reader = new FileReader();
-      
-      reader.onload = async (event) => {
-        try {
-          const data = new Uint8Array(event.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          
-          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
-          if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
-          
-          const newInvList = [];
-          for (let i = 1; i < rows.length; i++) {
-            const cols = rows[i];
-            if (!cols || cols.length === 0) continue;
-            const id = cols[0] ? String(cols[0]).trim() : '';
-            const name = cols[1] ? String(cols[1]).trim() : '';
-            const unit = cols[2] ? String(cols[2]).trim() : '';
-            const qty = cols[3] !== undefined ? Number(cols[3]) : 0;
-
-            if (name || id) {
-               newInvList.push({ id: id, name: name, unit: unit, quantity: isNaN(qty) ? 0 : qty });
-            }
-          }
-
-          let addedCount = 0; let updatedCount = 0;
-          const promises = newInvList.map(newItem => {
-              let existingItem = inventory.find(item => item.id === newItem.id && newItem.id !== '');
-              if (!existingItem) existingItem = inventory.find(item => item.name.toLowerCase() === newItem.name.toLowerCase());
-              if (existingItem) { updatedCount++; return saveInventoryData({ ...existingItem, quantity: newItem.quantity, unit: newItem.unit }); } 
-              else { addedCount++; return saveInventoryData({ id: newItem.id || `P-${Date.now()}-${Math.floor(Math.random()*1000)}`, name: newItem.name, unit: newItem.unit, quantity: newItem.quantity }); }
-          });
-          await Promise.all(promises);
-          showNotification(`Đã đồng bộ: Cập nhật ${updatedCount}, Thêm ${addedCount}`, 'success');
-        } catch (err) {
-          showNotification('Lỗi đọc dữ liệu file Excel.', 'error');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      reader.readAsArrayBuffer(file);
-    } catch (err) {
-      showNotification('Lỗi tải bộ giải mã Excel', 'error');
-      setIsLoading(false);
-    }
-    e.target.value = null; 
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50">
-      <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2></div>
-            {isLoading && <span className="text-xs text-blue-500 font-medium animate-pulse">Đang xử lý...</span>}
-        </div>
-        {user.role === 'admin' && (
-          <div className="flex flex-col gap-2">
-              <div className="flex gap-2">
-                  <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 text-blue-600" /> Tải File</button>
-                  <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
-                  <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 text-green-600" /> Nhập Kho</button>
-              </div>
-          </div>
-        )}
-        <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {user.role === 'admin' && (
-          <div className="bg-slate-100/50 p-3 rounded-xl border border-dashed border-slate-300 mb-2">
-            <h3 className="text-[11px] uppercase font-bold text-slate-500 mb-2">Thêm nhanh thủ công</h3>
-            <div className="flex flex-col gap-2">
-              <input placeholder="Tên vật tư (VD: Dầu nhớt)" className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-              <div className="flex gap-2">
-                  <input placeholder="Đơn vị" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
-                  <input placeholder="SL" type="number" className="w-1/4 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} />
-                  <button onClick={handleAddOrUpdate} className="w-1/4 bg-slate-800 text-white p-2 rounded-lg font-medium text-sm hover:bg-slate-700 flex justify-center items-center shadow-sm"><Plus className="w-4 h-4" /></button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredInventory.length})</span></div>
-        
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-          {filteredInventory.length > 0 ? (
-            filteredInventory.map((item, index) => (
-              <div key={item.id} className={`p-4 flex flex-col ${index !== filteredInventory.length -1 ? 'border-b border-slate-100' : ''}`}>
-                {editingId === item.id ? (
-                  <div className="flex flex-col gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-inner">
-                    <input className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên vật tư" />
-                    <div className="flex gap-2">
-                        <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} placeholder="Đơn vị" />
-                        <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} placeholder="Số lượng" />
-                    </div>
-                    <div className="flex justify-end gap-2 mt-2">
-                        <button onClick={() => setEditingId(null)} className="px-4 py-1.5 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors">Hủy</button>
-                        <button onClick={saveEdit} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">Lưu</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex justify-between items-center">
-                    <div><h4 className="font-bold text-slate-800">{item.name}</h4><p className="text-xs text-slate-500 font-mono mt-0.5">{item.id}</p></div>
-                    <div className="flex items-center space-x-3">
-                      <div className="text-right">
-                        <span className={`font-bold text-lg ${item.quantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>{item.quantity}</span><span className="text-sm text-slate-500 ml-1">{item.unit}</span>
-                        {item.quantity < 10 && <p className="text-[10px] text-red-500 font-medium">Sắp hết</p>}
-                      </div>
-                      {user.role === 'admin' && (<button onClick={() => startEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200"><Edit className="w-4 h-4" /></button>)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
-          ) : (<div className="p-8 text-center text-slate-400 text-sm">Kho trống.</div>)}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const SettingsView = ({ setView, showNotification, saveMachineData, saveInventoryData, setMachines, setInventory, googleSheetUrl, setGoogleSheetUrl }) => {
-    const handleSeedData = async () => {
-        showNotification('Đang khởi tạo dữ liệu mẫu...', 'success');
-        try {
-            if (db) {
-                for (const m of INITIAL_MACHINES) { await saveMachineData(m); }
-                for (const i of INITIAL_INVENTORY) { await saveInventoryData(i); }
-                showNotification('Đã nạp dữ liệu mẫu lên Đám mây!', 'success');
-            } else {
-                setMachines(INITIAL_MACHINES);
-                setInventory(INITIAL_INVENTORY);
-                localStorage.setItem('techmaintain_machines', JSON.stringify(INITIAL_MACHINES));
-                localStorage.setItem('techmaintain_inventory', JSON.stringify(INITIAL_INVENTORY));
-                showNotification('Đã khôi phục dữ liệu mẫu (Offline)', 'success');
-            }
-        } catch(e) {
-            showNotification('Lỗi khi nạp dữ liệu', 'error');
-        }
-    };
-
-    return (
-      <div className="flex flex-col h-full bg-white">
-        <div className="p-4 border-b border-slate-100 flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">Cài đặt Hệ thống</h2></div>
-        <div className="p-6 space-y-8 flex-1 overflow-y-auto">
-          <div>
-              <h3 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">Khởi tạo dữ liệu</h3>
-              <p className="text-xs text-slate-500 mb-3">Nếu đây là lần đầu bạn mở App và danh sách máy đang trống, hãy bấm nút dưới đây để nạp dữ liệu mẫu ban đầu (Máy CNC, Robot hàn...).</p>
-              <button onClick={handleSeedData} className="w-full bg-slate-800 text-white py-3 rounded-xl font-bold shadow-md hover:bg-slate-700 flex items-center justify-center gap-2">
-                  <Database className="w-5 h-5" /> Nạp Dữ Liệu Mẫu
-              </button>
-          </div>
-          <div>
-              <h3 className="text-sm font-bold text-slate-700 mb-2 border-b pb-2">Xuất Báo Cáo Google Sheet</h3>
-              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800 mb-3">
-              <strong>Hướng dẫn:</strong><ul className="list-disc ml-4 mt-1 space-y-1 text-xs"><li>Tạo Google Sheet mới & Apps Script.</li><li>Triển khai dưới dạng Web App (Access: Anyone).</li><li>Dán URL vào ô bên dưới.</li></ul></div>
-              <div><label className="block text-xs font-medium text-slate-500 mb-1">Google Apps Script URL</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-3 border border-slate-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
-              <button onClick={() => { 
-                  setGoogleSheetUrl(googleSheetUrl);
-                  localStorage.setItem('gs_url', googleSheetUrl);
-                  if (db) setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { gs_url: googleSheetUrl });
-                  showNotification('Đã lưu cấu hình Google Sheet!'); 
-                  setView('dashboard'); 
-              }} className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-md mt-3">Lưu URL Google Sheet</button>
-          </div>
-        </div>
-      </div>
-    );
-};
-
-const QrPrintView = ({ machines, setView }) => (
-  <div className="flex flex-col h-full bg-white">
-    <div className="p-4 border-b border-slate-100 flex items-center justify-between no-print shrink-0"><div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">In mã QR</h2></div><button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm"><Printer className="w-4 h-4" /> <span>In Ngay</span></button></div>
-    <div className="flex-1 overflow-y-auto p-8 bg-slate-100 print:bg-white print:p-0">
-      <div className="grid grid-cols-2 gap-8 print:grid-cols-3 print:gap-4">
-          {machines.map(m => (
-              <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black"><h3 className="font-bold text-lg mb-2">{m.name}</h3><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} alt={m.name} className="w-32 h-32 object-contain" /><p className="font-mono text-sm mt-2 font-bold">{m.id}</p><p className="text-xs text-slate-500">{m.model}</p></div>
-          ))}
-      </div>
-    </div>
-    <style>{`@media print { .no-print { display: none !important; } }`}</style>
-  </div>
-);
-
-const HomeView = ({ user, setView, handleLogout }) => (
-  <div className="flex flex-col items-center justify-center h-full space-y-8 p-6 relative overflow-y-auto">
-    <div className="absolute top-4 right-4 flex items-center space-x-3">{user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Dashboard</button>}<button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-5 h-5" /></button></div>
-    <div className="text-center space-y-2"><div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg"><Wrench className="w-12 h-12 text-white" /></div><h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1></div>
-    <div className="w-full max-w-xs space-y-4">
-        <button onClick={() => setView('scanner')} className="w-full bg-slate-900 text-white py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform"><QrCode className="w-6 h-6" /> <span className="font-semibold text-lg">Quét Mã QR</span></button>
-        <button onClick={() => setView('manual_select')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><ListFilter className="w-6 h-6 text-slate-500" /> <span className="font-semibold text-lg">Chọn Thủ Công</span></button>
-        <button onClick={() => setView('inventory')} className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><Boxes className="w-6 h-6 text-orange-500" /> <span className="font-semibold text-lg">Kho Vật Tư</span></button>
-    </div>
-    <p className="text-sm text-slate-400 text-center flex justify-center items-center gap-1">
-       {db ? <><Cloud className="w-4 h-4 text-blue-500"/> Trạng thái: Cloud Đồng Bộ</> : <><CloudOff className="w-4 h-4 text-slate-400"/> Trạng thái: Offline Local</>}
-    </p>
-  </div>
-);
-
-const ScannerView = ({ setView, handleScanSuccess, machines, user }) => {
-  return (
-    <div className="flex flex-col h-full bg-black relative">
-      <div className="absolute top-0 left-0 right-0 p-4 z-20"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm"><ArrowLeft className="w-5 h-5" /><span>Quay lại</span></button></div>
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-          <NativeCameraScanner onScan={handleScanSuccess} />
-          <div className="absolute bottom-8 left-0 right-0 px-6 z-20"><p className="text-white/50 text-xs text-center mb-2">Nếu không quét được, hãy chọn máy bên dưới:</p><div className="flex gap-2 overflow-x-auto pb-2">{machines.map(m => (<button key={m.id} onClick={() => handleScanSuccess(m.id)} className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10">{m.name}</button>))}</div></div>
-      </div>
-    </div>
-  );
-};
-
-const ManualSelectView = ({ machines, setView, handleScanSuccess }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const filteredMachines = machines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50">
-       <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm">
-          <div className="flex items-center space-x-3 mb-4"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Tìm kiếm thiết bị</h2></div>
-          <div className="relative"><Search className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="text" placeholder="Nhập tên hoặc mã máy..." className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus /></div>
-       </div>
-       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-           <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredMachines.length})</span></div>
-          {filteredMachines.length > 0 ? (
-              filteredMachines.map(m => (
-              <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="w-full p-4 bg-white border border-slate-200 hover:border-blue-500 rounded-xl flex items-center justify-between group transition-all shadow-sm active:scale-[0.98]">
-                <div className="flex items-center space-x-4 text-left">
-                  <div className={`w-2 h-12 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-                  <div><div className="font-bold text-slate-800 text-lg">{m.name}</div><div className="text-sm text-slate-500 font-mono flex items-center mt-1"><span className="bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-600 mr-2">{m.id}</span><MapPin className="w-3 h-3 mr-1" /><span className="truncate max-w-[150px]">{m.location}</span></div></div>
-                </div>
-                <div className="text-slate-300 group-hover:text-blue-600 transition-colors"><div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center bg-slate-50 group-hover:bg-blue-50 group-hover:border-blue-200">&rarr;</div></div>
-              </button>
-            ))
-          ) : (<div className="text-center py-12 text-slate-400"><Search className="w-12 h-12 mx-auto mb-3 opacity-20" /><p>Không tìm thấy thiết bị phù hợp.</p></div>)}
-       </div>
-    </div>
-  );
-};
-
-const DetailsView = ({ selectedMachine, setView, logs }) => {
-  const machineLogs = logs.filter(l => l.machineId === selectedMachine.id);
-  return (
-    <div className="flex flex-col h-full bg-slate-50">
-      <div className="bg-white shadow-sm p-4 shrink-0 z-10">
-          <div className="flex items-center justify-between mb-2"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800">Chi tiết thiết bị</h2><div className="w-8"></div></div>
-          <h1 className="text-xl font-bold text-slate-900">{selectedMachine.name}</h1>
-          <p className="text-slate-500 text-sm flex items-center mt-1"><MapPin className="w-3 h-3 mr-1"/> {selectedMachine.location}</p>
-          {selectedMachine.department && (<div className="mt-2 inline-flex items-center bg-blue-50 border border-blue-100 text-blue-700 px-2 py-1 rounded-md text-xs font-medium"><User className="w-3 h-3 mr-1.5" />Đơn vị: {selectedMachine.department}</div>)}
-      </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          <button onClick={() => setView('form')} className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-lg"><Wrench className="w-5 h-5" /><span className="font-semibold">Cập nhật / Bảo trì</span></button>
-          <div>
-              <h3 className="font-bold text-slate-800 mb-4 flex items-center space-x-2"><History className="w-5 h-5 text-slate-500" /><span>Lịch sử sửa chữa</span></h3>
-              <div className="space-y-4">{machineLogs.map((log) => (<div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100"><div className="flex justify-between items-start mb-2"><div><span className="text-xs font-bold text-blue-600 uppercase">{log.type}</span><div className="text-xs text-slate-400">{log.date}</div></div><div className="bg-slate-100 px-2 py-1 rounded text-xs text-slate-600">{log.technician}</div></div><p className="text-slate-700 text-sm mb-2">{log.note}</p>{log.parts && log.parts.length > 0 && (<div className="border-t border-slate-50 pt-2 mt-2"><div className="text-xs text-slate-400 mb-1 flex items-center"><Package className="w-3 h-3 mr-1"/> Vật tư:</div><div className="flex flex-wrap gap-1">{log.parts.map((p, idx) => (<span key={idx} className="bg-slate-50 text-slate-600 border border-slate-100 px-2 py-0.5 rounded text-[10px]">{p.name} ({p.quantity} {p.unit})</span>))}</div></div>)}
-              {log.images && log.images.length > 0 && (<div className="flex gap-2 mt-2 overflow-x-auto pb-1">{log.images.map((img, idx) => (<img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200" alt="Báo cáo" />))}</div>)}
-              </div>))}</div>
-          </div>
-      </div>
-    </div>
-  );
-};
-
-const LogFormView = ({ selectedMachine, user, inventory, setView, showNotification, handleSaveLog }) => {
-  const [formData, setFormData] = useState({ technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] });
-  const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
-
-  const addPart = () => { 
-      if(tempPart.name && tempPart.quantity) { 
-          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
-          setTempPart({ name: '', unit: '', quantity: '' }); 
-      } else {
-          showNotification('Vui lòng chọn vật tư và nhập số lượng', 'error');
-      }
-  };
-  
-  const handleImageUpload = (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const img = new Image();
-          img.onload = () => {
-              // TẠO BỘ NÉN ẢNH ĐỂ TRÁNH QUÁ TẢI KHI GỬI TỪ ĐIỆN THOẠI
-              const canvas = document.createElement('canvas');
-              const MAX_WIDTH = 800; // Giới hạn chiều rộng ảnh 800px
-              const scaleSize = MAX_WIDTH / img.width;
-              canvas.width = MAX_WIDTH;
-              canvas.height = img.height * scaleSize;
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              
-              // Nén thành định dạng JPEG với chất lượng 60%
-              const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
-              setFormData(prev => ({...prev, images: [...prev.images, compressedBase64]}));
-          };
-          img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-  };
-
-  const removeImage = (index) => {
-      const newImages = [...formData.images];
-      newImages.splice(index, 1);
-      setFormData({...formData, images: newImages});
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
-      <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3"><button onClick={() => setView('details')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><div><h2 className="font-bold text-slate-800">Báo cáo công việc</h2><p className="text-xs text-slate-500">{selectedMachine.name}</p></div></div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label><input type="text" className="w-full p-3 rounded-lg border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." /></div>
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Loại công việc</label><select className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo trì định kỳ</option><option>Sửa chữa sự cố</option><option>Thay thế linh kiện</option></select></div>
-          <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ Kho)</label>
-              <div className="flex flex-col gap-2 mb-2 bg-white p-3 rounded-lg border border-slate-200">
-                  <select className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.name} onChange={(e) => { const selectedItem = inventory.find(i => i.name === e.target.value); setTempPart({ ...tempPart, name: e.target.value, unit: selectedItem ? selectedItem.unit : '' }); }}>
-                      <option value="">-- Chọn vật tư trong kho --</option>
-                      {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity} {item.unit})</option>))}
-                  </select>
-                  <div className="flex gap-2"><input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-slate-100 text-slate-500" value={tempPart.unit} /><input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} /></div>
-                  <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-medium text-sm mt-1 hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" /> Thêm vào báo cáo</button>
-              </div>
-              <div className="space-y-2">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
-          </div>
-          <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Hình ảnh hiện trường</label>
-              <div className="flex flex-wrap gap-2">
-                  {formData.images.map((img, idx) => (<div key={idx} className="relative w-20 h-20"><img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-3 h-3" /></button></div>))}
-                  <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-white hover:bg-slate-50 hover:border-blue-400 text-slate-400 hover:text-blue-500 transition-colors"><Camera className="w-6 h-6 mb-1" /><span className="text-[10px]">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
-              </div>
-          </div>
-          <div className="pb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Mô tả chi tiết</label><textarea rows="5" className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[120px]" placeholder="Nhập chi tiết công việc, nguyên nhân, cách khắc phục..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea></div>
-          <div className="grid grid-cols-2 gap-3"><button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700' : ''}`}><CheckCircle className="w-5 h-5" /> <span>Xong</span></button><button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white ${formData.status === 'Cần theo dõi' ? 'bg-yellow-50 border-yellow-500 text-yellow-700' : ''}`}><AlertCircle className="w-5 h-5" /> <span>Chưa xong</span></button></div>
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/90 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]"><button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2"><Save className="w-5 h-5" /> Lưu Báo Cáo</button></div>
-    </div>
-  );
-};
-
-// ============================================================================
-// CHƯƠNG TRÌNH CHÍNH (APP)
-// ============================================================================
 export default function App() {
+  // --- STATE ---
   const [user, setUser] = useState(null); 
   const [view, setView] = useState('login'); 
+  const [machines, setMachines] = useState(INITIAL_MACHINES);
+  const [logs, setLogs] = useState(INITIAL_LOGS);
+  const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
+  const [showQrCode, setShowQrCode] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
   
-  // XỬ LÝ DỮ LIỆU LAI (HYBRID: OFFLINE HOẶC CLOUD)
-  const [machines, setMachines] = useState(() => {
-    if (db) return []; 
-    const saved = localStorage.getItem('techmaintain_machines');
-    return saved ? JSON.parse(saved) : INITIAL_MACHINES;
-  });
-  
-  const [logs, setLogs] = useState(() => {
-    if (db) return [];
-    const saved = localStorage.getItem('techmaintain_logs');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
-  const [inventory, setInventory] = useState(() => {
-    if (db) return [];
-    const saved = localStorage.getItem('techmaintain_inventory');
-    return saved ? JSON.parse(saved) : INITIAL_INVENTORY;
-  });
-
-  const [googleSheetUrl, setGoogleSheetUrl] = useState(() => localStorage.getItem('gs_url') || '');
+  // State Đám mây
   const [fbUser, setFbUser] = useState(null);
-  const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
+  const [googleSheetUrl, setGoogleSheetUrl] = useState(localStorage.getItem('gs_url') || '');
 
-  // --- KẾT NỐI ĐÁM MÂY (FIREBASE CLOUD) ---
+  // --- KẾT NỐI FIREBASE ĐÁM MÂY ---
   useEffect(() => {
-    if (!auth) {
-        setIsCloudSyncing(false);
-        return;
-    }
     const initAuth = async () => {
       try {
-        if (isCustomConfigured) {
-          await signInAnonymously(auth);
-        } else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
-        }
-      } catch (error) {
-        console.error("Lỗi xác thực Firebase:", error);
+        await signInAnonymously(auth);
+      } catch (e) {
+        console.error("Firebase auth error:", e);
+        setFbUser({ uid: 'guest' }); // Fallback an toàn
       }
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setFbUser);
-    return () => unsubscribe();
+    
+    const unsub = onAuthStateChanged(auth, u => {
+      if (u) setFbUser(u);
+    });
+    return () => unsub();
   }, []);
 
   useEffect(() => {
-    if (!fbUser || !db) return;
+    if (!fbUser) return;
+    setIsCloudSynced(true);
 
-    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      setMachines(data);
-      if (selectedMachine) {
-          const updatedSelected = data.find(m => m.id === selectedMachine.id);
-          if (updatedSelected) setSelectedMachine(updatedSelected);
+    const unsubMachines = onSnapshot(collection(db, 'machines'), (snapshot) => {
+      if (snapshot.empty) {
+        // Đẩy dữ liệu gốc lên nếu Đám mây rỗng
+        INITIAL_MACHINES.forEach(m => setDoc(doc(db, 'machines', m.id), m));
+      } else {
+        setMachines(snapshot.docs.map(d => d.data()));
       }
-    }, console.error);
+    });
 
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      setInventory(data);
-    }, console.error);
+    const unsubLogs = onSnapshot(collection(db, 'logs'), (snapshot) => {
+      if (snapshot.empty) {
+        INITIAL_LOGS.forEach(l => setDoc(doc(db, 'logs', String(l.id)), l));
+      } else {
+        setLogs(snapshot.docs.map(d => d.data()).sort((a,b) => b.id - a.id));
+      }
+    });
 
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-      setLogs(data.sort((a,b) => b.id - a.id));
-    }, console.error);
+    const unsubInventory = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+      if (snapshot.empty) {
+        INITIAL_INVENTORY.forEach(i => setDoc(doc(db, 'inventory', i.id), i));
+      } else {
+        setInventory(snapshot.docs.map(d => d.data()));
+      }
+    });
 
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snapshot) => {
-      const settingsData = snapshot.docs.find(doc => doc.id === 'general');
-      if (settingsData && settingsData.data().gs_url) setGoogleSheetUrl(settingsData.data().gs_url);
-      setIsCloudSyncing(false);
-    }, console.error);
-
-    return () => {
-       unsubMachines(); unsubInventory(); unsubLogs(); unsubSettings();
-    };
-  }, [fbUser, selectedMachine]);
-
-  // --- CÁC HÀM LƯU DỮ LIỆU LAI (HYBRID) ---
-  const saveMachineData = async (newMachineObj) => {
-    if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj);
-    } else {
-        const newList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m);
-        if(!newList.find(m => m.id === newMachineObj.id)) newList.push(newMachineObj);
-        setMachines(newList);
-        localStorage.setItem('techmaintain_machines', JSON.stringify(newList));
-    }
-  };
-
-  const saveInventoryData = async (newInvObj) => {
-    if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj);
-    } else {
-        const newList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i);
-        if(!newList.find(i => i.id === newInvObj.id)) newList.push(newInvObj);
-        setInventory(newList);
-        localStorage.setItem('techmaintain_inventory', JSON.stringify(newList));
-    }
-  };
-
-  const saveLogData = async (logEntry) => {
-    if (db && fbUser) {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry);
-    } else {
-        const newList = [logEntry, ...logs];
-        setLogs(newList);
-        localStorage.setItem('techmaintain_logs', JSON.stringify(newList));
-    }
-  };
+    return () => { unsubMachines(); unsubLogs(); unsubInventory(); };
+  }, [fbUser]);
 
   // --- ACTIONS ---
+
   const handleLogin = (username, password) => {
     const foundUser = USERS.find(u => u.username === username && u.password === password);
     if (foundUser) {
@@ -950,38 +142,69 @@ export default function App() {
     }
   };
 
-  const handleTechLogin = (techUser) => {
-    setUser(techUser);
-    setView('home');
-    showNotification(`Xin chào, ${techUser.name}`);
-  };
-
   const handleLogout = () => {
     setUser(null);
     setView('login');
     setSelectedMachine(null);
   };
 
-  const handleScanSuccess = (id) => {
-    if (!id) return;
-    if (selectedMachine && selectedMachine.id === id) return;
-
-    const machine = machines.find(m => m.id === id);
+  const handleScanSuccess = (machineId) => {
+    const machine = machines.find(m => m.id === machineId);
     if (machine) {
       setSelectedMachine(machine);
+      setShowQrCode(false);
       setView('details');
-      showNotification(`Quét thành công: ${machine.name}`);
     } else {
-      if (typeof id === 'string' && id.length > 2) {
-          if (!notification) { showNotification(`Mã không hợp lệ: ${id}`, 'error'); }
-      }
+      showNotification('Không tìm thấy mã máy này!', 'error');
     }
   };
 
-  const pushToGoogleSheet = async (logData) => {
+  const handleUpdateMachine = async (updatedMachine) => {
+    const newList = machines.map(m => m.id === updatedMachine.id ? updatedMachine : m);
+    setMachines(newList);
+    if (selectedMachine && selectedMachine.id === updatedMachine.id) {
+        setSelectedMachine(updatedMachine);
+    }
+    showNotification('Đã cập nhật thông tin thiết bị', 'success');
+    
+    if (isCloudSynced) await setDoc(doc(db, 'machines', updatedMachine.id), updatedMachine);
+  };
+
+  const handleDeleteMachine = async (id) => {
+    setMachines(machines.filter(m => m.id !== id));
+    if (selectedMachine && selectedMachine.id === id) {
+        setSelectedMachine(null);
+        setView(user.role === 'admin' ? 'dashboard' : 'home');
+    }
+    showNotification('Đã xóa thiết bị', 'success');
+    
+    if (isCloudSynced) await deleteDoc(doc(db, 'machines', id));
+  };
+
+  const handleDeleteLog = async (id) => {
+    setLogs(logs.filter(l => l.id !== id));
+    showNotification('Đã xóa báo cáo', 'success');
+    
+    if (isCloudSynced) await deleteDoc(doc(db, 'logs', String(id)));
+  };
+
+  const handleUpdateInventory = async (updatedItem) => {
+    const existingIndex = inventory.findIndex(i => i.id === updatedItem.id);
+    if (existingIndex > -1) {
+      const newList = [...inventory];
+      newList[existingIndex] = updatedItem;
+      setInventory(newList);
+    } else {
+      setInventory([updatedItem, ...inventory]);
+    }
+    
+    if (isCloudSynced) await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
+  };
+
+  const saveToGoogleSheet = async (logData) => {
     if (!googleSheetUrl) return;
+
     try {
-      // ĐÓNG GÓI DỮ LIỆU DẠNG JSON ĐỂ CHỞ ĐƯỢC ẢNH VÀ TRÁNH LỖI CORS
       const payload = {
         id: logData.id,
         machineId: logData.machineId,
@@ -992,49 +215,75 @@ export default function App() {
         note: logData.note,
         status: logData.status,
         parts: logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', '),
-        images: logData.images // Gửi kèm mảng ảnh đã nén
+        images: logData.images || []
       };
 
-      await fetch(googleSheetUrl, { 
-        method: 'POST', 
+      await fetch(googleSheetUrl, {
+        method: 'POST',
         body: JSON.stringify(payload),
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8', 
-        }
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       });
-      console.log("Đã xuất báo cáo lên Google Sheet");
     } catch (error) {
       console.error("Lỗi gửi Google Sheet:", error);
     }
   };
 
-  const handleSaveLog = async (newLog) => {
-    const logEntry = {
-      id: Date.now(),
-      machineId: selectedMachine.id,
-      date: new Date().toISOString().split('T')[0],
-      technician: newLog.technicianName || user.name, 
-      ...newLog
-    };
-    
-    await saveLogData(logEntry);
-    
-    const updatedMachine = { ...selectedMachine, status: newLog.status === 'Hoàn thành' ? 'operational' : 'maintenance' };
-    await saveMachineData(updatedMachine);
-    setSelectedMachine(updatedMachine);
+  const handleSaveLog = async (logData) => {
+    let finalLogEntry = null;
+    let machineToUpdate = null;
+    let inventoryToUpdate = [];
 
-    for (const usedPart of newLog.parts) {
-        const foundPart = inventory.find(i => i.name === usedPart.name);
-        if (foundPart) {
-            const newQty = Math.max(0, foundPart.quantity - Number(usedPart.quantity));
-            await saveInventoryData({ ...foundPart, quantity: newQty });
+    if (editingLog) {
+      finalLogEntry = { ...editingLog, ...logData };
+      setLogs(logs.map(l => l.id === editingLog.id ? finalLogEntry : l));
+    } else {
+      finalLogEntry = {
+        id: Date.now(),
+        machineId: selectedMachine.id,
+        date: new Date().toISOString().split('T')[0],
+        ...logData
+      };
+      setLogs([finalLogEntry, ...logs]);
+    }
+
+    const statusStr = logData.status === 'Hoàn thành' ? 'operational' : 'maintenance';
+    machineToUpdate = { ...selectedMachine, status: statusStr };
+    const updatedMachines = machines.map(m => m.id === selectedMachine.id ? machineToUpdate : m);
+    setMachines(updatedMachines);
+    setSelectedMachine(machineToUpdate);
+
+    if (!editingLog && logData.parts && logData.parts.length > 0) {
+      let newInventory = [...inventory];
+      logData.parts.forEach(part => {
+        const itemIndex = newInventory.findIndex(i => i.name === part.name);
+        if (itemIndex > -1) {
+          newInventory[itemIndex] = {
+            ...newInventory[itemIndex],
+            quantity: Math.max(0, newInventory[itemIndex].quantity - Number(part.quantity))
+          };
+          inventoryToUpdate.push(newInventory[itemIndex]);
+        }
+      });
+      setInventory(newInventory);
+    }
+
+    showNotification(editingLog ? 'Đã cập nhật báo cáo!' : 'Đã lưu báo cáo!', 'success');
+    setEditingLog(null);
+    setView('details');
+
+    // Đồng bộ lên Firebase Đám mây
+    if (isCloudSynced) {
+        await setDoc(doc(db, 'logs', String(finalLogEntry.id)), finalLogEntry);
+        await setDoc(doc(db, 'machines', machineToUpdate.id), machineToUpdate);
+        for (let item of inventoryToUpdate) {
+            await setDoc(doc(db, 'inventory', item.id), item);
         }
     }
 
-    if (googleSheetUrl) pushToGoogleSheet(logEntry);
-    
-    showNotification(db ? 'Đã lưu & đồng bộ hệ thống!' : 'Đã lưu vào bộ nhớ tạm (Offline)', 'success');
-    setView('details');
+    // Gửi báo cáo lên Google Sheet
+    if (!editingLog && googleSheetUrl) {
+        saveToGoogleSheet(finalLogEntry);
+    }
   };
 
   const showNotification = (msg, type = 'success') => {
@@ -1042,33 +291,1074 @@ export default function App() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  if (!user) return (
-      <div className="fixed inset-0 bg-slate-900 flex justify-center overflow-hidden">
-         <div className="w-full max-w-md h-full relative overflow-hidden">
-             <LoginView handleLogin={handleLogin} handleTechLogin={handleTechLogin} isCloudSyncing={isCloudSyncing} />
-         </div>
-         {notification && (<div className={`absolute top-4 left-4 right-4 max-w-md mx-auto p-4 rounded-lg shadow-xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
+  // --- VIEWS ---
+
+  const LoginView = () => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [isAdminView, setIsAdminView] = useState(false);
+    const techUser = USERS.find(u => u.role === 'maintenance');
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-6 bg-slate-900 text-white animate-fade-in relative">
+        <div className="w-full max-w-xs space-y-8 z-10">
+          <div className="text-center space-y-2">
+            <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg shadow-blue-500/30">
+              <Wrench className="w-12 h-12 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold">TechMaintain</h1>
+            <p className="text-slate-400">Hệ thống quản lý bảo trì</p>
+          </div>
+
+          {!isAdminView ? (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider text-center mb-4">
+                Dành cho Kỹ thuật viên
+              </h3>
+              
+              <button onClick={() => {
+                setUser(techUser);
+                setView('home');
+                showNotification(`Xin chào, ${techUser.name}`);
+              }} className="w-full bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-xl transition-all active:scale-95 shadow-lg flex items-center justify-between border border-slate-700">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-slate-700 p-2 rounded-full"><User className="w-5 h-5 text-blue-400" /></div>
+                  <span className="font-medium text-lg">Đăng nhập KTV</span>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-500" />
+              </button>
+
+              <div className="pt-6 border-t border-slate-800">
+                <button onClick={() => setIsAdminView(true)} className="w-full bg-transparent border border-slate-700 text-slate-300 hover:text-white font-medium py-3 rounded-xl transition-all active:scale-95 flex items-center justify-center">
+                  <Lock className="w-4 h-4 mr-2" /> Đăng nhập Quản trị (Admin)
+                </button>
+              </div>
+              
+              {/* HIỂN THỊ TRẠNG THÁI ĐÁM MÂY GIỐNG ẢNH */}
+              <div className="pt-4 text-center">
+                {isCloudSynced ? (
+                  <span className="inline-flex items-center justify-center text-xs font-medium text-green-400">
+                    <Cloud className="w-4 h-4 mr-2" /> Đã kết nối dữ liệu Đám mây
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center justify-center text-xs font-medium text-slate-500">
+                    <CloudOff className="w-4 h-4 mr-2" /> Đang kết nối Đám mây...
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl relative">
+              <button onClick={() => setIsAdminView(false)} className="absolute -top-4 -left-4 bg-slate-700 p-2 rounded-full hover:bg-slate-600 transition-colors shadow-lg">
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </button>
+              <h3 className="text-lg font-bold text-center mb-4">Đăng nhập Admin</h3>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Tài khoản</label>
+                <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none text-white" placeholder="admin" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Mật khẩu</label>
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-3 bg-slate-900 border border-slate-600 rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none text-white" placeholder="***" />
+              </div>
+              <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition-all active:scale-95 shadow-lg">Đăng Nhập</button>
+            </div>
+          )}
+        </div>
       </div>
+    );
+  };
+
+  const DashboardView = () => (
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+      <div className="bg-white p-4 border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
+        <div><h1 className="font-bold text-xl text-slate-800">Dashboard</h1><p className="text-xs text-slate-500">Xin chào, {user.name}</p></div>
+        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-2"><LogOut className="w-5 h-5" /></button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        <div className="grid grid-cols-2 gap-3">
+           <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm col-span-2">
+              <p className="text-blue-600 text-xs uppercase font-bold">Tổng thiết bị</p>
+              <p className="text-2xl font-bold text-blue-800">{machines.length}</p>
+           </div>
+           <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm"><p className="text-green-600 text-xs font-bold uppercase">Tốt</p><p className="text-2xl font-bold text-green-800 mt-1">{machines.filter(m => m.status === 'operational').length}</p></div>
+           <div className="bg-red-50 p-4 rounded-xl border border-red-100 shadow-sm"><p className="text-red-600 text-xs font-bold uppercase">Lỗi</p><p className="text-2xl font-bold text-red-800 mt-1">{machines.filter(m => m.status === 'broken').length}</p></div>
+        </div>
+        
+        <div>
+          <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị</h3>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+             <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Thêm/Sửa/Xóa, Nhập xuất Excel</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Quản lý tồn kho, Nhập xuất Excel</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('qr_print')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-purple-100 p-2 rounded-lg text-purple-600"><Printer className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">In mã QR Hàng loạt</p><p className="text-xs text-slate-500">Tạo trang in cho tất cả thiết bị</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Cấu hình Google Sheet</p><p className="text-xs text-slate-500">Kết nối cơ sở dữ liệu</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><QrCode className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-slate-500">Vào giao diện quét & chọn máy</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 
-  return (
-    <div className="fixed inset-0 bg-slate-900 flex justify-center overflow-hidden font-sans text-slate-800">
-      <div className="w-full max-w-md h-full bg-slate-100 shadow-2xl flex flex-col relative overflow-hidden">
-        <div className="h-1 bg-blue-600 w-full shrink-0"></div>
-        <div className="flex-1 overflow-hidden relative flex flex-col">
-          {view === 'dashboard' && <DashboardView user={user} machines={machines} handleLogout={handleLogout} setView={setView} db={db} />}
-          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} db={db} />}
-          {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} db={db} saveMachineData={saveMachineData} saveInventoryData={saveInventoryData} setMachines={setMachines} setInventory={setInventory} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
-          {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
-          {view === 'qr_print' && <QrPrintView machines={machines} setView={setView} />}
-          {view === 'home' && <HomeView user={user} setView={setView} handleLogout={handleLogout} db={db} />}
-          {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
-          {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} />}
-          {view === 'details' && <DetailsView selectedMachine={selectedMachine} setView={setView} logs={logs} />}
-          {view === 'form' && <LogFormView selectedMachine={selectedMachine} user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveLog={handleSaveLog} />}
+  const MachineManagementView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const fileInputRef = useRef(null);
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', status: 'operational' });
+    const [newItem, setNewItem] = useState({ id: '', name: '', model: '', location: '', status: 'operational' });
+
+    const filteredMachines = machines.filter(m => 
+      m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      m.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleAdd = () => {
+      if (!newItem.id || !newItem.name) return showNotification('Vui lòng nhập Mã và Tên máy!', 'error');
+      if (machines.find(m => m.id === newItem.id)) return showNotification('Mã máy đã tồn tại!', 'error');
+      
+      setMachines([newItem, ...machines]);
+      showNotification('Thêm máy thành công!');
+      if (isCloudSynced) setDoc(doc(db, 'machines', newItem.id), newItem);
+      
+      setNewItem({ id: '', name: '', model: '', location: '', status: 'operational' });
+    };
+
+    const startEdit = (machine) => {
+      setEditingId(machine.id);
+      setEditForm(machine);
+    };
+
+    const saveEdit = () => {
+      if (!editForm.name) return showNotification('Tên máy không được để trống!', 'error');
+      handleUpdateMachine(editForm);
+      setEditingId(null);
+    };
+
+    const handleExportExcel = async () => {
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Trạng Thái'];
+        const rows = machines.map(m => [m.id, m.name, m.model, m.location, m.status]);
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachMay");
+        XLSX.writeFile(workbook, `DanhSachMay_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showNotification('Đã xuất file Excel!');
+      } catch (err) {
+        showNotification('Lỗi xuất file Excel', 'error');
+      } finally { setIsLoading(false); }
+    };
+
+    const handleImportExcel = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+            
+            const newMachineList = [...machines];
+            let added = 0; let updated = 0;
+            
+            for (let i = 1; i < rows.length; i++) {
+              const cols = rows[i];
+              if (!cols || cols.length === 0) continue;
+              const id = cols[0] ? String(cols[0]).trim() : '';
+              const name = cols[1] ? String(cols[1]).trim() : '';
+              if (id && name) {
+                 const existingIdx = newMachineList.findIndex(m => m.id === id);
+                 const mData = { id, name, model: cols[2]||'', location: cols[3]||'', status: cols[4]||'operational' };
+                 if (existingIdx > -1) {
+                    newMachineList[existingIdx] = mData; updated++;
+                 } else {
+                    newMachineList.push(mData); added++;
+                 }
+                 if (isCloudSynced) setDoc(doc(db, 'machines', id), mData);
+              }
+            }
+            setMachines(newMachineList);
+            showNotification(`Cập nhật ${updated}, Thêm mới ${added} thiết bị`, 'success');
+          } catch (err) { showNotification('Lỗi đọc file Excel', 'error'); }
+          finally { setIsLoading(false); }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (err) { showNotification('Lỗi thư viện', 'error'); setIsLoading(false); }
+      e.target.value = null;
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
+           <div className="flex items-center space-x-3">
+               <button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+               <h2 className="font-bold text-slate-800 text-lg">Quản lý Thiết Bị</h2>
+           </div>
+           <div className="flex gap-2">
+               <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm"><Download className="w-4 h-4 text-blue-600" /> Tải File</button>
+               <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
+               <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm"><Upload className="w-4 h-4 text-green-600" /> Nhập File</button>
+           </div>
+           <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input type="text" placeholder="Tìm mã hoặc tên máy..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
         </div>
-        {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-lg shadow-xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+           <div className="bg-slate-100/50 p-3 rounded-xl border border-dashed border-slate-300 mb-2">
+              <h3 className="text-[11px] uppercase font-bold text-slate-500 mb-2">Thêm thiết bị mới</h3>
+              <div className="flex flex-col gap-2">
+                 <div className="flex gap-2">
+                    <input placeholder="Mã máy (VD: M-107)" className="w-1/3 p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500" value={newItem.id} onChange={e => setNewItem({...newItem, id: e.target.value})} />
+                    <input placeholder="Tên thiết bị" className="w-2/3 p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                 </div>
+                 <div className="flex gap-2">
+                    <input placeholder="Vị trí (VD: Xưởng A)" className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500" value={newItem.location} onChange={e => setNewItem({...newItem, location: e.target.value})} />
+                    <button onClick={handleAdd} className="w-1/2 bg-slate-800 text-white p-2 rounded-lg font-medium text-sm flex justify-center items-center"><Plus className="w-4 h-4 mr-1"/> Thêm Máy</button>
+                 </div>
+              </div>
+           </div>
+
+           <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách thiết bị ({filteredMachines.length})</span></div>
+           
+           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+              {filteredMachines.length > 0 ? filteredMachines.map((m, idx) => (
+                <div key={m.id} className={`p-4 flex flex-col ${idx !== filteredMachines.length -1 ? 'border-b border-slate-100' : ''}`}>
+                  {editingId === m.id ? (
+                     <div className="flex flex-col gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-inner">
+                        <input className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên máy" />
+                        <div className="flex gap-2">
+                           <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none" value={editForm.model} onChange={e => setEditForm({...editForm, model: e.target.value})} placeholder="Model" />
+                           <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
+                        </div>
+                        <select className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white outline-none" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>
+                            <option value="operational">Hoạt động tốt</option>
+                            <option value="maintenance">Đang bảo trì</option>
+                            <option value="broken">Bị hỏng</option>
+                        </select>
+                        <div className="flex justify-end gap-2 mt-2">
+                           <button onClick={() => handleDeleteMachine(m.id)} className="mr-auto p-1.5 bg-red-50 text-red-600 rounded-lg"><Trash2 className="w-4 h-4" /></button>
+                           <button onClick={() => setEditingId(null)} className="px-4 py-1.5 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg">Hủy</button>
+                           <button onClick={saveEdit} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg">Lưu</button>
+                        </div>
+                     </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                       <div>
+                          <div className="flex items-center gap-2 mb-1">
+                             <div className={`w-2 h-2 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+                             <h4 className="font-bold text-slate-800">{m.name}</h4>
+                          </div>
+                          <div className="text-xs text-slate-500 font-mono mt-0.5"><span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 mr-2">{m.id}</span> {m.location}</div>
+                       </div>
+                       <button onClick={() => startEdit(m)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg border border-slate-100"><Edit className="w-4 h-4" /></button>
+                    </div>
+                  )}
+                </div>
+              )) : (<div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị.</div>)}
+           </div>
+        </div>
       </div>
+    );
+  };
+
+  const InventoryView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const fileInputRef = useRef(null);
+    const [newItem, setNewItem] = useState({ name: '', unit: '', quantity: '' });
+    const [editingId, setEditingId] = useState(null);
+    const [editForm, setEditForm] = useState({ name: '', unit: '', quantity: '' });
+
+    const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const handleAddOrUpdate = () => {
+      if (!newItem.name || !newItem.unit || !newItem.quantity) { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
+      
+      const existingItem = inventory.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
+      if (existingItem) {
+        const newQty = existingItem.quantity + Number(newItem.quantity);
+        handleUpdateInventory({ ...existingItem, quantity: newQty, unit: newItem.unit });
+        showNotification(`Đã cộng thêm ${newItem.quantity} vào ${newItem.name}`);
+      } else {
+        const newId = 'P-' + Date.now();
+        handleUpdateInventory({ id: newId, name: newItem.name, unit: newItem.unit, quantity: Number(newItem.quantity) });
+        showNotification('Đã lưu vật tư mới!');
+      }
+      setNewItem({ name: '', unit: '', quantity: '' }); 
+    };
+
+    const startEdit = (item) => {
+        setEditingId(item.id);
+        setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity });
+    };
+
+    const saveEdit = () => {
+        if (!editForm.name || !editForm.unit || editForm.quantity === '') { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
+        const existingItem = inventory.find(i => i.id === editingId);
+        if (existingItem) {
+            handleUpdateInventory({ ...existingItem, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) });
+            showNotification('Đã cập nhật thành công!');
+        }
+        setEditingId(null);
+    };
+
+    const handleExportExcel = async () => {
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const headers = ['Mã Vật Tư', 'Tên Vật Tư', 'Đơn Vị', 'Số Lượng'];
+        const rows = inventory.map(item => [item.id, item.name, item.unit, item.quantity]);
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "KhoVatTu");
+        XLSX.writeFile(workbook, `Ton_Kho_${new Date().toISOString().split('T')[0]}.xlsx`);
+        showNotification('Đã xuất file Excel!');
+      } catch (err) {
+        showNotification('Lỗi xuất file Excel', 'error');
+      } finally { setIsLoading(false); }
+    };
+
+    const handleImportExcel = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        setIsLoading(true);
+        const XLSX = await loadXLSX();
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const data = new Uint8Array(event.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+            
+            const newInvList = [...inventory];
+            let added = 0; let updated = 0;
+            
+            for (let i = 1; i < rows.length; i++) {
+              const cols = rows[i];
+              if (!cols || cols.length === 0) continue;
+              const id = cols[0] ? String(cols[0]).trim() : '';
+              const name = cols[1] ? String(cols[1]).trim() : '';
+              const unit = cols[2] ? String(cols[2]).trim() : '';
+              const qty = cols[3] !== undefined ? Number(cols[3]) : 0;
+
+              if (name || id) {
+                 const existingIdx = newInvList.findIndex(item => (id && item.id === id) || item.name.toLowerCase() === name.toLowerCase());
+                 let itemData;
+                 if (existingIdx > -1) {
+                    itemData = { ...newInvList[existingIdx], quantity: isNaN(qty) ? 0 : qty, unit: unit || newInvList[existingIdx].unit };
+                    newInvList[existingIdx] = itemData;
+                    updated++;
+                 } else {
+                    itemData = { id: id || `P-${Date.now()}-${i}`, name, unit, quantity: isNaN(qty) ? 0 : qty };
+                    newInvList.push(itemData);
+                    added++;
+                 }
+                 if (isCloudSynced) setDoc(doc(db, 'inventory', itemData.id), itemData);
+              }
+            }
+            setInventory(newInvList);
+            showNotification(`Cập nhật ${updated}, Thêm mới ${added} vật tư`, 'success');
+          } catch (err) { showNotification('Lỗi đọc file Excel', 'error'); }
+          finally { setIsLoading(false); }
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (err) { showNotification('Lỗi thư viện', 'error'); setIsLoading(false); }
+      e.target.value = null;
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Kho Vật Tư</h2></div>
+          </div>
+          {user.role === 'admin' && (
+             <div className="flex gap-2">
+                 <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Download className="w-4 h-4 text-blue-600" /> Tải File</button>
+                 <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
+                 <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm"><Upload className="w-4 h-4 text-green-600" /> Nhập Kho</button>
+             </div>
+          )}
+          <div className="relative"><Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" /><input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 bg-slate-100 border-none rounded-lg text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {user.role === 'admin' && (
+            <div className="bg-slate-100/50 p-3 rounded-xl border border-dashed border-slate-300 mb-2">
+              <h3 className="text-[11px] uppercase font-bold text-slate-500 mb-2">Thêm nhanh thủ công</h3>
+              <div className="flex flex-col gap-2">
+                <input placeholder="Tên vật tư (VD: Dầu nhớt)" className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                <div className="flex gap-2">
+                    <input placeholder="Đơn vị" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
+                    <input placeholder="SL" type="number" className="w-1/4 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} />
+                    <button onClick={handleAddOrUpdate} className="w-1/4 bg-slate-800 text-white p-2 rounded-lg font-medium text-sm hover:bg-slate-700 flex justify-center items-center shadow-sm"><Plus className="w-4 h-4" /></button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredInventory.length})</span></div>
+          
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+            {filteredInventory.length > 0 ? (
+              filteredInventory.map((item, index) => (
+                <div key={item.id} className={`p-4 flex flex-col ${index !== filteredInventory.length -1 ? 'border-b border-slate-100' : ''}`}>
+                  {editingId === item.id ? (
+                    <div className="flex flex-col gap-2 bg-blue-50/50 p-3 rounded-lg border border-blue-200 shadow-inner">
+                      <input className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên vật tư" />
+                      <div className="flex gap-2">
+                          <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} placeholder="Đơn vị" />
+                          <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} placeholder="Số lượng" />
+                      </div>
+                      <div className="flex justify-end gap-2 mt-2">
+                          <button onClick={() => setEditingId(null)} className="px-4 py-1.5 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors">Hủy</button>
+                          <button onClick={saveEdit} className="px-4 py-1.5 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center shadow-sm">Lưu</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between items-center">
+                      <div><h4 className="font-bold text-slate-800">{item.name}</h4><p className="text-xs text-slate-500 font-mono mt-0.5">{item.id}</p></div>
+                      <div className="flex items-center space-x-3">
+                        <div className="text-right">
+                          <span className={`font-bold text-lg ${item.quantity < 10 ? 'text-red-500' : 'text-slate-700'}`}>{item.quantity}</span><span className="text-sm text-slate-500 ml-1">{item.unit}</span>
+                          {item.quantity < 10 && <p className="text-[10px] text-red-500 font-medium">Sắp hết</p>}
+                        </div>
+                        {user.role === 'admin' && (<button onClick={() => startEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded-lg transition-colors border border-slate-100 hover:border-blue-200"><Edit className="w-4 h-4" /></button>)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (<div className="p-8 text-center text-slate-400 text-sm">Kho trống.</div>)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const SettingsView = () => (
+    <div className="flex flex-col h-full bg-white">
+      <div className="p-4 border-b border-slate-100 flex items-center space-x-3">
+        <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+        <h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2>
+      </div>
+      <div className="p-6 space-y-4">
+        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800">
+          <strong>Hướng dẫn:</strong>
+          <ul className="list-disc ml-4 mt-2 space-y-1">
+             <li>Tạo Google Sheet mới & Apps Script.</li>
+             <li>Triển khai dưới dạng Web App (Access: Anyone).</li>
+             <li>Dán URL vào ô bên dưới.</li>
+          </ul>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script URL</label>
+          <input 
+            type="text" 
+            value={googleSheetUrl}
+            onChange={(e) => setGoogleSheetUrl(e.target.value)}
+            className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            placeholder="https://script.google.com/macros/s/..."
+          />
+        </div>
+        <button 
+          onClick={() => {
+            localStorage.setItem('gs_url', googleSheetUrl);
+            showNotification('Đã lưu cấu hình!');
+            setView('dashboard');
+          }}
+          className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg"
+        >
+          Lưu Cấu Hình
+        </button>
+      </div>
+    </div>
+  );
+
+  const QrPrintView = () => (
+    <div className="flex flex-col h-full bg-white">
+      <div className="p-4 border-b border-slate-100 flex items-center justify-between no-print">
+        <div className="flex items-center space-x-3">
+            <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+            <h2 className="font-bold text-slate-800">In mã QR</h2>
+        </div>
+        <button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm">
+            <Printer className="w-4 h-4" /> <span>In Ngay</span>
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-8 bg-slate-100 print:bg-white print:p-0">
+        <div className="grid grid-cols-2 gap-8 print:grid-cols-3 print:gap-4">
+            {machines.map(m => (
+                <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black">
+                    <h3 className="font-bold text-lg mb-2">{m.name}</h3>
+                    <img 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} 
+                      alt={m.name} 
+                      className="w-32 h-32 object-contain"
+                    />
+                    <p className="font-mono text-sm mt-2 font-bold">{m.id}</p>
+                    <p className="text-xs text-slate-500">{m.model}</p>
+                </div>
+            ))}
+        </div>
+      </div>
+      <style>{`@media print { .no-print { display: none !important; } }`}</style>
+    </div>
+  );
+
+  const HomeView = () => (
+    <div className="flex flex-col items-center justify-center h-full space-y-8 p-6 relative">
+      <div className="absolute top-4 right-4 flex items-center space-x-3">
+        {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Dashboard</button>}
+        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-5 h-5" /></button>
+      </div>
+      <div className="text-center space-y-2">
+        <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg"><Wrench className="w-12 h-12 text-white" /></div>
+        <h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1>
+      </div>
+      
+      <div className="w-full max-w-xs space-y-4">
+          <button 
+            onClick={() => setView('scanner')} 
+            className="w-full bg-slate-900 text-white py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform"
+          >
+            <QrCode className="w-6 h-6" />
+            <span className="font-semibold text-lg">Quét Mã QR</span>
+          </button>
+
+          <button 
+            onClick={() => setView('manual_select')} 
+            className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"
+          >
+            <ListFilter className="w-6 h-6 text-slate-500" />
+            <span className="font-semibold text-lg">Chọn Thủ Công</span>
+          </button>
+
+          <button 
+            onClick={() => setView('inventory')} 
+            className="w-full bg-white text-slate-700 border border-slate-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"
+          >
+            <Boxes className="w-6 h-6 text-orange-500" />
+            <span className="font-semibold text-lg">Kho Vật Tư</span>
+          </button>
+      </div>
+      
+      <p className="text-sm text-slate-400 text-center">
+        Chọn phương thức để bắt đầu bảo trì
+      </p>
+    </div>
+  );
+
+  const ScannerView = () => {
+    return (
+      <div className="flex flex-col h-full bg-black relative">
+        <div className="absolute top-0 left-0 right-0 p-4 z-20">
+          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 px-3 py-1.5 rounded-full backdrop-blur-sm">
+            <ArrowLeft className="w-5 h-5" />
+            <span>Quay lại</span>
+          </button>
+        </div>
+
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+             <div className="w-64 h-64 border-2 border-white/50 rounded-3xl relative">
+               <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -mt-1 -ml-1"></div>
+               <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl -mt-1 -mr-1"></div>
+               <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -mb-1 -ml-1"></div>
+               <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl -mb-1 -mr-1"></div>
+               <div className="absolute top-1/2 left-0 w-full h-0.5 bg-red-500/50 animate-pulse"></div>
+             </div>
+             <p className="absolute mt-80 text-white/80 text-sm font-medium">Di chuyển camera đến mã QR</p>
+        </div>
+
+        <div className="absolute bottom-8 left-0 right-0 px-6 z-20">
+             <p className="text-white/50 text-xs text-center mb-2">Demo: Nhấn để giả lập quét thành công</p>
+             <div className="flex gap-2 overflow-x-auto pb-2">
+                 {machines.map(m => (
+                     <button 
+                        key={m.id} 
+                        onClick={() => handleScanSuccess(m.id)}
+                        className="whitespace-nowrap bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-full text-xs backdrop-blur-md border border-white/10"
+                     >
+                        {m.name}
+                     </button>
+                 ))}
+             </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ManualSelectView = () => {
+    const [searchTerm, setSearchTerm] = useState('');
+    
+    const filteredMachines = machines.filter(m => 
+      m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      m.id.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+         <div className="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+            <div className="flex items-center space-x-3 mb-4">
+                <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
+                <h2 className="font-bold text-slate-800 text-lg">Tìm kiếm thiết bị</h2>
+            </div>
+            
+            <div className="relative">
+                <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                <input 
+                type="text" 
+                placeholder="Nhập tên hoặc mã máy..." 
+                className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+                />
+            </div>
+         </div>
+
+         <div className="flex-1 overflow-y-auto p-4 space-y-3">
+             <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
+                 <span>Danh sách ({filteredMachines.length})</span>
+             </div>
+             
+            {filteredMachines.length > 0 ? (
+                filteredMachines.map(m => (
+                <button 
+                  key={m.id}
+                  onClick={() => handleScanSuccess(m.id)}
+                  className="w-full p-4 bg-white border border-slate-200 hover:border-blue-500 rounded-xl flex items-center justify-between group transition-all shadow-sm active:scale-[0.98]"
+                >
+                  <div className="flex items-center space-x-4 text-left">
+                    <div className={`w-2 h-12 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+                    <div>
+                      <div className="font-bold text-slate-800 text-lg">{m.name}</div>
+                      <div className="text-sm text-slate-500 font-mono flex items-center mt-1">
+                         <span className="bg-slate-100 px-1.5 py-0.5 rounded text-xs text-slate-600 mr-2">{m.id}</span>
+                         <MapPin className="w-3 h-3 mr-1" />
+                         <span className="truncate max-w-[150px]">{m.location}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-slate-300 group-hover:text-blue-600 transition-colors">
+                      <div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center bg-slate-50 group-hover:bg-blue-50 group-hover:border-blue-200">
+                          &rarr;
+                      </div>
+                  </div>
+                </button>
+              ))
+            ) : (
+                <div className="text-center py-12 text-slate-400">
+                    <Search className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                    <p>Không tìm thấy thiết bị phù hợp.</p>
+                </div>
+            )}
+         </div>
+      </div>
+    );
+  };
+
+  const DetailsView = () => {
+    const machineLogs = logs.filter(l => l.machineId === selectedMachine.id);
+    const [isEditingMachine, setIsEditingMachine] = useState(false);
+    const [editMachineData, setEditMachineData] = useState(selectedMachine);
+    const [viewingLog, setViewingLog] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, type: '', id: null });
+
+    const handleConfirmDelete = () => {
+      if (confirmDelete.type === 'machine') {
+        handleDeleteMachine(confirmDelete.id);
+      } else if (confirmDelete.type === 'log') {
+        handleDeleteLog(confirmDelete.id);
+        if (viewingLog && viewingLog.id === confirmDelete.id) setViewingLog(null);
+      }
+      setConfirmDelete({ isOpen: false, type: '', id: null });
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="bg-white shadow-sm p-4 sticky top-0 z-10">
+            <div className="flex items-center justify-between mb-2">
+                <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full">
+                    <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h2 className="font-bold text-slate-800">Chi tiết thiết bị</h2>
+                <div>
+                   {user.role === 'admin' && !isEditingMachine && (
+                     <button onClick={() => setIsEditingMachine(true)} className="p-2 -mr-2 text-blue-600 hover:bg-blue-50 rounded-full">
+                         <Edit className="w-5 h-5" />
+                     </button>
+                   )}
+                </div>
+            </div>
+
+            {isEditingMachine ? (
+               <div className="space-y-3 mt-4 animate-fade-in">
+                  <div>
+                      <label className="text-xs text-slate-500 font-medium">Tên thiết bị</label>
+                      <input value={editMachineData.name} onChange={e => setEditMachineData({...editMachineData, name: e.target.value})} className="w-full border border-slate-300 rounded p-2 text-sm" placeholder="Tên máy..." />
+                  </div>
+                  <div>
+                      <label className="text-xs text-slate-500 font-medium">Model</label>
+                      <input value={editMachineData.model} onChange={e => setEditMachineData({...editMachineData, model: e.target.value})} className="w-full border border-slate-300 rounded p-2 text-sm" placeholder="Model máy..." />
+                  </div>
+                  <div>
+                      <label className="text-xs text-slate-500 font-medium">Vị trí</label>
+                      <input value={editMachineData.location} onChange={e => setEditMachineData({...editMachineData, location: e.target.value})} className="w-full border border-slate-300 rounded p-2 text-sm" placeholder="Vị trí đặt máy..." />
+                  </div>
+                  <div>
+                      <label className="text-xs text-slate-500 font-medium">Trạng thái</label>
+                      <select value={editMachineData.status} onChange={e => setEditMachineData({...editMachineData, status: e.target.value})} className="w-full border border-slate-300 rounded p-2 text-sm bg-white">
+                        <option value="operational">Đang hoạt động tốt</option>
+                        <option value="maintenance">Đang bảo trì</option>
+                        <option value="broken">Bị hỏng</option>
+                      </select>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-3">
+                     <button onClick={() => setConfirmDelete({ isOpen: true, type: 'machine', id: selectedMachine.id })} className="mr-auto p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100">
+                         <Trash2 className="w-5 h-5" />
+                     </button>
+                     <button onClick={() => { setIsEditingMachine(false); setEditMachineData(selectedMachine); }} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200">Hủy</button>
+                     <button onClick={() => { handleUpdateMachine(editMachineData); setIsEditingMachine(false); }} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium flex items-center hover:bg-blue-700"><Save className="w-4 h-4 mr-2" /> Lưu</button>
+                  </div>
+               </div>
+            ) : (
+               <div className="animate-fade-in">
+                  <h1 className="text-xl font-bold text-slate-900">{selectedMachine.name}</h1>
+                  <div className="flex items-center space-x-2 mt-1">
+                      <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs font-mono">{selectedMachine.id}</span>
+                      <p className="text-slate-500 text-sm flex items-center"><MapPin className="w-3 h-3 mr-1"/> {selectedMachine.location}</p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                      <div className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${selectedMachine.status === 'operational' ? 'bg-green-50 text-green-700 border-green-200' : selectedMachine.status === 'maintenance' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                          {selectedMachine.status === 'operational' ? 'Đang hoạt động' : selectedMachine.status === 'maintenance' ? 'Đang bảo trì' : 'Đang hỏng'}
+                      </div>
+                      <span className="text-xs text-slate-400">Model: {selectedMachine.model}</span>
+                  </div>
+               </div>
+            )}
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
+            <button onClick={() => { setEditingLog(null); setView('form'); }} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-3 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-lg">
+                <Wrench className="w-5 h-5" />
+                <span className="font-semibold">Tạo Báo Cáo Mới</span>
+            </button>
+            
+            <div>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center space-x-2"><History className="w-5 h-5 text-slate-500" /><span>Lịch sử báo cáo</span></h3>
+                {machineLogs.length === 0 ? (
+                   <p className="text-sm text-slate-400 text-center py-6">Chưa có báo cáo nào cho thiết bị này.</p>
+                ) : (
+                   <div className="space-y-4">
+                     {machineLogs.map((log) => (
+                       <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
+                           <div className="flex justify-between items-start mb-2">
+                               <div>
+                                   <span className="text-xs font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded">{log.type}</span>
+                                   <div className="text-xs text-slate-400 mt-1">{log.date}</div>
+                               </div>
+                               <div className="flex flex-col items-end gap-1">
+                                   <span className="bg-slate-100 px-2 py-1 rounded text-[11px] font-medium text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {log.technician}</span>
+                                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${log.status === 'Hoàn thành' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{log.status}</span>
+                               </div>
+                           </div>
+                           <p className="text-slate-700 text-sm my-3 line-clamp-2">{log.note}</p>
+                           
+                           {/* Các nút Xem / Sửa / Xóa */}
+                           <div className="flex gap-2 justify-end border-t border-slate-50 pt-3">
+                               <button onClick={() => setViewingLog(log)} className="flex items-center gap-1.5 text-xs font-medium text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+                                  <Eye className="w-3.5 h-3.5" /> Xem
+                               </button>
+                               <button onClick={() => { setEditingLog(log); setView('form'); }} className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
+                                  <Edit className="w-3.5 h-3.5" /> Sửa
+                               </button>
+                               <button onClick={() => setConfirmDelete({ isOpen: true, type: 'log', id: log.id })} className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" /> Xóa
+                               </button>
+                           </div>
+                       </div>
+                     ))}
+                   </div>
+                )}
+            </div>
+        </div>
+
+        {/* MODAL XEM CHI TIẾT BÁO CÁO */}
+        {viewingLog && (
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-40 p-4 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl p-5 w-full max-w-sm max-h-[85vh] flex flex-col shadow-2xl">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                <h3 className="font-bold text-lg text-slate-800">Chi tiết báo cáo</h3>
+                <button onClick={() => setViewingLog(null)} className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-600 transition-colors"><X className="w-5 h-5"/></button>
+              </div>
+              <div className="overflow-y-auto space-y-4 flex-1 pr-1 custom-scrollbar">
+                 <div className="grid grid-cols-2 gap-4">
+                    <div><p className="text-[11px] text-slate-400 uppercase font-bold mb-1">Ngày bảo trì</p><p className="font-medium text-sm text-slate-800">{viewingLog.date}</p></div>
+                    <div><p className="text-[11px] text-slate-400 uppercase font-bold mb-1">Người thực hiện</p><p className="font-medium text-sm text-slate-800">{viewingLog.technician}</p></div>
+                    <div><p className="text-[11px] text-slate-400 uppercase font-bold mb-1">Phân loại</p><p className="font-medium text-sm text-slate-800">{viewingLog.type}</p></div>
+                    <div>
+                        <p className="text-[11px] text-slate-400 uppercase font-bold mb-1">Trạng thái</p>
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${viewingLog.status === 'Hoàn thành' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{viewingLog.status}</span>
+                    </div>
+                 </div>
+                 <div>
+                    <p className="text-[11px] text-slate-400 uppercase font-bold mb-1 mt-2">Ghi chú công việc</p>
+                    <div className="text-sm bg-blue-50/50 p-3 rounded-xl border border-blue-100 text-slate-700 leading-relaxed whitespace-pre-wrap">{viewingLog.note}</div>
+                 </div>
+                 {viewingLog.parts && viewingLog.parts.length > 0 && (
+                   <div>
+                     <p className="text-[11px] text-slate-400 uppercase font-bold mb-2 flex items-center"><Package className="w-3.5 h-3.5 mr-1" /> Vật tư thay thế</p>
+                     <div className="space-y-2">
+                       {viewingLog.parts.map((p, i) => (
+                         <div key={i} className="flex justify-between items-center text-sm bg-white p-2 rounded-lg border border-slate-200 shadow-sm">
+                            <span className="font-medium text-slate-700">{p.name}</span>
+                            <span className="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">{p.quantity} {p.unit}</span>
+                         </div>
+                       ))}
+                     </div>
+                   </div>
+                 )}
+                 {viewingLog.images && viewingLog.images.length > 0 && (
+                   <div>
+                     <p className="text-[11px] text-slate-400 uppercase font-bold mb-2 flex items-center"><Camera className="w-3.5 h-3.5 mr-1" /> Hình ảnh đính kèm</p>
+                     <div className="flex flex-wrap gap-2">
+                       {viewingLog.images.map((img, idx) => (
+                          <img key={idx} src={img} className="w-20 h-20 object-cover rounded-lg border border-slate-200" alt="Báo cáo" />
+                       ))}
+                     </div>
+                   </div>
+                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL XÁC NHẬN XÓA */}
+        {confirmDelete.isOpen && (
+          <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100">
+              <div className="flex items-center space-x-3 mb-3 text-red-600">
+                 <div className="bg-red-100 p-2 rounded-full"><AlertCircle className="w-6 h-6" /></div>
+                 <h3 className="font-bold text-lg text-slate-800">Xác nhận xóa</h3>
+              </div>
+              <p className="text-slate-600 text-sm mb-6 pl-1">
+                Bạn có chắc chắn muốn xóa vĩnh viễn {confirmDelete.type === 'machine' ? <strong className="text-slate-800">thiết bị này</strong> : <strong className="text-slate-800">báo cáo bảo trì này</strong>}? Hành động này sẽ không thể hoàn tác.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setConfirmDelete({ isOpen: false, type: '', id: null })} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Hủy</button>
+                <button onClick={handleConfirmDelete} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-red-500/30">
+                  Đồng ý Xóa
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const LogFormView = () => {
+    // Tự động nạp dữ liệu cũ nếu đang ở chế độ SỬA
+    const initialForm = editingLog || { technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] };
+    const [formData, setFormData] = useState(initialForm);
+    const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+
+    const addPart = () => { 
+        if(tempPart.name && tempPart.quantity) { 
+            setFormData({...formData, parts: [...formData.parts, tempPart]}); 
+            setTempPart({ name: '', unit: '', quantity: '' }); 
+        } else {
+            showNotification('Vui lòng chọn vật tư và nhập số lượng', 'error');
+        }
+    };
+
+    const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800; // Giới hạn chiều rộng ảnh để nén nhẹ
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
+                setFormData(prev => ({...prev, images: [...prev.images, compressedBase64]}));
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const removeImage = (index) => {
+        const newImages = [...formData.images];
+        newImages.splice(index, 1);
+        setFormData({...formData, images: newImages});
+    };
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 relative">
+        {/* THANH TIÊU ĐỀ */}
+        <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 z-10 shadow-sm">
+            <button onClick={() => { setEditingLog(null); setView('details'); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+                <ArrowLeft className="w-6 h-6 text-slate-600" />
+            </button>
+            <div>
+                <h2 className="font-bold text-slate-800 flex items-center">
+                    {editingLog ? <><Edit className="w-4 h-4 mr-1.5 text-orange-500" /> Cập nhật báo cáo</> : <><Plus className="w-4 h-4 mr-1.5 text-blue-500" /> Báo cáo công việc</>}
+                </h2>
+                <p className="text-xs text-slate-500">{selectedMachine.name}</p>
+            </div>
+        </div>
+        
+        {/* KHU VỰC NHẬP LIỆU CÓ THỂ CUỘN */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label>
+                <input type="text" className="w-full p-3 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Loại công việc</label>
+                <select className="w-full p-3 rounded-xl border border-slate-300 text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                    <option>Bảo trì định kỳ</option>
+                    <option>Sửa chữa sự cố</option>
+                    <option>Thay thế linh kiện</option>
+                </select>
+            </div>
+            
+            {/* KHU VỰC VẬT TƯ THAY THẾ CHUẨN */}
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ Kho)</label>
+                <div className="flex flex-col gap-2 mb-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <select className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.name} onChange={(e) => { const selectedItem = inventory.find(i => i.name === e.target.value); setTempPart({ ...tempPart, name: e.target.value, unit: selectedItem ? selectedItem.unit : '' }); }}>
+                        <option value="">-- Chọn vật tư trong kho --</option>
+                        {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity} {item.unit})</option>))}
+                    </select>
+                    
+                    <div className="flex gap-2">
+                        <input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-slate-100 text-slate-500" value={tempPart.unit} />
+                        <input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
+                    </div>
+                    
+                    <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-medium text-sm mt-1 hover:bg-blue-700 transition-colors">
+                        <Plus className="w-4 h-4 mr-1" /> Thêm vào báo cáo
+                    </button>
+                </div>
+                
+                <div className="space-y-2">
+                    {formData.parts.map((p, i) => (
+                      <div key={i} className="bg-white border border-slate-200 p-3 rounded-lg flex justify-between items-center text-sm shadow-sm">
+                          <span className="font-medium text-slate-700">{p.name}</span>
+                          <span className="text-slate-600 bg-slate-100 px-2 py-1 rounded text-xs font-bold">Dùng: {p.quantity} {p.unit}</span>
+                      </div>
+                    ))}
+                </div>
+            </div>
+            
+            {/* KHU VỰC HÌNH ẢNH */}
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Hình ảnh hiện trường</label>
+                <div className="flex flex-wrap gap-2">
+                    {formData.images.map((img, idx) => (
+                      <div key={idx} className="relative w-20 h-20">
+                         <img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200 shadow-sm" alt="Preview" />
+                         <button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-transform active:scale-90"><X className="w-3 h-3" /></button>
+                      </div>
+                    ))}
+                    <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-white hover:bg-slate-50 hover:border-blue-400 text-slate-400 hover:text-blue-500 transition-colors">
+                        <Camera className="w-6 h-6 mb-1" />
+                        <span className="text-[10px] font-medium">Chụp ảnh</span>
+                        <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
+                    </label>
+                </div>
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Mô tả chi tiết</label>
+                <textarea rows="4" className="w-full p-3 rounded-xl border border-slate-300 text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[120px]" placeholder="Nhập chi tiết công việc, nguyên nhân, cách khắc phục..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+            </div>
+            
+            {/* NÚT TRẠNG THÁI */}
+            <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-xl border-2 flex items-center justify-center space-x-2 transition-all ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'border-slate-200 text-slate-500 bg-white hover:border-green-200 hover:bg-green-50'}`}>
+                    <CheckCircle className="w-5 h-5" /> <span className="font-medium">Xong</span>
+                </button>
+                <button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-3 rounded-xl border-2 flex items-center justify-center space-x-2 transition-all ${formData.status === 'Cần theo dõi' ? 'bg-white border-slate-300 text-slate-700 shadow-sm' : 'border-slate-200 text-slate-400 bg-white hover:border-slate-300 hover:text-slate-600 hover:bg-slate-50'}`}>
+                    <AlertCircle className="w-5 h-5" /> <span className="font-medium">Chưa xong</span>
+                </button>
+            </div>
+        </div>
+        
+        {/* NÚT LƯU CỐ ĐỊNH Ở ĐÁY MÀN HÌNH MÀ KHÔNG CHE KHUẤT TRANG */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
+            <button onClick={() => {if(!formData.note) return showNotification('Bạn cần nhập mô tả công việc!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-slate-800 transition-transform active:scale-95">
+                <Save className="w-5 h-5" /> {editingLog ? 'Lưu Thay Đổi' : 'Lưu Báo Cáo'}
+            </button>
+        </div>
+      </div>
+    );
+  };
+
+  if (!user) return <div className="max-w-md mx-auto h-[100dvh] w-full bg-slate-900 overflow-hidden font-sans relative"><LoginView /></div>;
+  return (
+    <div className="max-w-md mx-auto h-[100dvh] bg-slate-100 shadow-2xl overflow-hidden font-sans text-slate-800 flex flex-col relative">
+      <div className="h-1 bg-blue-600 w-full shrink-0"></div>
+      <div className="flex-1 overflow-hidden relative">
+        {view === 'dashboard' && <DashboardView />}
+        {view === 'machines' && <MachineManagementView />}
+        {view === 'settings' && <SettingsView />}
+        {view === 'qr_print' && <QrPrintView />}
+        {view === 'home' && <HomeView />}
+        {view === 'scanner' && <ScannerView />}
+        {view === 'manual_select' && <ManualSelectView />}
+        {view === 'details' && <DetailsView />}
+        {view === 'form' && <LogFormView />}
+        {view === 'inventory' && <InventoryView />}
+      </div>
+      {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-xl shadow-2xl flex items-center space-x-3 z-50 animate-fade-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
     </div>
   );
 }
