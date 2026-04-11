@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Eye, Trash2, Edit, Boxes, Download, Upload, Database, Cloud, CloudOff, Users } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Eye, Trash2, Edit, Boxes, Download, Upload, Database, Cloud, CloudOff, Users, Zap, Droplets, Gauge, Calendar } from 'lucide-react';
 
 // --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
@@ -80,6 +80,16 @@ const INITIAL_TECHNICIANS = [
   { id: 'T-3', name: 'KTV Trần Thị B' }
 ];
 
+// Hàm tính toán Cos Phi
+const calcCosPhi = (normal, peak, offPeak, reactive) => {
+    const P = (parseFloat(normal) || 0) + (parseFloat(peak) || 0) + (parseFloat(offPeak) || 0);
+    const Q = parseFloat(reactive) || 0;
+    if (P === 0 && Q === 0) return 0;
+    const S = Math.sqrt(Math.pow(P, 2) + Math.pow(Q, 2));
+    if (S === 0) return 0;
+    return (P / S).toFixed(2);
+};
+
 export default function App() {
   // --- STATE ---
   const [user, setUser] = useState(null); 
@@ -88,6 +98,7 @@ export default function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [inventory, setInventory] = useState(INITIAL_INVENTORY);
   const [technicians, setTechnicians] = useState(INITIAL_TECHNICIANS);
+  const [meterLogs, setMeterLogs] = useState([]);
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
   const [showQrCode, setShowQrCode] = useState(false);
@@ -122,7 +133,6 @@ export default function App() {
 
     const unsubMachines = onSnapshot(collection(db, 'machines'), (snapshot) => {
       if (snapshot.empty) {
-        // Đẩy dữ liệu gốc lên nếu Đám mây rỗng
         INITIAL_MACHINES.forEach(m => setDoc(doc(db, 'machines', m.id), m));
       } else {
         setMachines(snapshot.docs.map(d => d.data()));
@@ -153,7 +163,15 @@ export default function App() {
       }
     });
 
-    return () => { unsubMachines(); unsubLogs(); unsubInventory(); unsubTechnicians(); };
+    const unsubMeterLogs = onSnapshot(collection(db, 'meter_logs'), (snapshot) => {
+      if (!snapshot.empty) {
+        setMeterLogs(snapshot.docs.map(d => d.data()).sort((a,b) => b.id - a.id));
+      } else {
+        setMeterLogs([]);
+      }
+    });
+
+    return () => { unsubMachines(); unsubLogs(); unsubInventory(); unsubTechnicians(); unsubMeterLogs(); };
   }, [fbUser]);
 
   // --- ACTIONS ---
@@ -193,7 +211,6 @@ export default function App() {
         setSelectedMachine(updatedMachine);
     }
     showNotification('Đã cập nhật thông tin thiết bị', 'success');
-    
     if (isCloudSynced) await setDoc(doc(db, 'machines', updatedMachine.id), updatedMachine);
   };
 
@@ -204,15 +221,19 @@ export default function App() {
         setView(user.role === 'admin' ? 'dashboard' : 'home');
     }
     showNotification('Đã xóa thiết bị', 'success');
-    
     if (isCloudSynced) await deleteDoc(doc(db, 'machines', id));
   };
 
   const handleDeleteLog = async (id) => {
     setLogs(logs.filter(l => l.id !== id));
     showNotification('Đã xóa báo cáo', 'success');
-    
     if (isCloudSynced) await deleteDoc(doc(db, 'logs', String(id)));
+  };
+
+  const handleDeleteMeterLog = async (id) => {
+    setMeterLogs(meterLogs.filter(l => l.id !== id));
+    showNotification('Đã xóa ghi nhận điện/nước', 'success');
+    if (isCloudSynced) await deleteDoc(doc(db, 'meter_logs', String(id)));
   };
 
   const handleUpdateInventory = async (updatedItem) => {
@@ -224,7 +245,6 @@ export default function App() {
     } else {
       setInventory([updatedItem, ...inventory]);
     }
-    
     if (isCloudSynced) await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
   };
 
@@ -248,9 +268,9 @@ export default function App() {
 
   const saveToGoogleSheet = async (logData) => {
     if (!googleSheetUrl) return;
-
     try {
       const payload = {
+        formType: 'maintenance',
         id: logData.id,
         machineId: logData.machineId,
         machineName: selectedMachine.name,
@@ -268,9 +288,54 @@ export default function App() {
         body: JSON.stringify(payload),
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }
       });
-    } catch (error) {
-      console.error("Lỗi gửi Google Sheet:", error);
-    }
+    } catch (error) { console.error("Lỗi gửi Google Sheet:", error); }
+  };
+
+  const saveMeterToGoogleSheet = async (data) => {
+    if (!googleSheetUrl) return;
+    try {
+      let payload = {
+        id: data.id,
+        date: data.date,
+        technician: data.technicianName,
+      };
+
+      if (data.recordType === 'water') {
+        payload.formType = 'water_log';
+        payload.water = data.water;
+      } else if (data.recordType === 'electricity') {
+        payload.formType = 'electricity_log';
+        payload.s1_normal = data.s1_normal;
+        payload.s1_peak = data.s1_peak;
+        payload.s1_offpeak = data.s1_offpeak;
+        payload.s1_reactive = data.s1_reactive;
+        payload.s1_cosPhi = calcCosPhi(data.s1_normal, data.s1_peak, data.s1_offpeak, data.s1_reactive);
+        payload.s2_normal = data.s2_normal;
+        payload.s2_peak = data.s2_peak;
+        payload.s2_offpeak = data.s2_offpeak;
+        payload.s2_reactive = data.s2_reactive;
+        payload.s2_cosPhi = calcCosPhi(data.s2_normal, data.s2_peak, data.s2_offpeak, data.s2_reactive);
+      } else {
+        payload.formType = 'meter_log';
+        payload.water = data.water;
+        payload.s1_normal = data.s1_normal;
+        payload.s1_peak = data.s1_peak;
+        payload.s1_offpeak = data.s1_offpeak;
+        payload.s1_reactive = data.s1_reactive;
+        payload.s1_cosPhi = calcCosPhi(data.s1_normal, data.s1_peak, data.s1_offpeak, data.s1_reactive);
+        payload.s2_normal = data.s2_normal;
+        payload.s2_peak = data.s2_peak;
+        payload.s2_offpeak = data.s2_offpeak;
+        payload.s2_reactive = data.s2_reactive;
+        payload.s2_cosPhi = calcCosPhi(data.s2_normal, data.s2_peak, data.s2_offpeak, data.s2_reactive);
+      }
+
+      await fetch(googleSheetUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+      });
+    } catch (error) { console.error("Lỗi gửi Google Sheet điện nước:", error); }
   };
 
   const handleSaveLog = async (logData) => {
@@ -316,7 +381,6 @@ export default function App() {
     setEditingLog(null);
     setView('details');
 
-    // Đồng bộ lên Firebase Đám mây
     if (isCloudSynced) {
         await setDoc(doc(db, 'logs', String(finalLogEntry.id)), finalLogEntry);
         await setDoc(doc(db, 'machines', machineToUpdate.id), machineToUpdate);
@@ -324,11 +388,19 @@ export default function App() {
             await setDoc(doc(db, 'inventory', item.id), item);
         }
     }
+    if (!editingLog && googleSheetUrl) { saveToGoogleSheet(finalLogEntry); }
+  };
 
-    // Gửi báo cáo lên Google Sheet
-    if (!editingLog && googleSheetUrl) {
-        saveToGoogleSheet(finalLogEntry);
-    }
+  const handleSaveMeterLog = async (logData) => {
+      if (!logData.technicianName) return showNotification("Vui lòng nhập tên người thực hiện!", "error");
+      
+      const finalData = { id: Date.now(), ...logData };
+      setMeterLogs([finalData, ...meterLogs]);
+      showNotification('Đã lưu thông số điện nước!', 'success');
+      setView('meter_menu');
+
+      if (isCloudSynced) await setDoc(doc(db, 'meter_logs', String(finalData.id)), finalData);
+      if (googleSheetUrl) saveMeterToGoogleSheet(finalData);
   };
 
   const showNotification = (msg, type = 'success') => {
@@ -379,7 +451,6 @@ export default function App() {
                 </button>
               </div>
               
-              {/* HIỂN THỊ TRẠNG THÁI ĐÁM MÂY GIỐNG ẢNH */}
               <div className="pt-4 text-center">
                 {isCloudSynced ? (
                   <span className="inline-flex items-center justify-center text-xs font-medium text-green-400">
@@ -451,6 +522,13 @@ export default function App() {
                 <div className="flex items-center space-x-3">
                   <div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div>
                   <div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Quản lý tồn kho, Nhập xuất Excel</p></div>
+                </div>
+                <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('meter_menu')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="bg-yellow-100 p-2 rounded-lg text-yellow-600"><Zap className="w-5 h-5" /></div>
+                  <div className="text-left"><p className="font-medium text-slate-800">Quản lý Điện Nước</p><p className="text-xs text-slate-500">Ghi nhận và xem lịch sử điện, nước</p></div>
                 </div>
                 <ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
@@ -928,10 +1006,18 @@ export default function App() {
             <Boxes className="w-6 h-6 text-orange-500" />
             <span className="font-semibold text-lg">Kho Vật Tư</span>
           </button>
+
+          <button 
+            onClick={() => setView('meter_menu')} 
+            className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-4 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-blue-100 active:scale-95 transition-transform mt-4"
+          >
+            <Zap className="w-6 h-6" />
+            <span className="font-semibold text-lg">Ghi Điện / Nước</span>
+          </button>
       </div>
       
       <p className="text-sm text-slate-400 text-center">
-        Chọn phương thức để bắt đầu bảo trì
+        Chọn phương thức để bắt đầu công việc
       </p>
     </div>
   );
@@ -956,26 +1042,21 @@ export default function App() {
               qrbox: { width: 250, height: 250 }
             },
             (decodedText) => {
-              // Xử lý khi quét thành công
               if (decodedText !== lastScannedRef.current) {
                 lastScannedRef.current = decodedText;
                 const machine = machines.find(m => m.id === decodedText);
                 
                 if (machine) {
-                  // Nếu mã QR khớp với một thiết bị, dừng camera và chuyển trang
                   html5QrCode.stop().then(() => {
                     handleScanSuccess(decodedText);
                   }).catch(console.error);
                 } else {
-                  // Nếu quét được mã QR nhưng không phải của máy nào trong hệ thống
                   showNotification(`Mã không hợp lệ: ${decodedText}`, 'error');
-                  setTimeout(() => { lastScannedRef.current = null; }, 3000); // 3 giây sau mới quét lại mã này
+                  setTimeout(() => { lastScannedRef.current = null; }, 3000);
                 }
               }
             },
-            (errorMessage) => {
-               // Bỏ qua các lỗi frame trong lúc đang tìm mã
-            }
+            (errorMessage) => { }
           );
           setIsCameraReady(true);
         } catch (err) {
@@ -986,7 +1067,6 @@ export default function App() {
 
       initScanner();
 
-      // Dọn dẹp: Tắt camera khi người dùng rời khỏi trang này
       return () => {
         if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
           html5QrCodeRef.current.stop().catch(console.error);
@@ -1003,9 +1083,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Khung chứa Camera */}
         <div className="absolute inset-0 bg-slate-900 flex items-center justify-center overflow-hidden">
-           {/* id="qr-reader" là bắt buộc để thư viện chèn thẻ <video> vào đây */}
            <div id="qr-reader" className="w-full h-full [&>video]:object-cover [&>video]:w-full [&>video]:h-full"></div>
            
            {!isCameraReady && !errorMsg && (
@@ -1021,22 +1099,17 @@ export default function App() {
            )}
         </div>
 
-        {/* Khung UI đè lên (Overlay) làm đẹp */}
         <div className="absolute inset-0 pointer-events-none z-20 flex flex-col items-center justify-center shadow-[inset_0_0_0_2000px_rgba(0,0,0,0.5)]">
            <div className="w-64 h-64 relative">
-             {/* 4 Góc bo */}
              <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-blue-500 rounded-tl-2xl"></div>
              <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-blue-500 rounded-tr-2xl"></div>
              <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-blue-500 rounded-bl-2xl"></div>
              <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-blue-500 rounded-br-2xl"></div>
-             
-             {/* Tia Laser chạy dọc */}
              {isCameraReady && <div className="absolute top-0 left-0 w-full h-0.5 bg-red-500 shadow-[0_0_10px_2px_rgba(239,68,68,0.5)] animate-[scan_2s_ease-in-out_infinite]"></div>}
            </div>
            <p className="text-white/90 text-sm font-medium mt-8 bg-black/50 px-4 py-1.5 rounded-full backdrop-blur-md">Di chuyển camera đến mã QR</p>
         </div>
 
-        {/* Vẫn giữ lại Nút ấn thủ công phòng khi camera lỗi */}
         <div className="absolute bottom-8 left-0 right-0 px-6 z-30">
            <p className="text-white/70 text-xs text-center mb-3 font-medium">Hoặc chọn máy (Demo thủ công):</p>
            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
@@ -1338,8 +1411,342 @@ export default function App() {
     );
   };
 
+  // MÀN HÌNH MENU GHI ĐIỆN NƯỚC (TÍNH NĂNG MỚI)
+  const MeterMenuView = () => (
+    <div className="flex flex-col h-full bg-slate-50 relative">
+      <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 z-10 shadow-sm">
+          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+              <ArrowLeft className="w-6 h-6 text-slate-600" />
+          </button>
+          <h2 className="font-bold text-slate-800 text-lg">Quản lý Điện / Nước</h2>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <button
+              onClick={() => setView('electric_form')}
+              className="w-full bg-yellow-50 text-yellow-700 border border-yellow-200 py-6 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-sm hover:bg-yellow-100 active:scale-95 transition-transform"
+          >
+              <Zap className="w-10 h-10" />
+              <span className="font-bold text-xl">Ghi Số Điện</span>
+          </button>
+
+          <button
+              onClick={() => setView('water_form')}
+              className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-6 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-sm hover:bg-blue-100 active:scale-95 transition-transform"
+          >
+              <Droplets className="w-10 h-10" />
+              <span className="font-bold text-xl">Ghi Số Nước</span>
+          </button>
+
+          <button
+              onClick={() => setView('meter_history')}
+              className="w-full bg-white text-slate-700 border border-slate-200 py-6 rounded-2xl flex flex-col items-center justify-center gap-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"
+          >
+              <History className="w-10 h-10 text-slate-500" />
+              <span className="font-bold text-xl">Lịch sử Điện / Nước</span>
+          </button>
+      </div>
+    </div>
+  );
+
+  // MÀN HÌNH NHẬP FORM GHI ĐIỆN 
+  const ElectricFormView = () => {
+    const [formData, setFormData] = useState({
+      date: new Date().toISOString().split('T')[0],
+      technicianName: user?.name || '',
+      recordType: 'electricity',
+      s1_normal: '', s1_peak: '', s1_offpeak: '', s1_reactive: '',
+      s2_normal: '', s2_peak: '', s2_offpeak: '', s2_reactive: ''
+    });
+    const [showTechDropdown, setShowTechDropdown] = useState(false);
+
+    const s1_cos = calcCosPhi(formData.s1_normal, formData.s1_peak, formData.s1_offpeak, formData.s1_reactive);
+    const s2_cos = calcCosPhi(formData.s2_normal, formData.s2_peak, formData.s2_offpeak, formData.s2_reactive);
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 z-10 shadow-sm">
+            <button onClick={() => setView('meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+                <ArrowLeft className="w-6 h-6 text-slate-600" />
+            </button>
+            <h2 className="font-bold text-slate-800 flex items-center text-lg">
+                <Zap className="w-5 h-5 mr-1.5 text-yellow-500" /> Ghi Số Điện
+            </h2>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
+            <div className="grid grid-cols-2 gap-3">
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Ngày ghi</label>
+                  <input type="date" className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+               </div>
+               <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Người ghi</label>
+                  <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={formData.technicianName} 
+                      onChange={e => {
+                          setFormData({...formData, technicianName: e.target.value});
+                          setShowTechDropdown(true);
+                      }} 
+                      onFocus={() => setShowTechDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowTechDropdown(false), 200)}
+                      placeholder="Nhập tên..." 
+                  />
+                  {showTechDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                          {technicians.filter(t => t.name.toLowerCase().includes(formData.technicianName.toLowerCase())).map(t => (
+                              <div key={t.id} onClick={() => setFormData({...formData, technicianName: t.name})} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 text-slate-700 text-sm">
+                                  {t.name}
+                              </div>
+                          ))}
+                      </div>
+                  )}
+               </div>
+            </div>
+
+            {/* Trạm Điện 1 */}
+            <div className="bg-white p-4 rounded-xl border border-yellow-200 shadow-sm">
+               <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center uppercase"><Gauge className="w-4 h-4 mr-1 text-yellow-500"/> Đồng Hồ - Trạm 1</h3>
+               <div className="grid grid-cols-2 gap-3 mb-3">
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Bình thường (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s1_normal} onChange={e => setFormData({...formData, s1_normal: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Cao điểm (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s1_peak} onChange={e => setFormData({...formData, s1_peak: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Thấp điểm (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s1_offpeak} onChange={e => setFormData({...formData, s1_offpeak: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Vô công (Kvar)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s1_reactive} onChange={e => setFormData({...formData, s1_reactive: e.target.value})} />
+                   </div>
+               </div>
+               <div className={`p-3 rounded-lg border flex items-center justify-between ${s1_cos > 0 && s1_cos < 0.9 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                   <span className="font-semibold text-slate-700">Cos φ</span>
+                   <div className="flex items-center">
+                       {s1_cos > 0 && s1_cos < 0.9 && <AlertCircle className="w-4 h-4 text-red-500 mr-2" />}
+                       <span className={`font-bold text-lg ${s1_cos > 0 && s1_cos < 0.9 ? 'text-red-600' : 'text-green-600'}`}>{s1_cos}</span>
+                   </div>
+               </div>
+               {s1_cos > 0 && s1_cos < 0.9 && <p className="text-xs text-red-500 mt-1 italic">Cảnh báo: Cos phi đang dưới 0.9!</p>}
+            </div>
+
+            {/* Trạm Điện 2 */}
+            <div className="bg-white p-4 rounded-xl border border-yellow-200 shadow-sm">
+               <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center uppercase"><Gauge className="w-4 h-4 mr-1 text-yellow-500"/> Đồng Hồ - Trạm 2</h3>
+               <div className="grid grid-cols-2 gap-3 mb-3">
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Bình thường (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s2_normal} onChange={e => setFormData({...formData, s2_normal: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Cao điểm (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s2_peak} onChange={e => setFormData({...formData, s2_peak: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Thấp điểm (Kw)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s2_offpeak} onChange={e => setFormData({...formData, s2_offpeak: e.target.value})} />
+                   </div>
+                   <div>
+                       <label className="text-xs text-slate-500 mb-1 block">Vô công (Kvar)</label>
+                       <input type="number" className="w-full p-2 rounded-lg border border-slate-300 focus:ring-2 outline-none" value={formData.s2_reactive} onChange={e => setFormData({...formData, s2_reactive: e.target.value})} />
+                   </div>
+               </div>
+               <div className={`p-3 rounded-lg border flex items-center justify-between ${s2_cos > 0 && s2_cos < 0.9 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-100'}`}>
+                   <span className="font-semibold text-slate-700">Cos φ</span>
+                   <div className="flex items-center">
+                       {s2_cos > 0 && s2_cos < 0.9 && <AlertCircle className="w-4 h-4 text-red-500 mr-2" />}
+                       <span className={`font-bold text-lg ${s2_cos > 0 && s2_cos < 0.9 ? 'text-red-600' : 'text-green-600'}`}>{s2_cos}</span>
+                   </div>
+               </div>
+               {s2_cos > 0 && s2_cos < 0.9 && <p className="text-xs text-red-500 mt-1 italic">Cảnh báo: Cos phi đang dưới 0.9!</p>}
+            </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
+            <button onClick={() => handleSaveMeterLog(formData)} className="w-full bg-yellow-600 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-yellow-700 transition-transform active:scale-95">
+                <Save className="w-5 h-5" /> Ghi Nhận Điện
+            </button>
+        </div>
+      </div>
+    );
+  };
+
+  // MÀN HÌNH NHẬP FORM GHI NƯỚC
+  const WaterFormView = () => {
+    const [formData, setFormData] = useState({
+      date: new Date().toISOString().split('T')[0],
+      technicianName: user?.name || '',
+      recordType: 'water',
+      water: ''
+    });
+    const [showTechDropdown, setShowTechDropdown] = useState(false);
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 z-10 shadow-sm">
+            <button onClick={() => setView('meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+                <ArrowLeft className="w-6 h-6 text-slate-600" />
+            </button>
+            <h2 className="font-bold text-slate-800 flex items-center text-lg">
+                <Droplets className="w-5 h-5 mr-1.5 text-blue-500" /> Ghi Số Nước
+            </h2>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
+            <div className="grid grid-cols-2 gap-3">
+               <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Ngày ghi</label>
+                  <input type="date" className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+               </div>
+               <div className="relative">
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Người ghi</label>
+                  <input 
+                      type="text" 
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={formData.technicianName} 
+                      onChange={e => {
+                          setFormData({...formData, technicianName: e.target.value});
+                          setShowTechDropdown(true);
+                      }} 
+                      onFocus={() => setShowTechDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowTechDropdown(false), 200)}
+                      placeholder="Nhập tên..." 
+                  />
+                  {showTechDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                          {technicians.filter(t => t.name.toLowerCase().includes(formData.technicianName.toLowerCase())).map(t => (
+                              <div key={t.id} onClick={() => setFormData({...formData, technicianName: t.name})} className="p-3 hover:bg-blue-50 cursor-pointer border-b border-slate-50 text-slate-700 text-sm">
+                                  {t.name}
+                              </div>
+                          ))}
+                      </div>
+                  )}
+               </div>
+            </div>
+
+            {/* Mục Nước */}
+            <div className="bg-white p-5 rounded-xl border border-blue-200 shadow-sm">
+               <h3 className="text-sm font-bold text-blue-600 mb-3 flex items-center uppercase"><Droplets className="w-5 h-5 mr-1"/> Chỉ số nước tổng</h3>
+               <div>
+                   <input type="number" placeholder="Khối (m³)..." className="w-full p-4 text-xl font-bold rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.water} onChange={e => setFormData({...formData, water: e.target.value})} />
+               </div>
+            </div>
+        </div>
+
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
+            <button onClick={() => handleSaveMeterLog(formData)} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-blue-700 transition-transform active:scale-95">
+                <Save className="w-5 h-5" /> Ghi Nhận Nước
+            </button>
+        </div>
+      </div>
+    );
+  };
+
+  // MÀN HÌNH LỊCH SỬ GHI ĐIỆN NƯỚC
+  const MeterHistoryView = () => {
+    const [filterTab, setFilterTab] = useState('all');
+
+    const filteredLogs = meterLogs.filter(log => {
+        if (filterTab === 'all') return true;
+        return log.recordType === filterTab || (!log.recordType); // Bao gồm cả log cũ nếu có
+    });
+
+    return (
+      <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="bg-white shadow-sm p-4 sticky top-0 z-10 flex flex-col space-y-3">
+            <div className="flex items-center space-x-3">
+                <button onClick={() => setView('meter_menu')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full">
+                    <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h2 className="font-bold text-slate-800">Sổ Ghi Điện / Nước</h2>
+            </div>
+            
+            <div className="flex bg-slate-100 p-1 rounded-lg">
+                <button onClick={() => setFilterTab('all')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${filterTab === 'all' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>Tất cả</button>
+                <button onClick={() => setFilterTab('electricity')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${filterTab === 'electricity' ? 'bg-white shadow-sm text-yellow-600' : 'text-slate-500'}`}>Điện</button>
+                <button onClick={() => setFilterTab('water')} className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-colors ${filterTab === 'water' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}>Nước</button>
+            </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {filteredLogs.length === 0 ? (
+               <p className="text-sm text-slate-400 text-center py-6">Chưa có dữ liệu ghi nhận.</p>
+            ) : (
+               filteredLogs.map((log) => (
+                 <div key={log.id} className={`bg-white p-4 rounded-xl shadow-sm border relative ${log.recordType === 'electricity' ? 'border-yellow-100' : log.recordType === 'water' ? 'border-blue-100' : 'border-slate-100'}`}>
+                     <div className="flex justify-between items-center mb-3 border-b border-slate-50 pb-2">
+                         <div className="font-bold text-slate-800 flex items-center">
+                             <Calendar className="w-4 h-4 mr-1 text-slate-400"/> {log.date}
+                             {log.recordType === 'electricity' && <span className="ml-2 bg-yellow-100 text-yellow-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Điện</span>}
+                             {log.recordType === 'water' && <span className="ml-2 bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded font-bold uppercase">Nước</span>}
+                         </div>
+                         <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-md flex items-center"><User className="w-3 h-3 mr-1"/> {log.technicianName}</div>
+                     </div>
+                     
+                     <div className="space-y-3 text-sm text-slate-600">
+                         {(log.recordType === 'water' || !log.recordType) && log.water && (
+                           <div className="flex items-center text-blue-600 font-medium bg-blue-50 p-2.5 rounded-lg border border-blue-100">
+                               <Droplets className="w-5 h-5 mr-2" /> Chỉ số Nước: <span className="ml-2 text-slate-800 text-lg">{log.water}</span> <span className="ml-1 text-xs">m³</span>
+                           </div>
+                         )}
+                         
+                         {(log.recordType === 'electricity' || !log.recordType) && log.s1_normal !== undefined && log.s1_normal !== '' && (
+                             <>
+                                 <div className="bg-yellow-50/50 p-2.5 rounded-lg border border-yellow-100">
+                                     <p className="font-bold text-slate-700 flex items-center mb-1"><Gauge className="w-3 h-3 mr-1 text-yellow-600"/> Trạm 1</p>
+                                     <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                                        <span>B.thường: <strong className="text-slate-800">{log.s1_normal}</strong></span>
+                                        <span>Cao điểm: <strong className="text-slate-800">{log.s1_peak}</strong></span>
+                                        <span>Thấp điểm: <strong className="text-slate-800">{log.s1_offpeak}</strong></span>
+                                        <span>Vô công: <strong className="text-slate-800">{log.s1_reactive}</strong></span>
+                                     </div>
+                                     <div className="mt-2 border-t border-yellow-200/50 pt-1 flex justify-between items-center">
+                                         <span className="text-xs font-semibold">Cos φ</span>
+                                         <span className={`font-bold ${calcCosPhi(log.s1_normal, log.s1_peak, log.s1_offpeak, log.s1_reactive) < 0.9 ? 'text-red-500' : 'text-green-600'}`}>
+                                             {calcCosPhi(log.s1_normal, log.s1_peak, log.s1_offpeak, log.s1_reactive)}
+                                         </span>
+                                     </div>
+                                 </div>
+                                 
+                                 <div className="bg-yellow-50/50 p-2.5 rounded-lg border border-yellow-100">
+                                     <p className="font-bold text-slate-700 flex items-center mb-1"><Gauge className="w-3 h-3 mr-1 text-yellow-600"/> Trạm 2</p>
+                                     <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                                        <span>B.thường: <strong className="text-slate-800">{log.s2_normal}</strong></span>
+                                        <span>Cao điểm: <strong className="text-slate-800">{log.s2_peak}</strong></span>
+                                        <span>Thấp điểm: <strong className="text-slate-800">{log.s2_offpeak}</strong></span>
+                                        <span>Vô công: <strong className="text-slate-800">{log.s2_reactive}</strong></span>
+                                     </div>
+                                     <div className="mt-2 border-t border-yellow-200/50 pt-1 flex justify-between items-center">
+                                         <span className="text-xs font-semibold">Cos φ</span>
+                                         <span className={`font-bold ${calcCosPhi(log.s2_normal, log.s2_peak, log.s2_offpeak, log.s2_reactive) < 0.9 ? 'text-red-500' : 'text-green-600'}`}>
+                                             {calcCosPhi(log.s2_normal, log.s2_peak, log.s2_offpeak, log.s2_reactive)}
+                                         </span>
+                                     </div>
+                                 </div>
+                             </>
+                         )}
+                     </div>
+
+                     {user.role === 'admin' && (
+                        <div className="absolute top-2 right-2">
+                           <button onClick={() => handleDeleteMeterLog(log.id)} className="text-slate-400 p-2 hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                        </div>
+                     )}
+                 </div>
+               ))
+            )}
+        </div>
+      </div>
+    );
+  };
+
   const LogFormView = () => {
-    // Tự động nạp dữ liệu cũ nếu đang ở chế độ SỬA
     const initialForm = editingLog || { technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] };
     const [formData, setFormData] = useState(initialForm);
     const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
@@ -1363,7 +1770,7 @@ export default function App() {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 800; // Giới hạn chiều rộng ảnh để nén nhẹ
+                const MAX_WIDTH = 800;
                 const scaleSize = MAX_WIDTH / img.width;
                 canvas.width = MAX_WIDTH;
                 canvas.height = img.height * scaleSize;
@@ -1386,7 +1793,6 @@ export default function App() {
 
     return (
       <div className="flex flex-col h-full bg-slate-50 relative">
-        {/* THANH TIÊU ĐỀ */}
         <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 z-10 shadow-sm">
             <button onClick={() => { setEditingLog(null); setView('details'); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
                 <ArrowLeft className="w-6 h-6 text-slate-600" />
@@ -1399,7 +1805,6 @@ export default function App() {
             </div>
         </div>
         
-        {/* KHU VỰC NHẬP LIỆU CÓ THỂ CUỘN */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
             <div className="relative">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label>
@@ -1416,7 +1821,6 @@ export default function App() {
                     placeholder="Gõ để tìm hoặc nhập tên mới..." 
                 />
                 
-                {/* DROPDOWN CHỌN NHÂN SỰ */}
                 {showTechDropdown && (
                     <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto custom-scrollbar">
                         {technicians.filter(t => t.name.toLowerCase().includes(formData.technicianName.toLowerCase())).length > 0 ? (
@@ -1445,7 +1849,6 @@ export default function App() {
                 </select>
             </div>
             
-            {/* KHU VỰC VẬT TƯ THAY THẾ CHUẨN */}
             <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ Kho)</label>
                 <div className="flex flex-col gap-2 mb-2 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
@@ -1474,7 +1877,6 @@ export default function App() {
                 </div>
             </div>
             
-            {/* KHU VỰC HÌNH ẢNH */}
             <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Hình ảnh hiện trường</label>
                 <div className="flex flex-wrap gap-2">
@@ -1497,7 +1899,6 @@ export default function App() {
                 <textarea rows="4" className="w-full p-3 rounded-xl border border-slate-300 text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[120px]" placeholder="Nhập chi tiết công việc, nguyên nhân, cách khắc phục..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
             </div>
             
-            {/* NÚT TRẠNG THÁI */}
             <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-xl border-2 flex items-center justify-center space-x-2 transition-all ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'border-slate-200 text-slate-500 bg-white hover:border-green-200 hover:bg-green-50'}`}>
                     <CheckCircle className="w-5 h-5" /> <span className="font-medium">Xong</span>
@@ -1508,7 +1909,6 @@ export default function App() {
             </div>
         </div>
         
-        {/* NÚT LƯU CỐ ĐỊNH Ở ĐÁY MÀN HÌNH MÀ KHÔNG CHE KHUẤT TRANG */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
             <button onClick={() => {if(!formData.note) return showNotification('Bạn cần nhập mô tả công việc!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-slate-800 transition-transform active:scale-95">
                 <Save className="w-5 h-5" /> {editingLog ? 'Lưu Thay Đổi' : 'Lưu Báo Cáo'}
@@ -1615,6 +2015,10 @@ export default function App() {
         {view === 'form' && <LogFormView />}
         {view === 'inventory' && <InventoryView />}
         {view === 'technicians' && <TechnicianManagementView />}
+        {view === 'meter_menu' && <MeterMenuView />}
+        {view === 'electric_form' && <ElectricFormView />}
+        {view === 'water_form' && <WaterFormView />}
+        {view === 'meter_history' && <MeterHistoryView />}
       </div>
       {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-xl shadow-2xl flex items-center space-x-3 z-50 animate-fade-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
     </div>
