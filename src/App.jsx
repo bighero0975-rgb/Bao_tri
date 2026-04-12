@@ -302,7 +302,22 @@ export default function App() {
 
       if (data.recordType === 'water') {
         payload.formType = 'water_log';
-        payload.water = data.water;
+        payload.w_total = data.w_total;
+        payload.w_total_usage = data.w_total_usage;
+        payload.w_plants = data.w_plants;
+        payload.w_plants_usage = data.w_plants_usage;
+        payload.w_main_office = data.w_main_office;
+        payload.w_main_office_usage = data.w_main_office_usage;
+        payload.w_canteen_main = data.w_canteen_main;
+        payload.w_canteen_main_usage = data.w_canteen_main_usage;
+        payload.w_canteen_factory = data.w_canteen_factory;
+        payload.w_canteen_factory_usage = data.w_canteen_factory_usage;
+        payload.w_guard_main = data.w_guard_main;
+        payload.w_guard_main_usage = data.w_guard_main_usage;
+        payload.w_guard_side = data.w_guard_side;
+        payload.w_guard_side_usage = data.w_guard_side_usage;
+        payload.w_restroom = data.w_restroom;
+        payload.w_restroom_usage = data.w_restroom_usage;
       } else if (data.recordType === 'electricity') {
         payload.formType = 'electricity_log';
         payload.s1_normal = data.s1_normal;
@@ -901,44 +916,131 @@ export default function App() {
     );
   };
 
-  const SettingsView = () => (
-    <div className="flex flex-col h-full bg-white">
-      <div className="p-4 border-b border-slate-100 flex items-center space-x-3">
-        <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-        <h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2>
-      </div>
-      <div className="p-6 space-y-4">
-        <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800">
-          <strong>Hướng dẫn:</strong>
-          <ul className="list-disc ml-4 mt-2 space-y-1">
-             <li>Tạo Google Sheet mới & Apps Script.</li>
-             <li>Triển khai dưới dạng Web App (Access: Anyone).</li>
-             <li>Dán URL vào ô bên dưới.</li>
-          </ul>
+  const APPS_SCRIPT_CODE = `function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. XỬ LÝ GHI NƯỚC
+    if (data.formType === 'water_log') {
+      var sheet = ss.getSheetByName('GhiNuoc') || ss.insertSheet('GhiNuoc');
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(['ID', 'Ngày', 'Người ghi', 'Tổng CS', 'Tổng TT', 'Tưới Cây CS', 'Tưới Cây TT', 'VP Chính CS', 'VP Chính TT', 'N.ăn VPC CS', 'N.ăn VPC TT', 'N.ăn Xưởng CS', 'N.ăn Xưởng TT', 'BV C.Chính CS', 'BV C.Chính TT', 'BV C.Phụ CS', 'BV C.Phụ TT', 'NVS Xưởng CS', 'NVS Xưởng TT']);
+        sheet.getRange("A1:S1").setFontWeight("bold").setBackground("#cfe2f3");
+      }
+      sheet.appendRow([data.id, data.date, data.technician, 
+         data.w_total, data.w_total_usage, 
+         data.w_plants, data.w_plants_usage, 
+         data.w_main_office, data.w_main_office_usage, 
+         data.w_canteen_main, data.w_canteen_main_usage, 
+         data.w_canteen_factory, data.w_canteen_factory_usage, 
+         data.w_guard_main, data.w_guard_main_usage, 
+         data.w_guard_side, data.w_guard_side_usage, 
+         data.w_restroom, data.w_restroom_usage
+      ]);
+    } 
+    
+    // 2. XỬ LÝ GHI ĐIỆN
+    else if (data.formType === 'electricity_log') {
+      var sheet = ss.getSheetByName('GhiDien') || ss.insertSheet('GhiDien');
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(['ID', 'Ngày', 'Người ghi', 'T1-Bình Thường', 'T1-Cao Điểm', 'T1-Thấp Điểm', 'T1-Vô Công', 'T1-CosPhi', 'T2-Bình Thường', 'T2-Cao Điểm', 'T2-Thấp Điểm', 'T2-Vô Công', 'T2-CosPhi']);
+        sheet.getRange("A1:M1").setFontWeight("bold").setBackground("#fff2cc");
+      }
+      sheet.appendRow([
+        data.id, data.date, data.technician, 
+        data.s1_normal, data.s1_peak, data.s1_offpeak, data.s1_reactive, data.s1_cosPhi, 
+        data.s2_normal, data.s2_peak, data.s2_offpeak, data.s2_reactive, data.s2_cosPhi
+      ]);
+    }
+    
+    // 3. XỬ LÝ BÁO CÁO BẢO TRÌ (CŨ)
+    else if (data.formType === 'maintenance') {
+      var sheet = ss.getSheetByName('BaoTri') || ss.insertSheet('BaoTri');
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(['ID', 'Ngày', 'Mã Máy', 'Tên Máy', 'KTV', 'Loại', 'Ghi chú', 'Trạng thái', 'Vật tư']);
+        sheet.getRange("A1:I1").setFontWeight("bold").setBackground("#d9ead3");
+      }
+      sheet.appendRow([data.id, data.date, data.machineId, data.machineName, data.technician, data.type, data.note, data.status, data.parts]);
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({"error": err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  const SettingsView = () => {
+    const [showScript, setShowScript] = useState(false);
+
+    return (
+      <div className="flex flex-col h-full bg-white relative">
+        <div className="p-4 border-b border-slate-100 flex items-center space-x-3 sticky top-0 bg-white z-10 shadow-sm">
+          <button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+          <h2 className="font-bold text-slate-800">Cấu hình Google Sheet</h2>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Google Apps Script URL</label>
-          <input 
-            type="text" 
-            value={googleSheetUrl}
-            onChange={(e) => setGoogleSheetUrl(e.target.value)}
-            className="w-full p-3 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="https://script.google.com/macros/s/..."
-          />
+        <div className="p-6 space-y-6 overflow-y-auto pb-20">
+          <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 text-sm text-yellow-800 shadow-sm">
+            <strong className="flex items-center text-yellow-900 mb-2"><FileSpreadsheet className="w-4 h-4 mr-1"/> Hướng dẫn kết nối:</strong>
+            <ul className="list-decimal ml-5 space-y-1.5 text-yellow-800/90">
+               <li>Mở Google Sheet của bạn &gt; Tiện ích mở rộng (Extensions) &gt; <b>Apps Script</b>.</li>
+               <li>Copy đoạn mã (code) bên dưới dán vào ô Script và nhấn Lưu.</li>
+               <li>Nhấn nút <b>Triển khai (Deploy)</b> &gt; Tùy chọn triển khai mới (New deployment).</li>
+               <li>Chọn loại "Ứng dụng Web" (Web app). Quyền truy cập: <b>Bất kỳ ai (Anyone)</b>.</li>
+               <li>Copy <b>URL Ứng dụng web</b> dán vào ô màu xanh bên dưới.</li>
+            </ul>
+          </div>
+
+          <div>
+            <div className="flex justify-between items-end mb-2">
+                <label className="block text-sm font-bold text-slate-700">Mã Google Apps Script</label>
+                <button 
+                   onClick={() => {
+                       navigator.clipboard.writeText(APPS_SCRIPT_CODE);
+                       showNotification('Đã copy mã Script!', 'success');
+                   }} 
+                   className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                   Copy Code
+                </button>
+            </div>
+            {showScript ? (
+                <div className="relative">
+                    <textarea readOnly value={APPS_SCRIPT_CODE} className="w-full h-48 p-3 bg-slate-900 text-green-400 font-mono text-xs rounded-xl shadow-inner focus:outline-none resize-none custom-scrollbar"></textarea>
+                    <button onClick={() => setShowScript(false)} className="absolute top-2 right-2 p-1.5 bg-slate-700 text-slate-300 rounded-lg hover:text-white"><X className="w-4 h-4"/></button>
+                </div>
+            ) : (
+                <button onClick={() => setShowScript(true)} className="w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 font-medium hover:bg-slate-50 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                    + Nhấn để hiển thị mã Script
+                </button>
+            )}
+          </div>
+
+          <div className="pt-2 border-t border-slate-100">
+            <label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label>
+            <input 
+              type="text" 
+              value={googleSheetUrl}
+              onChange={(e) => setGoogleSheetUrl(e.target.value)}
+              className="w-full p-3.5 bg-blue-50/50 border border-blue-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 placeholder:text-slate-400"
+              placeholder="https://script.google.com/macros/s/..."
+            />
+          </div>
+          
+          <button 
+            onClick={() => {
+              localStorage.setItem('gs_url', googleSheetUrl);
+              showNotification('Đã lưu cấu hình URL!');
+              setView('dashboard');
+            }}
+            className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-700 transition-transform active:scale-95 flex justify-center items-center gap-2"
+          >
+            <Save className="w-5 h-5"/> Lưu Cấu Hình
+          </button>
         </div>
-        <button 
-          onClick={() => {
-            localStorage.setItem('gs_url', googleSheetUrl);
-            showNotification('Đã lưu cấu hình!');
-            setView('dashboard');
-          }}
-          className="w-full bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg"
-        >
-          Lưu Cấu Hình
-        </button>
       </div>
-    </div>
-  );
+    );
+  };
 
   const QrPrintView = () => (
     <div className="flex flex-col h-full bg-white">
@@ -1325,7 +1427,7 @@ export default function App() {
                                </button>
                                <button onClick={() => { setEditingLog(log); setView('form'); }} className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
                                   <Edit className="w-3.5 h-3.5" /> Sửa
-                               </button>
+                                </button>
                                <button onClick={() => setConfirmDelete({ isOpen: true, type: 'log', id: log.id })} className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
                                   <Trash2 className="w-3.5 h-3.5" /> Xóa
                                </button>
@@ -1580,13 +1682,50 @@ export default function App() {
 
   // MÀN HÌNH NHẬP FORM GHI NƯỚC
   const WaterFormView = () => {
+    // Tìm log nước gần nhất để tính toán tiêu thụ
+    const previousLog = meterLogs.find(log => log.recordType === 'water');
+
     const [formData, setFormData] = useState({
       date: new Date().toISOString().split('T')[0],
       technicianName: user?.name || '',
       recordType: 'water',
-      water: ''
+      w_total: '',
+      w_plants: '',
+      w_main_office: '',
+      w_canteen_main: '',
+      w_canteen_factory: '',
+      w_guard_main: '',
+      w_guard_side: '',
+      w_restroom: ''
     });
     const [showTechDropdown, setShowTechDropdown] = useState(false);
+
+    const WATER_METERS = [
+      { id: 'w_total', label: 'Chỉ số Tổng', color: 'text-blue-600' },
+      { id: 'w_plants', label: 'Tưới cây', color: 'text-green-600' },
+      { id: 'w_main_office', label: 'Văn phòng chính', color: 'text-slate-600' },
+      { id: 'w_canteen_main', label: 'Nhà ăn VPC', color: 'text-orange-500' },
+      { id: 'w_canteen_factory', label: 'Nhà ăn xưởng', color: 'text-orange-600' },
+      { id: 'w_guard_main', label: 'Bảo vệ cổng chính', color: 'text-slate-700' },
+      { id: 'w_guard_side', label: 'Bảo vệ cổng phụ', color: 'text-slate-500' },
+      { id: 'w_restroom', label: 'Nhà vệ sinh xưởng', color: 'text-teal-600' },
+    ];
+
+    const calcUsage = (current, prev) => {
+        if (current === '' || current === undefined) return 0;
+        const currVal = parseFloat(current);
+        const prevVal = parseFloat(prev) || 0;
+        return currVal >= prevVal ? parseFloat((currVal - prevVal).toFixed(2)) : 0;
+    };
+
+    const handleSave = () => {
+        let finalData = { ...formData };
+        WATER_METERS.forEach(m => {
+            const prevValue = previousLog ? previousLog[m.id] : 0;
+            finalData[`${m.id}_usage`] = calcUsage(formData[m.id], prevValue);
+        });
+        handleSaveMeterLog(finalData);
+    };
 
     return (
       <div className="flex flex-col h-full bg-slate-50 relative">
@@ -1631,17 +1770,36 @@ export default function App() {
                </div>
             </div>
 
-            {/* Mục Nước */}
-            <div className="bg-white p-5 rounded-xl border border-blue-200 shadow-sm">
-               <h3 className="text-sm font-bold text-blue-600 mb-3 flex items-center uppercase"><Droplets className="w-5 h-5 mr-1"/> Chỉ số nước tổng</h3>
-               <div>
-                   <input type="number" placeholder="Khối (m³)..." className="w-full p-4 text-xl font-bold rounded-xl border border-slate-300 bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.water} onChange={e => setFormData({...formData, water: e.target.value})} />
-               </div>
+            {/* Các Mục Ghi Nước */}
+            <div className="space-y-3">
+                {WATER_METERS.map(meter => {
+                    const prevValue = previousLog ? previousLog[meter.id] : 0;
+                    const usage = calcUsage(formData[meter.id], prevValue);
+                    
+                    return (
+                        <div key={meter.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between gap-3">
+                           <div className="flex-1">
+                               <label className={`text-sm font-bold ${meter.color} flex items-center mb-1.5 uppercase tracking-tight`}>
+                                 <Droplets className="w-3.5 h-3.5 mr-1"/> {meter.label}
+                               </label>
+                               <input type="number" placeholder="Chỉ số mới..." className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none font-medium" 
+                                  value={formData[meter.id]} 
+                                  onChange={e => setFormData({...formData, [meter.id]: e.target.value})} 
+                               />
+                           </div>
+                           <div className="w-24 bg-blue-50 py-2.5 px-2 rounded-lg border border-blue-100 flex flex-col justify-center items-center shrink-0">
+                               <p className="text-[10px] text-slate-500 uppercase font-bold">Tiêu thụ</p>
+                               <p className={`font-black text-lg leading-tight mt-0.5 ${usage > 0 ? 'text-blue-700' : 'text-slate-400'}`}>{usage}</p>
+                               <p className="text-[9px] text-slate-400 mt-0.5 whitespace-nowrap">Cũ: <span className="font-medium text-slate-500">{prevValue || 0}</span></p>
+                           </div>
+                        </div>
+                    )
+                })}
             </div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
-            <button onClick={() => handleSaveMeterLog(formData)} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-blue-700 transition-transform active:scale-95">
+            <button onClick={handleSave} className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-bold shadow-xl flex justify-center items-center gap-2 hover:bg-blue-700 transition-transform active:scale-95">
                 <Save className="w-5 h-5" /> Ghi Nhận Nước
             </button>
         </div>
@@ -1690,7 +1848,24 @@ export default function App() {
                      </div>
                      
                      <div className="space-y-3 text-sm text-slate-600">
-                         {(log.recordType === 'water' || !log.recordType) && log.water && (
+                         {log.recordType === 'water' && log.w_total !== undefined && (
+                           <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-2">
+                              <p className="font-bold text-slate-700 flex items-center mb-2"><Droplets className="w-4 h-4 mr-1 text-blue-500"/> Tiêu thụ (m³)</p>
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>Tổng:</span> <strong className="text-blue-700 text-sm">{log.w_total_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>Tưới cây:</span> <strong className="text-slate-800">{log.w_plants_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>VP Chính:</span> <strong className="text-slate-800">{log.w_main_office_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>N.ăn VPC:</span> <strong className="text-slate-800">{log.w_canteen_main_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>N.ăn Xưởng:</span> <strong className="text-slate-800">{log.w_canteen_factory_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>BV C.Chính:</span> <strong className="text-slate-800">{log.w_guard_main_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>BV C.Phụ:</span> <strong className="text-slate-800">{log.w_guard_side_usage}</strong></div>
+                                 <div className="flex justify-between border-b border-blue-100/50 pb-1"><span>NVS Xưởng:</span> <strong className="text-slate-800">{log.w_restroom_usage}</strong></div>
+                              </div>
+                           </div>
+                         )}
+
+                         {/* Legacy fallback if any */}
+                         {(!log.recordType || (log.recordType === 'water' && log.w_total === undefined)) && log.water && (
                            <div className="flex items-center text-blue-600 font-medium bg-blue-50 p-2.5 rounded-lg border border-blue-100">
                                <Droplets className="w-5 h-5 mr-2" /> Chỉ số Nước: <span className="ml-2 text-slate-800 text-lg">{log.water}</span> <span className="ml-1 text-xs">m³</span>
                            </div>

@@ -1,13 +1,28 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/3014/3014282.png" />
+    
+    <!-- Cấu hình viewport chuẩn cho Mobile App: Ngăn người dùng zoom linh tinh -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Màu thanh trạng thái điện thoại -->
+    <meta name="theme-color" content="#2563eb" />
+    
+    <!-- Khai báo file manifest cho PWA -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Khai báo cho iOS (iPhone/iPad) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bảo Trì" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3014/3014282.png" />
+    
+    <title>TechMaintain - Quản lý Bảo Trì</title>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
