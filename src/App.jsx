@@ -275,7 +275,7 @@ export default function App() {
         machineId: logData.machineId,
         machineName: selectedMachine.name,
         date: logData.date,
-        technician: logData.technician,
+        technician: logData.technicianName || logData.technician,
         type: logData.type,
         note: logData.note,
         status: logData.status,
@@ -954,14 +954,42 @@ export default function App() {
       ]);
     }
     
-    // 3. XỬ LÝ BÁO CÁO BẢO TRÌ (CŨ)
+    // 3. XỬ LÝ BÁO CÁO BẢO TRÌ (CÓ LƯU ẢNH LÊN GOOGLE DRIVE)
     else if (data.formType === 'maintenance') {
       var sheet = ss.getSheetByName('BaoTri') || ss.insertSheet('BaoTri');
-      if (sheet.getLastRow() === 0) {
-        sheet.appendRow(['ID', 'Ngày', 'Mã Máy', 'Tên Máy', 'KTV', 'Loại', 'Ghi chú', 'Trạng thái', 'Vật tư']);
-        sheet.getRange("A1:I1").setFontWeight("bold").setBackground("#d9ead3");
+      
+      // Xử lý lưu ảnh lên Google Drive
+      var imageUrls = "";
+      if (data.images && data.images.length > 0) {
+        try {
+          var folderName = "Anh_BaoTri";
+          var folders = DriveApp.getFoldersByName(folderName);
+          var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+          
+          // Chỉnh quyền xem cho thư mục: Ai có link cũng xem được ảnh
+          folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          
+          var urls = [];
+          for (var i = 0; i < data.images.length; i++) {
+            // LƯU Ý QUAN TRỌNG: Phải cắt bỏ phần mào đầu "data:image/jpeg;base64," thì Drive mới giải mã được
+            var base64String = data.images[i].split(',')[1];
+            if (!base64String) base64String = data.images[i];
+            
+            var blob = Utilities.newBlob(Utilities.base64Decode(base64String), "image/jpeg", "IMG_" + data.id + "_" + i + ".jpg");
+            var file = folder.createFile(blob);
+            urls.push(file.getUrl());
+          }
+          imageUrls = urls.join(", ");
+        } catch (e) {
+          imageUrls = "Lỗi tải ảnh lên Drive: " + e.message;
+        }
       }
-      sheet.appendRow([data.id, data.date, data.machineId, data.machineName, data.technician, data.type, data.note, data.status, data.parts]);
+
+      if (sheet.getLastRow() === 0) {
+        sheet.appendRow(['ID', 'Ngày', 'Mã Máy', 'Tên Máy', 'KTV', 'Loại', 'Ghi chú', 'Trạng thái', 'Vật tư', 'Hình Ảnh (Link)']);
+        sheet.getRange("A1:J1").setFontWeight("bold").setBackground("#d9ead3");
+      }
+      sheet.appendRow([data.id, data.date, data.machineId, data.machineName, data.technician, data.type, data.note, data.status, data.parts, imageUrls]);
     }
     
     return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
@@ -1427,7 +1455,7 @@ export default function App() {
                                </button>
                                <button onClick={() => { setEditingLog(log); setView('form'); }} className="flex items-center gap-1.5 text-xs font-medium text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg hover:bg-orange-100 transition-colors">
                                   <Edit className="w-3.5 h-3.5" /> Sửa
-                                </button>
+                               </button>
                                <button onClick={() => setConfirmDelete({ isOpen: true, type: 'log', id: log.id })} className="flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
                                   <Trash2 className="w-3.5 h-3.5" /> Xóa
                                </button>
@@ -1682,7 +1710,6 @@ export default function App() {
 
   // MÀN HÌNH NHẬP FORM GHI NƯỚC
   const WaterFormView = () => {
-    // Tìm log nước gần nhất để tính toán tiêu thụ
     const previousLog = meterLogs.find(log => log.recordType === 'water');
 
     const [formData, setFormData] = useState({
@@ -1813,7 +1840,7 @@ export default function App() {
 
     const filteredLogs = meterLogs.filter(log => {
         if (filterTab === 'all') return true;
-        return log.recordType === filterTab || (!log.recordType); // Bao gồm cả log cũ nếu có
+        return log.recordType === filterTab || (!log.recordType); 
     });
 
     return (
@@ -1864,7 +1891,6 @@ export default function App() {
                            </div>
                          )}
 
-                         {/* Legacy fallback if any */}
                          {(!log.recordType || (log.recordType === 'water' && log.w_total === undefined)) && log.water && (
                            <div className="flex items-center text-blue-600 font-medium bg-blue-50 p-2.5 rounded-lg border border-blue-100">
                                <Droplets className="w-5 h-5 mr-2" /> Chỉ số Nước: <span className="ml-2 text-slate-800 text-lg">{log.water}</span> <span className="ml-1 text-xs">m³</span>
