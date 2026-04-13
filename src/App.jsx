@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff, CalendarClock, Clock, Filter, Zap, Droplets, ChevronDown, ChevronUp, AlertTriangle, Calculator } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff, CalendarClock, Clock, Filter, Zap, Droplets, ChevronDown, ChevronUp, AlertTriangle, Calculator, PlaySquare } from 'lucide-react';
 
 // --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
@@ -124,6 +124,32 @@ const NativeCameraScanner = ({ onScan }) => {
 };
 
 // ============================================================================
+// COMPONENT DÙNG CHUNG: BẢNG CẢNH BÁO XÓA (MODAL)
+// ============================================================================
+const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100">
+        <div className="flex items-center space-x-3 mb-3 text-red-600">
+           <div className="bg-red-100 p-2 rounded-full"><AlertTriangle className="w-6 h-6" /></div>
+           <h3 className="font-bold text-lg text-slate-800">{title || 'Xác nhận xóa'}</h3>
+        </div>
+        <p className="text-slate-600 text-sm mb-6 pl-1 leading-relaxed">
+          {message || 'Bạn có chắc chắn muốn xóa dữ liệu này? Hành động này không thể hoàn tác.'}
+        </p>
+        <div className="flex gap-3 justify-end">
+          <button onClick={onCancel} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Hủy</button>
+          <button onClick={onConfirm} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-red-500/30">
+            Đồng ý
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // CÁC THÀNH PHẦN GIAO DIỆN
 // ============================================================================
 
@@ -169,7 +195,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
   );
 };
 
-const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db }) => {
+const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db, setMachineFilter, setTaskFilter }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
   const pendingDailyTasks = dailyTasks.filter(t => t.status === 'Đang xử lý').length;
@@ -187,11 +213,11 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
           <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
             <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center"><Database className="w-4 h-4 mr-2 text-blue-600"/> Trạng thái Máy móc ({machines.length})</h3>
             <div className="flex gap-3">
-               <div className="flex-1 bg-green-50 p-3 rounded-xl border border-green-100 cursor-pointer transition-transform active:scale-95" onClick={() => setView('machines')}>
+               <div className="flex-1 bg-green-50 p-3 rounded-xl border border-green-100 cursor-pointer transition-transform active:scale-95" onClick={() => { setMachineFilter('operational'); setView('machines'); }}>
                   <p className="text-green-600 text-[10px] uppercase font-bold flex items-center mb-1"><CheckCircle className="w-3 h-3 mr-1"/>Bình thường</p>
                   <p className="text-2xl font-bold text-green-700">{machinesOperational}</p>
                </div>
-               <div className="flex-1 bg-red-50 p-3 rounded-xl border border-red-100 cursor-pointer transition-transform active:scale-95" onClick={() => setView('machines')}>
+               <div className="flex-1 bg-red-50 p-3 rounded-xl border border-red-100 cursor-pointer transition-transform active:scale-95" onClick={() => { setMachineFilter('issue'); setView('machines'); }}>
                   <p className="text-red-600 text-[10px] uppercase font-bold flex items-center mb-1"><AlertTriangle className="w-3 h-3 mr-1"/>Lỗi / Bảo trì</p>
                   <p className="text-2xl font-bold text-red-700">{machinesIssue}</p>
                </div>
@@ -199,11 +225,11 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-             <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => setView('daily_task_history')}>
+             <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
                 <p className="text-orange-600 text-[10px] uppercase font-bold flex items-center mb-1"><Clock className="w-3 h-3 mr-1"/> CV Tồn đọng</p>
                 <p className="text-2xl font-bold text-orange-700">{totalPending}</p>
              </div>
-             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => setView('daily_task_history')}>
+             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }}>
                 <p className="text-purple-600 text-[10px] uppercase font-bold flex items-center mb-1"><CalendarClock className="w-3 h-3 mr-1"/> Báo cáo Ngày</p>
                 <p className="text-2xl font-bold text-purple-700">{dailyTasks.length}</p>
              </div>
@@ -220,13 +246,13 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
              <button onClick={() => setView('user_management')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <div className="flex items-center space-x-3"><div className="bg-emerald-100 p-2 rounded-lg text-emerald-600"><User className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Tài khoản (KTV)</p><p className="text-xs text-slate-500">Tạo tài khoản & Mật khẩu</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
-             <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+             <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
-             <button onClick={() => setView('daily_task_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+             <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <div className="flex items-center space-x-3"><div className="bg-pink-100 p-2 rounded-lg text-pink-600"><CalendarClock className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Sổ Ghi Công Việc</p><p className="text-xs text-slate-500">Xem Báo cáo công việc hằng ngày</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
              </button>
              <button onClick={() => setView('utility_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
@@ -248,7 +274,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
 // =========================================================================
 // MÀN HÌNH HOME COMPACT (BENTO GRID STYLE)
 // =========================================================================
-const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout }) => {
+const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, setMachineFilter, setTaskFilter, setInitialTaskData, setEditTaskData }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
   
@@ -276,15 +302,15 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout }) =
 
       <div className="flex-1 overflow-y-auto px-4 -mt-6 pb-20 space-y-4 custom-scrollbar relative z-10">
          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 grid grid-cols-3 gap-2 divide-x divide-slate-100">
-            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('manual_select')}>
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => { setMachineFilter('operational'); setView('manual_select'); }}>
                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Máy tốt</p>
                <p className="text-xl font-black text-green-600 leading-none">{machinesOperational}</p>
             </div>
-            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('manual_select')}>
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => { setMachineFilter('issue'); setView('manual_select'); }}>
                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Lỗi / Bảo trì</p>
                <p className="text-xl font-black text-red-500 leading-none">{machinesIssue}</p>
             </div>
-            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('daily_task_history')}>
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
                <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Tồn đọng</p>
                <p className="text-xl font-black text-orange-500 leading-none">{totalPending}</p>
             </div>
@@ -296,7 +322,7 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout }) =
          </button>
 
          <div className="grid grid-cols-2 gap-3">
-             <button onClick={() => setView('manual_select')} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-blue-400 transition-all active:scale-95">
+             <button onClick={() => { setMachineFilter('all'); setView('manual_select'); }} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-blue-400 transition-all active:scale-95">
                  <div className="bg-blue-50 p-2.5 rounded-xl"><ListFilter className="w-5 h-5 text-blue-600"/></div>
                  <div className="text-left"><p className="font-bold text-sm text-slate-800">Chọn Máy</p><p className="text-[10px] text-slate-500 mt-0.5">Tìm kiếm thủ công</p></div>
              </button>
@@ -306,12 +332,12 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout }) =
                  <div className="text-left"><p className="font-bold text-sm text-slate-800">Kho Vật Tư</p><p className="text-[10px] text-slate-500 mt-0.5">Xem tồn kho linh kiện</p></div>
              </button>
 
-             <button onClick={() => setView('daily_task_form')} className="bg-purple-50 p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 hover:bg-purple-100 transition-all active:scale-95">
+             <button onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-50 p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 hover:bg-purple-100 transition-all active:scale-95">
                  <div className="bg-purple-200 p-2.5 rounded-xl"><CalendarClock className="w-5 h-5 text-purple-700"/></div>
                  <div className="text-left"><p className="font-bold text-sm text-purple-900">Báo Cáo Ngày</p><p className="text-[10px] text-purple-600 mt-0.5">Việc ngoài / không QR</p></div>
              </button>
 
-             <button onClick={() => setView('daily_task_history')} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-slate-400 transition-all active:scale-95">
+             <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-slate-400 transition-all active:scale-95">
                  <div className="bg-slate-100 p-2.5 rounded-xl"><History className="w-5 h-5 text-slate-600"/></div>
                  <div className="text-left"><p className="font-bold text-sm text-slate-800">Sổ Lịch Sử</p><p className="text-[10px] text-slate-500 mt-0.5">Xem lại việc đã làm</p></div>
              </button>
@@ -384,6 +410,293 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => (
     </div>
   </div>
 );
+
+// =========================================================================
+// MÀN HÌNH FORM GHI ĐIỆN NƯỚC
+// =========================================================================
+const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
+  const isEditing = !!editData;
+  const dateStr = new Date().toISOString().split('T')[0];
+  
+  const [formData, setFormData] = useState(isEditing ? editData : { 
+      id: Date.now(),
+      technicianName: user?.name || '', username: user?.username || '', 
+      date: dateStr, note: '', images: [],
+      elec1: { bt: '', cd: '', td: '', vc: '' },
+      elec2: { bt: '', cd: '', td: '', vc: '' },
+      water: { tong: '', tuoiCay: '', vanPhong: '', nhaAnVpc: '', nhaAnXuong: '', congChinh: '', congPhu: '' }
+  });
+
+  const [activeTab, setActiveTab] = useState(mode === 'water' ? 'water' : 'elec1'); 
+
+  const prevLog = [...utilityLogs]
+      .filter(log => log.id !== formData.id && new Date(log.date) <= new Date(formData.date))
+      .sort((a,b) => b.id - a.id)[0];
+
+  const handleElecChange = (tram, field, value) => {
+      setFormData(prev => ({ ...prev, [tram]: { ...prev[tram], [field]: value } }));
+  };
+
+  const handleWaterChange = (field, value) => {
+      setFormData(prev => ({ ...prev, water: { ...prev.water, [field]: value } }));
+  };
+
+  const calcCosPhi = (elec) => {
+      const p = Number(elec.bt) + Number(elec.cd) + Number(elec.td);
+      const q = Number(elec.vc);
+      if (p === 0 && q === 0) return 0;
+      const cos = p / Math.sqrt(p*p + q*q);
+      return isNaN(cos) ? 0 : cos.toFixed(3);
+  };
+
+  const calcWaterConsumption = (field) => {
+      if (!formData.water[field] || !prevLog || !prevLog.water || !prevLog.water[field]) return 0;
+      const current = Number(formData.water[field]);
+      const prev = Number(prevLog.water[field]);
+      return current >= prev ? (current - prev).toFixed(1) : 0;
+  };
+
+  const handleImageUpload = (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas'); const scaleSize = 800 / img.width;
+              canvas.width = 800; canvas.height = img.height * scaleSize;
+              const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              setFormData(prev => ({...prev, images: [...prev.images, canvas.toDataURL('image/jpeg', 0.6)]}));
+          };
+          img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const removeImage = (index) => {
+      const newImages = [...formData.images];
+      newImages.splice(index, 1);
+      setFormData({...formData, images: newImages});
+  };
+
+  const submitForm = () => {
+      handleSaveUtilityLog(formData);
+      if (isEditing) setEditData(null);
+  };
+
+  const ElecInputGroup = ({ tramName, tramKey }) => {
+      const cosPhi = calcCosPhi(formData[tramKey]);
+      const isLowCosPhi = cosPhi > 0 && cosPhi < 0.9;
+
+      return (
+          <div className="space-y-4 animate-fade-in">
+              <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">Bình thường (Kw)</label>
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].bt} onChange={e => handleElecChange(tramKey, 'bt', e.target.value)} />
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">Cao điểm (Kw)</label>
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-red-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].cd} onChange={e => handleElecChange(tramKey, 'cd', e.target.value)} />
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">Thấp điểm (Kw)</label>
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-green-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].td} onChange={e => handleElecChange(tramKey, 'td', e.target.value)} />
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                      <label className="text-xs font-bold text-slate-500 mb-1 block">Vô công (Kvar)</label>
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-purple-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].vc} onChange={e => handleElecChange(tramKey, 'vc', e.target.value)} />
+                  </div>
+              </div>
+
+              <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm transition-colors ${isLowCosPhi ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                  <div className="flex items-center space-x-2">
+                      <Calculator className={`w-5 h-5 ${isLowCosPhi ? 'text-red-500' : 'text-slate-500'}`} />
+                      <span className={`font-bold ${isLowCosPhi ? 'text-red-700' : 'text-slate-700'}`}>Hệ số Cos ϕ:</span>
+                  </div>
+                  <div className="text-right">
+                      <span className={`text-xl font-bold ${isLowCosPhi ? 'text-red-600' : 'text-blue-600'}`}>{cosPhi || '0.000'}</span>
+                  </div>
+              </div>
+              {isLowCosPhi && (
+                  <div className="flex items-start space-x-2 text-red-600 bg-red-100 p-3 rounded-lg text-sm font-medium">
+                      <AlertTriangle className="w-5 h-5 shrink-0" />
+                      <p>Cảnh báo: Hệ số Cos ϕ dưới 0.9. Kiểm tra lại tụ bù hoặc liên hệ kỹ thuật!</p>
+                  </div>
+              )}
+          </div>
+      );
+  };
+
+  const waterFields = [
+      { id: 'tong', label: 'Chỉ số Tổng' }, { id: 'tuoiCay', label: 'Tưới cây' },
+      { id: 'vanPhong', label: 'VP Chính' }, { id: 'nhaAnVpc', label: 'Nhà ăn VPC' },
+      { id: 'nhaAnXuong', label: 'Nhà ăn Xưởng' }, { id: 'congChinh', label: 'Bảo vệ cổng chính' },
+      { id: 'congPhu', label: 'Bảo vệ cổng phụ' }
+  ];
+
+  return (
+    <div className="flex flex-col h-full bg-slate-100 relative">
+      <div className="p-4 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10 flex justify-between items-center">
+          <div className="flex items-center space-x-3">
+              <button onClick={() => { setView(isEditing ? 'utility_history' : 'meter_menu'); setEditData(null); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+              <div>
+                  <h2 className="font-bold text-slate-800 flex items-center">
+                      {isEditing ? 'Sửa Bản Ghi' : (mode === 'elec' ? 'Ghi Số Điện' : 'Ghi Số Nước')}
+                  </h2>
+              </div>
+          </div>
+          <input type="date" className="p-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 outline-none font-medium bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+      </div>
+
+      {mode === 'elec' && (
+          <div className="flex bg-white border-b border-slate-200 shrink-0">
+              <button onClick={() => setActiveTab('elec1')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec1' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 1</button>
+              <button onClick={() => setActiveTab('elec2')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec2' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 2</button>
+          </div>
+      )}
+      
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
+          {mode === 'elec' && activeTab === 'elec1' && <ElecInputGroup tramName="Trạm Điện 1" tramKey="elec1" />}
+          {mode === 'elec' && activeTab === 'elec2' && <ElecInputGroup tramName="Trạm Điện 2" tramKey="elec2" />}
+          
+          {mode === 'water' && (
+              <div className="space-y-3 animate-fade-in">
+                  <div className="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs flex items-center shadow-sm">
+                      <Droplets className="w-4 h-4 mr-2 shrink-0" /> Hệ thống tự động lấy chỉ số ngày gần nhất để tính Tiêu thụ.
+                  </div>
+                  {waterFields.map(field => (
+                      <div key={field.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
+                          <div className="w-1/3 pr-2">
+                              <label className="text-xs font-bold text-slate-700 leading-tight block">{field.label}</label>
+                              {prevLog && prevLog.water && prevLog.water[field.id] && (
+                                  <span className="text-[10px] text-slate-400">Số cũ: {prevLog.water[field.id]}</span>
+                              )}
+                          </div>
+                          <div className="w-1/3 px-1">
+                              <input type="number" step="any" placeholder="Số mới" className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold text-center" value={formData.water[field.id]} onChange={e => handleWaterChange(field.id, e.target.value)} />
+                          </div>
+                          <div className="w-1/3 pl-2 text-right">
+                              <div className="text-[10px] text-slate-500 uppercase font-bold">Tiêu thụ ($m^3$)</div>
+                              <div className="text-lg font-bold text-blue-600">{calcWaterConsumption(field.id)}</div>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          )}
+
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 mt-6">
+              <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Ghi chú (Sự cố, hao hụt...)</label>
+                  <textarea rows="2" className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-cyan-500 outline-none resize-none" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+              </div>
+              <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Hình ảnh hóa đơn / đồng hồ</label>
+                  <div className="flex flex-wrap gap-2">
+                      {formData.images.map((img, idx) => (<div key={idx} className="relative w-16 h-16"><img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-3 h-3" /></button></div>))}
+                      <label className="w-16 h-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors"><Camera className="w-5 h-5 mb-1" /><span className="text-[9px] font-bold">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
+                  </div>
+              </div>
+          </div>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20"><button onClick={submitForm} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-transform active:scale-95"><Save className="w-5 h-5" /> {isEditing ? 'Cập Nhật Bản Ghi' : 'Lưu Chỉ Số Hôm Nay'}</button></div>
+    </div>
+  );
+};
+
+// =========================================================================
+// MÀN HÌNH LỊCH SỬ ĐIỆN NƯỚC
+// =========================================================================
+const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode }) => {
+  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  
+  const filteredLogs = utilityLogs.filter(t => {
+      let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
+      let matchDate = t.date.startsWith(filterMonth);
+      return matchTech && matchDate;
+  });
+
+  const handleEdit = (log, mode) => {
+      setEditData(log);
+      setUtilityMode(mode); 
+      setView('utility_form');
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="p-4 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
+            <div className="flex items-center space-x-3 mb-4">
+               <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+               <h2 className="font-bold text-slate-800 flex items-center">Lịch Sử Điện Nước</h2>
+            </div>
+            <div className="flex gap-2">
+               {user.role === 'admin' && (
+                  <div className="flex-1 relative">
+                      <Filter className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
+                      <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-8 pr-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 font-medium">
+                          <option value="all">Tất cả KTV</option>
+                          {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
+                      </select>
+                  </div>
+               )}
+               <div className="flex-1 relative">
+                  <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 font-medium" />
+               </div>
+            </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({filteredLogs.length} bản ghi)</span></div>
+            {filteredLogs.length === 0 ? (
+                 <p className="text-sm text-slate-400 text-center py-10 bg-white rounded-xl border border-dashed border-slate-300">Không có bản ghi nào.</p>
+            ) : (
+                 filteredLogs.map((log) => {
+                     const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
+                     const p2 = Number(log.elec2?.bt||0) + Number(log.elec2?.cd||0) + Number(log.elec2?.td||0);
+                     const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
+                     
+                     return (
+                     <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-cyan-300 transition-colors">
+                         <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
+                             <div>
+                                 <h4 className="font-bold text-slate-800 text-base leading-tight flex items-center"><CalendarClock className="w-4 h-4 mr-1.5 text-slate-400"/>Ngày {log.date}</h4>
+                             </div>
+                             <div className="flex flex-col gap-1 items-end">
+                                 <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {log.technicianName}</span>
+                                 <div className="flex gap-1 mt-1">
+                                     <button onClick={() => handleEdit(log, 'elec')} className="bg-yellow-50 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Điện</button>
+                                     <button onClick={() => handleEdit(log, 'water')} className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-100 border border-blue-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Nước</button>
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         <div className="grid grid-cols-2 gap-3 mb-3">
+                             <div className="bg-yellow-50 p-2 rounded-lg border border-yellow-100 flex flex-col justify-center">
+                                 <p className="text-[10px] text-yellow-600 font-bold uppercase mb-1 flex items-center"><Zap className="w-3 h-3 mr-1"/> Điện T.Thụ</p>
+                                 <p className="font-bold text-yellow-800 text-base">{(p1+p2).toFixed(1)} <span className="text-[10px] font-normal text-yellow-600">Kw (T1+T2)</span></p>
+                             </div>
+                             <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex flex-col justify-center">
+                                 <p className="text-[10px] text-blue-600 font-bold uppercase mb-1 flex items-center"><Droplets className="w-3 h-3 mr-1"/> Nước T.Thụ (Thô)</p>
+                                 <p className="font-bold text-blue-800 text-base">{waterTotal} <span className="text-[10px] font-normal text-blue-600">Tổng m3 (Ghi nhận)</span></p>
+                             </div>
+                         </div>
+                         
+                         {log.note && <p className="text-slate-700 text-sm whitespace-pre-wrap bg-slate-50 p-2 rounded text-xs border border-slate-100 mb-3">{log.note}</p>}
+
+                         {log.images && log.images.length > 0 && (
+                           <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
+                             {log.images.map((img, idx) => (
+                                <img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" alt="Log" />
+                             ))}
+                           </div>
+                         )}
+                     </div>
+                 )})
+            )}
+        </div>
+    </div>
+  );
+};
 
 const UserManagementView = ({ usersList, setView, showNotification, saveUserData, handleDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -474,15 +787,47 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   );
 };
 
-const MachineManagementView = ({ machines, setView, showNotification, saveMachineData }) => {
+const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
+  
+  // State phục vụ tính năng XEM/SỬA/XÓA
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', status: 'operational' });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
-  const filteredMachines = machines.filter(m => 
+  // Áp dụng bộ lọc từ Dashboard nếu có
+  let baseMachines = machines;
+  if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
+  if (machineFilter === 'issue') baseMachines = machines.filter(m => m.status === 'maintenance' || m.status === 'broken');
+
+  const filteredMachines = baseMachines.filter(m => 
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     m.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  
+  const filterTitle = machineFilter === 'operational' ? '(Máy Đang Tốt)' : machineFilter === 'issue' ? '(Lỗi / Bảo Trì)' : '';
+
+  const startEdit = (m) => {
+      setEditingId(m.id);
+      setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', status: m.status || 'operational' });
+  };
+
+  const handleSaveEdit = async () => {
+      if (!editForm.name) { showNotification('Vui lòng nhập tên thiết bị!', 'error'); return; }
+      await saveMachineData(editForm);
+      setEditingId(null);
+      showNotification('Đã cập nhật thiết bị thành công!');
+  };
+
+  const handleConfirmDelete = async () => {
+      if (deleteModal.id) {
+          await handleDeleteMachineApp(deleteModal.id);
+          showNotification('Đã xóa thiết bị!');
+      }
+      setDeleteModal({ isOpen: false, id: null });
+  };
 
   const handleExportExcel = async () => {
     try {
@@ -559,6 +904,14 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
+      <CustomConfirmModal 
+        isOpen={deleteModal.isOpen} 
+        title="Xóa thiết bị" 
+        message="Bạn có chắc chắn muốn xóa thiết bị này khỏi danh sách? Hành động này sẽ không thể hoàn tác."
+        onConfirm={handleConfirmDelete} 
+        onCancel={() => setDeleteModal({ isOpen: false, id: null })} 
+      />
+
       <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm space-y-4">
         <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -587,27 +940,57 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-20">
         <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2">
-            <span>Danh sách thiết bị ({filteredMachines.length})</span>
+            <span>Danh sách thiết bị {filterTitle} ({filteredMachines.length})</span>
         </div>
         
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
           {filteredMachines.length > 0 ? (
             filteredMachines.map((m, index) => (
-              <div key={m.id} className={`p-4 flex justify-between items-center ${index !== filteredMachines.length -1 ? 'border-b border-slate-100' : ''}`}>
-                <div>
-                  <h4 className="font-bold text-slate-800">{m.name}</h4>
-                  <div className="text-xs text-slate-500 font-mono mt-1 flex items-center">
-                      <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 mr-2">{m.id}</span>
-                      {m.department && <span className="truncate max-w-[150px]">- {m.department}</span>}
-                  </div>
-                </div>
-                <div className={`w-3 h-3 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+              <div key={m.id} className={`flex flex-col ${index !== filteredMachines.length -1 ? 'border-b border-slate-100' : ''}`}>
+                 {editingId === m.id ? (
+                     <div className="flex flex-col gap-3 bg-blue-50/50 p-4 border border-blue-200 shadow-inner">
+                        <input className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
+                        <input className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
+                        <div className="flex gap-2">
+                            <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
+                            <input className="w-1/2 p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
+                        </div>
+                        <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option value="operational">Hoạt động tốt</option>
+                            <option value="maintenance">Đang bảo trì</option>
+                            <option value="broken">Bị hỏng</option>
+                        </select>
+                        <div className="flex justify-end gap-2 mt-1">
+                            <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors">Hủy</button>
+                            <button onClick={handleSaveEdit} className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
+                        </div>
+                     </div>
+                 ) : (
+                     <div className="p-4 flex justify-between items-center group">
+                        <div>
+                          <h4 className="font-bold text-slate-800">{m.name}</h4>
+                          <div className="text-xs text-slate-500 font-mono mt-1 flex items-center">
+                              <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 mr-2">{m.id}</span>
+                              {m.department && <span className="truncate max-w-[150px]">- {m.department}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <div className={`w-3 h-3 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
+                           {user?.role === 'admin' && (
+                               <div className="flex gap-1 ml-2 border-l border-slate-200 pl-2">
+                                  <button onClick={() => startEdit(m)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded transition-colors"><Edit className="w-4 h-4" /></button>
+                                  <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-100 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                               </div>
+                           )}
+                        </div>
+                     </div>
+                 )}
               </div>
             ))
           ) : (
-            <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị. Hãy tải file Excel lên.</div>
+            <div className="p-8 text-center text-slate-400 text-sm">Không tìm thấy thiết bị.</div>
           )}
         </div>
       </div>
@@ -863,14 +1246,22 @@ const ScannerView = ({ setView, handleScanSuccess, machines, user }) => {
   );
 };
 
-const ManualSelectView = ({ machines, setView, handleScanSuccess }) => {
+const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const filteredMachines = machines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
+  
+  // Áp dụng bộ lọc
+  let baseMachines = machines;
+  if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
+  if (machineFilter === 'issue') baseMachines = machines.filter(m => m.status === 'maintenance' || m.status === 'broken');
+
+  const filteredMachines = baseMachines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const title = machineFilter === 'operational' ? 'Máy hoạt động tốt' : machineFilter === 'issue' ? 'Máy lỗi / bảo trì' : 'Tìm kiếm thiết bị';
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
        <div className="bg-white p-4 border-b border-slate-200 shrink-0 shadow-sm">
-          <div className="flex items-center space-x-3 mb-4"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">Tìm kiếm thiết bị</h2></div>
+          <div className="flex items-center space-x-3 mb-4"><button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button><h2 className="font-bold text-slate-800 text-lg">{title}</h2></div>
           <div className="relative"><Search className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="text" placeholder="Nhập tên hoặc mã máy..." className="w-full pl-10 pr-4 py-3 bg-slate-100 border-none rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus /></div>
        </div>
        <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -891,21 +1282,26 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess }) => {
   );
 };
 
-const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, handleDeleteMachine, showNotification }) => {
+const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, handleDeleteMachineApp, handleDeleteLogApp, setEditLogData, showNotification }) => {
   const machineLogs = logs.filter(l => l.machineId === selectedMachine.id);
   const [isEditingMachine, setIsEditingMachine] = useState(false);
   const [editMachineData, setEditMachineData] = useState(selectedMachine);
-  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, type: '', id: null });
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: '', id: null }); // type: 'machine' hoặc 'log'
 
   useEffect(() => {
     setEditMachineData(selectedMachine);
   }, [selectedMachine]);
 
-  const handleConfirmDelete = () => {
-    if (confirmDelete.type === 'machine') {
-      handleDeleteMachine(confirmDelete.id);
+  const handleConfirmDelete = async () => {
+    if (deleteModal.type === 'machine') {
+      await handleDeleteMachineApp(deleteModal.id);
+      setView('home');
+      showNotification('Đã xóa thiết bị!');
+    } else if (deleteModal.type === 'log') {
+      await handleDeleteLogApp(deleteModal.id);
+      showNotification('Đã xóa báo cáo!');
     }
-    setConfirmDelete({ isOpen: false, type: '', id: null });
+    setDeleteModal({ isOpen: false, type: '', id: null });
   };
 
   const handleSaveEdit = async () => {
@@ -914,14 +1310,27 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
     showNotification('Đã cập nhật thông tin máy', 'success');
   };
 
+  const startEditLog = (logItem) => {
+    setEditLogData(logItem);
+    setView('form');
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
+      <CustomConfirmModal 
+        isOpen={deleteModal.isOpen} 
+        title={deleteModal.type === 'machine' ? "Xóa thiết bị" : "Xóa báo cáo"}
+        message={deleteModal.type === 'machine' ? "Bạn có chắc chắn muốn xóa vĩnh viễn thiết bị này? Dữ liệu không thể hoàn tác." : "Bạn có chắc muốn xóa báo cáo này khỏi lịch sử?"}
+        onConfirm={handleConfirmDelete} 
+        onCancel={() => setDeleteModal({ isOpen: false, type: '', id: null })} 
+      />
+
       <div className="bg-white shadow-sm p-4 shrink-0 z-10">
           <div className="flex items-center justify-between mb-2">
               <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
               <h2 className="font-bold text-slate-800">Chi tiết thiết bị</h2>
               <div>
-                 {user.role === 'admin' && !isEditingMachine && (
+                 {user?.role === 'admin' && !isEditingMachine && (
                    <button onClick={() => setIsEditingMachine(true)} className="p-2 -mr-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors">
                        <Edit className="w-5 h-5" />
                    </button>
@@ -956,7 +1365,7 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
                     </select>
                 </div>
                 <div className="flex justify-end gap-2 pt-3">
-                   <button onClick={() => setConfirmDelete({ isOpen: true, type: 'machine', id: selectedMachine.id })} className="mr-auto p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100 transition-colors">
+                   <button onClick={() => setDeleteModal({ isOpen: true, type: 'machine', id: selectedMachine.id })} className="mr-auto p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 hover:bg-red-100 transition-colors">
                        <Trash2 className="w-5 h-5" />
                    </button>
                    <button onClick={() => { setIsEditingMachine(false); setEditMachineData(selectedMachine); }} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">Hủy</button>
@@ -986,7 +1395,7 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
-          <button onClick={() => setView('form')} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-3 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-lg">
+          <button onClick={() => { setEditLogData(null); setView('form'); }} className="w-full bg-blue-600 hover:bg-blue-700 transition-colors text-white py-3 px-4 rounded-xl flex items-center justify-center space-x-2 shadow-lg">
               <Wrench className="w-5 h-5" />
               <span className="font-semibold">Tạo Báo Cáo Mới</span>
           </button>
@@ -998,14 +1407,22 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
               ) : (
                  <div className="space-y-4">
                    {machineLogs.map((log) => (
-                     <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                         <div className="flex justify-between items-start mb-2">
+                     <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:border-blue-200 transition-colors">
+                         <div className="flex justify-between items-start mb-2 border-b border-slate-50 pb-2">
                              <div>
-                                 <span className="text-xs font-bold text-blue-600 uppercase">{log.type}</span>
-                                 <div className="text-xs text-slate-400 mt-1">{log.date}</div>
+                                 <span className="text-xs font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded">{log.type}</span>
+                                 <div className="text-xs text-slate-400 mt-1.5 flex items-center"><Clock className="w-3 h-3 mr-1"/> {log.date}</div>
                              </div>
-                             <div className="bg-slate-100 px-2 py-1 rounded text-[11px] font-medium text-slate-600 flex items-center">
-                                 <User className="w-3 h-3 mr-1" /> {log.technician}
+                             <div className="flex flex-col items-end gap-1">
+                                <div className="bg-slate-100 px-2 py-1 rounded text-[11px] font-medium text-slate-600 flex items-center">
+                                    <User className="w-3 h-3 mr-1" /> {log.technician}
+                                </div>
+                                {user?.role === 'admin' && (
+                                   <div className="flex gap-1 mt-1">
+                                      <button onClick={() => startEditLog(log)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded bg-slate-50 transition-colors"><Edit className="w-3.5 h-3.5" /></button>
+                                      <button onClick={() => setDeleteModal({ isOpen: true, type: 'log', id: log.id })} className="p-1.5 text-red-500 hover:bg-red-50 rounded bg-slate-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                   </div>
+                                )}
                              </div>
                          </div>
                          <p className="text-slate-700 text-sm my-3 whitespace-pre-wrap">{log.note}</p>
@@ -1033,33 +1450,21 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
               )}
           </div>
       </div>
-
-      {/* MODAL XÁC NHẬN XÓA TÁCH RỜI */}
-      {confirmDelete.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100">
-            <div className="flex items-center space-x-3 mb-3 text-red-600">
-               <div className="bg-red-100 p-2 rounded-full"><AlertCircle className="w-6 h-6" /></div>
-               <h3 className="font-bold text-lg text-slate-800">Xác nhận xóa</h3>
-            </div>
-            <p className="text-slate-600 text-sm mb-6 pl-1">
-              Bạn có chắc chắn muốn xóa vĩnh viễn thiết bị này? Hành động này sẽ không thể hoàn tác.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button onClick={() => setConfirmDelete({ isOpen: false, type: '', id: null })} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Hủy</button>
-              <button onClick={handleConfirmDelete} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-red-500/30">
-                Đồng ý Xóa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-const LogFormView = ({ selectedMachine, user, inventory, setView, showNotification, handleSaveLog }) => {
-  const [formData, setFormData] = useState({ technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] });
+const LogFormView = ({ selectedMachine, user, inventory, setView, showNotification, handleSaveLog, editLogData }) => {
+  // Nếu có dữ liệu sửa, lấy nguyên ID cũ. Ngược lại là tạo mới.
+  const [formData, setFormData] = useState(editLogData || { 
+      id: Date.now(),
+      technicianName: user?.name || '', 
+      type: 'Bảo trì định kỳ', 
+      note: '', 
+      status: 'Hoàn thành', 
+      parts: [], 
+      images: [] 
+  });
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
 
   const addPart = () => { 
@@ -1102,9 +1507,12 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
-      <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3"><button onClick={() => setView('details')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><div><h2 className="font-bold text-slate-800">Báo cáo công việc</h2><p className="text-xs text-slate-500">{selectedMachine.name}</p></div></div>
+      <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3">
+          <button onClick={() => setView('details')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+          <div><h2 className="font-bold text-slate-800">{editLogData ? 'Sửa Báo Cáo' : 'Báo cáo công việc'}</h2><p className="text-xs text-slate-500">{selectedMachine.name}</p></div>
+      </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-32">
-          <div><label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label><input type="text" className="w-full p-3 rounded-lg border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." /></div>
+          <div><label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label><input type="text" className="w-full p-3 rounded-lg border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName || formData.technician} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Loại công việc</label><select className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo trì định kỳ</option><option>Sửa chữa sự cố</option><option>Thay thế linh kiện</option></select></div>
           <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ Kho)</label>
@@ -1116,12 +1524,12 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
                   <div className="flex gap-2"><input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-slate-100 text-slate-500" value={tempPart.unit} /><input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} /></div>
                   <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-medium text-sm mt-1 hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" /> Thêm vào báo cáo</button>
               </div>
-              <div className="space-y-2">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
+              <div className="space-y-2">{formData.parts?.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
           </div>
           <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Hình ảnh hiện trường</label>
               <div className="flex flex-wrap gap-2">
-                  {formData.images.map((img, idx) => (<div key={idx} className="relative w-20 h-20"><img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-3 h-3" /></button></div>))}
+                  {formData.images?.map((img, idx) => (<div key={idx} className="relative w-20 h-20"><img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-3 h-3" /></button></div>))}
                   <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-white hover:bg-slate-50 hover:border-blue-400 text-slate-400 hover:text-blue-500 transition-colors"><Camera className="w-6 h-6 mb-1" /><span className="text-[10px]">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
               </div>
           </div>
@@ -1131,19 +1539,36 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
           </div>
           <div className="grid grid-cols-2 gap-3"><button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white transition-colors ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}><CheckCircle className="w-5 h-5" /> <span className="font-medium">Xong</span></button><button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white transition-colors ${formData.status === 'Cần theo dõi' ? 'bg-yellow-50 border-yellow-500 text-yellow-700 shadow-sm' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}`}><AlertCircle className="w-5 h-5" /> <span className="font-medium">Chưa xong</span></button></div>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/90 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]"><button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-transform active:scale-95"><Save className="w-5 h-5" /> Lưu Báo Cáo</button></div>
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/90 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]">
+          <button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData, !!editLogData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-transform active:scale-95"><Save className="w-5 h-5" /> {editLogData ? 'Cập Nhật' : 'Lưu Báo Cáo'}</button>
+      </div>
     </div>
   );
 };
 
-const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask }) => {
+const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
   const dateStr = new Date().toISOString().split('T')[0];
 
+  // Nếu là editTaskData: Lấy nguyên ID và dữ liệu cũ
+  // Nếu là initialTaskData (Kế thừa): Tạo ID mới, lấy thông tin chung
+  // Nếu cả 2 null: Tạo mới hoàn toàn
+  const isEditing = !!editTaskData;
+  const sourceData = editTaskData || initialTaskData;
+
   const [formData, setFormData] = useState({ 
-      technicianName: user?.name || '', username: user?.username || '', 
-      date: dateStr, startTime: nowStr, endTime: nowStr,
-      taskName: '', type: 'Sửa chữa chung', note: '', status: 'Hoàn thành', parts: [], images: [] 
+      id: isEditing ? editTaskData.id : Date.now(),
+      technicianName: sourceData ? sourceData.technicianName : (user?.name || ''), 
+      username: sourceData ? sourceData.username : (user?.username || ''), 
+      date: isEditing ? editTaskData.date : dateStr, 
+      startTime: isEditing ? editTaskData.startTime : nowStr, 
+      endTime: isEditing ? editTaskData.endTime : nowStr,
+      taskName: sourceData ? sourceData.taskName : '', 
+      type: sourceData ? sourceData.type : 'Sửa chữa chung', 
+      note: isEditing ? editTaskData.note : (initialTaskData ? `[Tiếp tục CV ngày ${initialTaskData.date}] \n` : ''), 
+      status: isEditing ? editTaskData.status : 'Hoàn thành', 
+      parts: isEditing ? (editTaskData.parts || []) : [], 
+      images: isEditing ? (editTaskData.images || []) : [] 
   });
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
 
@@ -1178,14 +1603,27 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const submitForm = () => {
       if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
       if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
-      handleSaveDailyTask(formData);
+      handleSaveDailyTask(formData, isEditing);
+      setInitialTaskData(null); 
+      setEditTaskData(null);
+  };
+
+  const handleBack = () => {
+      setInitialTaskData(null);
+      setEditTaskData(null);
+      setView(user.role === 'admin' ? 'daily_task_history' : 'home');
   };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center space-x-3 shadow-sm z-10">
-          <button onClick={() => setView('home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-          <div><h2 className="font-bold text-slate-800 flex items-center"><CalendarClock className="w-5 h-5 mr-1.5 text-purple-600"/> Báo cáo Hằng ngày</h2></div>
+          <button onClick={handleBack} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+          <div>
+            <h2 className="font-bold text-slate-800 flex items-center">
+                <CalendarClock className="w-5 h-5 mr-1.5 text-purple-600"/> 
+                {isEditing ? 'Sửa Báo Cáo Ngày' : (initialTaskData ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}
+            </h2>
+          </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
@@ -1248,27 +1686,61 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 
           <div className="grid grid-cols-2 gap-3"><button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-xl border-2 flex items-center justify-center space-x-2 bg-white transition-all ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-sm' : 'border-slate-200 text-slate-400'}`}><CheckCircle className="w-5 h-5" /> <span>Đã xong</span></button><button onClick={() => setFormData({...formData, status: 'Đang xử lý'})} className={`p-3 rounded-xl border-2 flex items-center justify-center space-x-2 bg-white transition-all ${formData.status === 'Đang xử lý' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-sm' : 'border-slate-200 text-slate-400'}`}><AlertCircle className="w-5 h-5" /> <span>Đang dở</span></button></div>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20"><button onClick={submitForm} className="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 hover:bg-purple-700 transition-transform active:scale-95"><Save className="w-5 h-5" /> Lưu Báo Cáo Ngày</button></div>
+      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20">
+          <button onClick={submitForm} className="w-full bg-purple-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-purple-500/30 flex items-center justify-center gap-2 hover:bg-purple-700 transition-transform active:scale-95">
+              <Save className="w-5 h-5" /> {isEditing ? 'Cập Nhật Bản Ghi' : (initialTaskData ? 'Lưu Tiến Độ Mới' : 'Lưu Báo Cáo Ngày')}
+          </button>
+      </div>
     </div>
   );
 };
 
-const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
+const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
-  const [filterDateStr, setFilterDateStr] = useState(new Date().toISOString().split('T')[0]); // Default today
-  
+  const [filterDateStr, setFilterDateStr] = useState(taskFilter === 'pending' ? '' : new Date().toISOString().split('T')[0]); 
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+
+  useEffect(() => {
+     if(taskFilter === 'pending') setFilterDateStr('');
+  }, [taskFilter]);
+
   const filteredTasks = dailyTasks.filter(t => {
+      if (taskFilter === 'pending' && t.status !== 'Đang xử lý') return false;
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       let matchDate = filterDateStr === '' ? true : t.date === filterDateStr;
       return matchTech && matchDate;
   });
 
+  const viewTitle = taskFilter === 'pending' ? 'Công Việc Đang Dở' : 'Sổ Ghi Công Việc';
+
+  const startEdit = (task) => {
+      setEditTaskData(task);
+      setInitialTaskData(null);
+      setView('daily_task_form');
+  };
+
+  const handleConfirmDelete = async () => {
+      if(deleteModal.id) {
+          await handleDeleteDailyTaskApp(deleteModal.id);
+          showNotification('Đã xóa công việc!');
+      }
+      setDeleteModal({ isOpen: false, id: null });
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
+        <CustomConfirmModal 
+            isOpen={deleteModal.isOpen} 
+            title="Xóa công việc" 
+            message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác."
+            onConfirm={handleConfirmDelete} 
+            onCancel={() => setDeleteModal({ isOpen: false, id: null })} 
+        />
+
         <div className="p-4 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
             <div className="flex items-center space-x-3 mb-4">
                <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-               <h2 className="font-bold text-slate-800 flex items-center">Sổ Ghi Công Việc</h2>
+               <h2 className="font-bold text-slate-800 flex items-center">{viewTitle}</h2>
             </div>
             
             <div className="flex gap-2">
@@ -1290,7 +1762,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
             <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách ({filteredTasks.length})</span></div>
             {filteredTasks.length === 0 ? (
-                 <p className="text-sm text-slate-400 text-center py-10 bg-white rounded-xl border border-dashed border-slate-300">Không có báo cáo nào trong ngày này.</p>
+                 <p className="text-sm text-slate-400 text-center py-10 bg-white rounded-xl border border-dashed border-slate-300">Không có báo cáo nào phù hợp.</p>
             ) : (
                  filteredTasks.map((task) => (
                      <div key={task.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-purple-300 transition-colors">
@@ -1301,12 +1773,20 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
                              </div>
                              <div className="flex flex-col items-end gap-1">
                                  <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {task.technicianName}</span>
-                                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{task.status}</span>
+                                 <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{task.status}</span>
+                                    {user?.role === 'admin' && (
+                                       <div className="flex gap-1 ml-1 border-l pl-2 border-slate-100">
+                                          <button onClick={() => startEdit(task)} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><Edit className="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                                       </div>
+                                    )}
+                                 </div>
                              </div>
                          </div>
                          
                          <div className="flex items-center text-xs font-mono text-slate-600 mb-3 bg-slate-50 inline-flex px-2 py-1 rounded border border-slate-100">
-                             <Clock className="w-3.5 h-3.5 mr-1.5 text-slate-400" /> {task.startTime} - {task.endTime}
+                             <Clock className="w-3.5 h-3.5 mr-1.5 text-slate-400" /> Ngày {task.date} ({task.startTime} - {task.endTime})
                          </div>
                          
                          <p className="text-slate-700 text-sm whitespace-pre-wrap">{task.note}</p>
@@ -1328,6 +1808,16 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
                              ))}
                            </div>
                          )}
+
+                         {/* Nút Tiếp tục công việc cho việc Đang dở */}
+                         {task.status === 'Đang xử lý' && (
+                             <button 
+                               onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }}
+                               className="mt-4 w-full bg-purple-50 text-purple-700 border border-purple-200 py-2 rounded-lg text-sm font-bold flex justify-center items-center gap-2 hover:bg-purple-100 transition-colors active:scale-95"
+                             >
+                                <PlaySquare className="w-4 h-4" /> Tiếp tục công việc này
+                             </button>
+                         )}
                      </div>
                  ))
             )}
@@ -1335,290 +1825,6 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
     </div>
   );
 };
-
-const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
-  const isEditing = !!editData;
-  const dateStr = new Date().toISOString().split('T')[0];
-  
-  const [formData, setFormData] = useState(isEditing ? editData : { 
-      id: Date.now(),
-      technicianName: user?.name || '', username: user?.username || '', 
-      date: dateStr, note: '', images: [],
-      elec1: { bt: '', cd: '', td: '', vc: '' },
-      elec2: { bt: '', cd: '', td: '', vc: '' },
-      water: { tong: '', tuoiCay: '', vanPhong: '', nhaAnVpc: '', nhaAnXuong: '', congChinh: '', congPhu: '' }
-  });
-
-  const [activeTab, setActiveTab] = useState(mode === 'water' ? 'water' : 'elec1'); 
-
-  const prevLog = [...utilityLogs]
-      .filter(log => log.id !== formData.id && new Date(log.date) <= new Date(formData.date))
-      .sort((a,b) => b.id - a.id)[0];
-
-  const handleElecChange = (tram, field, value) => {
-      setFormData(prev => ({ ...prev, [tram]: { ...prev[tram], [field]: value } }));
-  };
-
-  const handleWaterChange = (field, value) => {
-      setFormData(prev => ({ ...prev, water: { ...prev.water, [field]: value } }));
-  };
-
-  const calcCosPhi = (elec) => {
-      const p = Number(elec.bt) + Number(elec.cd) + Number(elec.td);
-      const q = Number(elec.vc);
-      if (p === 0 && q === 0) return 0;
-      const cos = p / Math.sqrt(p*p + q*q);
-      return isNaN(cos) ? 0 : cos.toFixed(3);
-  };
-
-  const calcWaterConsumption = (field) => {
-      if (!formData.water[field] || !prevLog || !prevLog.water || !prevLog.water[field]) return 0;
-      const current = Number(formData.water[field]);
-      const prev = Number(prevLog.water[field]);
-      return current >= prev ? (current - prev).toFixed(1) : 0;
-  };
-
-  const handleImageUpload = (e) => {
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const img = new Image();
-          img.onload = () => {
-              const canvas = document.createElement('canvas'); const scaleSize = 800 / img.width;
-              canvas.width = 800; canvas.height = img.height * scaleSize;
-              const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              setFormData(prev => ({...prev, images: [...prev.images, canvas.toDataURL('image/jpeg', 0.6)]}));
-          };
-          img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-  };
-
-  const removeImage = (index) => {
-      const newImages = [...formData.images];
-      newImages.splice(index, 1);
-      setFormData({...formData, images: newImages});
-  };
-
-  const submitForm = () => {
-      handleSaveUtilityLog(formData);
-      if (isEditing) setEditData(null);
-  };
-
-  const ElecInputGroup = ({ tramName, tramKey }) => {
-      const cosPhi = calcCosPhi(formData[tramKey]);
-      const isLowCosPhi = cosPhi > 0 && cosPhi < 0.9;
-
-      return (
-          <div className="space-y-4 animate-fade-in">
-              <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <label className="text-xs font-bold text-slate-500 mb-1 block">Bình thường (Kw)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].bt} onChange={e => handleElecChange(tramKey, 'bt', e.target.value)} />
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <label className="text-xs font-bold text-slate-500 mb-1 block">Cao điểm (Kw)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-red-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].cd} onChange={e => handleElecChange(tramKey, 'cd', e.target.value)} />
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <label className="text-xs font-bold text-slate-500 mb-1 block">Thấp điểm (Kw)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-green-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].td} onChange={e => handleElecChange(tramKey, 'td', e.target.value)} />
-                  </div>
-                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                      <label className="text-xs font-bold text-slate-500 mb-1 block">Vô công (Kvar)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-purple-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].vc} onChange={e => handleElecChange(tramKey, 'vc', e.target.value)} />
-                  </div>
-              </div>
-
-              <div className={`p-4 rounded-xl border flex items-center justify-between shadow-sm transition-colors ${isLowCosPhi ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                  <div className="flex items-center space-x-2">
-                      <Calculator className={`w-5 h-5 ${isLowCosPhi ? 'text-red-500' : 'text-slate-500'}`} />
-                      <span className={`font-bold ${isLowCosPhi ? 'text-red-700' : 'text-slate-700'}`}>Hệ số Cos ϕ:</span>
-                  </div>
-                  <div className="text-right">
-                      <span className={`text-xl font-bold ${isLowCosPhi ? 'text-red-600' : 'text-blue-600'}`}>{cosPhi || '0.000'}</span>
-                  </div>
-              </div>
-              {isLowCosPhi && (
-                  <div className="flex items-start space-x-2 text-red-600 bg-red-100 p-3 rounded-lg text-sm font-medium">
-                      <AlertTriangle className="w-5 h-5 shrink-0" />
-                      <p>Cảnh báo: Hệ số Cos ϕ dưới 0.9. Kiểm tra lại tụ bù hoặc liên hệ kỹ thuật!</p>
-                  </div>
-              )}
-          </div>
-      );
-  };
-
-  const waterFields = [
-      { id: 'tong', label: 'Chỉ số Tổng' }, { id: 'tuoiCay', label: 'Tưới cây' },
-      { id: 'vanPhong', label: 'VP Chính' }, { id: 'nhaAnVpc', label: 'Nhà ăn VPC' },
-      { id: 'nhaAnXuong', label: 'Nhà ăn Xưởng' }, { id: 'congChinh', label: 'Bảo vệ cổng chính' },
-      { id: 'congPhu', label: 'Bảo vệ cổng phụ' }
-  ];
-
-  return (
-    <div className="flex flex-col h-full bg-slate-100 relative">
-      <div className="p-4 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
-              <button onClick={() => { setView(isEditing ? 'utility_history' : 'meter_menu'); setEditData(null); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-              <div>
-                  <h2 className="font-bold text-slate-800 flex items-center">
-                      {isEditing ? 'Sửa Bản Ghi' : (mode === 'elec' ? 'Ghi Số Điện' : 'Ghi Số Nước')}
-                  </h2>
-              </div>
-          </div>
-          <input type="date" className="p-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 outline-none font-medium bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-      </div>
-
-      {/* Chỉ hiển thị tab Điện 1 và Điện 2 nếu đang ở chế độ Ghi Số Điện */}
-      {mode === 'elec' && (
-          <div className="flex bg-white border-b border-slate-200 shrink-0">
-              <button onClick={() => setActiveTab('elec1')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec1' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 1</button>
-              <button onClick={() => setActiveTab('elec2')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec2' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 2</button>
-          </div>
-      )}
-      
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
-          {mode === 'elec' && activeTab === 'elec1' && <ElecInputGroup tramName="Trạm Điện 1" tramKey="elec1" />}
-          {mode === 'elec' && activeTab === 'elec2' && <ElecInputGroup tramName="Trạm Điện 2" tramKey="elec2" />}
-          
-          {mode === 'water' && (
-              <div className="space-y-3 animate-fade-in">
-                  <div className="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs flex items-center shadow-sm">
-                      <Droplets className="w-4 h-4 mr-2 shrink-0" /> Hệ thống tự động lấy chỉ số ngày gần nhất để tính Tiêu thụ.
-                  </div>
-                  {waterFields.map(field => (
-                      <div key={field.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                          <div className="w-1/3 pr-2">
-                              <label className="text-xs font-bold text-slate-700 leading-tight block">{field.label}</label>
-                              {prevLog && prevLog.water && prevLog.water[field.id] && (
-                                  <span className="text-[10px] text-slate-400">Số cũ: {prevLog.water[field.id]}</span>
-                              )}
-                          </div>
-                          <div className="w-1/3 px-1">
-                              <input type="number" step="any" placeholder="Số mới" className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold text-center" value={formData.water[field.id]} onChange={e => handleWaterChange(field.id, e.target.value)} />
-                          </div>
-                          <div className="w-1/3 pl-2 text-right">
-                              <div className="text-[10px] text-slate-500 uppercase font-bold">Tiêu thụ ($m^3$)</div>
-                              <div className="text-lg font-bold text-blue-600">{calcWaterConsumption(field.id)}</div>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          )}
-
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4 mt-6">
-              <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Ghi chú (Sự cố, hao hụt...)</label>
-                  <textarea rows="2" className="w-full p-3 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-cyan-500 outline-none resize-none" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
-              </div>
-              <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Hình ảnh hóa đơn / đồng hồ</label>
-                  <div className="flex flex-wrap gap-2">
-                      {formData.images.map((img, idx) => (<div key={idx} className="relative w-16 h-16"><img src={img} className="w-full h-full object-cover rounded-lg border border-slate-200" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600"><X className="w-3 h-3" /></button></div>))}
-                      <label className="w-16 h-16 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-slate-50 hover:bg-slate-100 text-slate-500 transition-colors"><Camera className="w-5 h-5 mb-1" /><span className="text-[9px] font-bold">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
-                  </div>
-              </div>
-          </div>
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 bg-white/95 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)] z-20"><button onClick={submitForm} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-transform active:scale-95"><Save className="w-5 h-5" /> {isEditing ? 'Cập Nhật Bản Ghi' : 'Lưu Chỉ Số Hôm Nay'}</button></div>
-    </div>
-  );
-};
-
-const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode }) => {
-  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
-  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  
-  const filteredLogs = utilityLogs.filter(t => {
-      let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
-      let matchDate = t.date.startsWith(filterMonth);
-      return matchTech && matchDate;
-  });
-
-  const handleEdit = (log, mode) => {
-      setEditData(log);
-      setUtilityMode(mode); 
-      setView('utility_form');
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
-        <div className="p-4 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
-            <div className="flex items-center space-x-3 mb-4">
-               <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-               <h2 className="font-bold text-slate-800 flex items-center">Lịch Sử Điện Nước</h2>
-            </div>
-            <div className="flex gap-2">
-               {user.role === 'admin' && (
-                  <div className="flex-1 relative">
-                      <Filter className="absolute left-2.5 top-2 w-4 h-4 text-slate-400" />
-                      <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-8 pr-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 font-medium">
-                          <option value="all">Tất cả KTV</option>
-                          {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
-                      </select>
-                  </div>
-               )}
-               <div className="flex-1 relative">
-                  <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-2 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-cyan-500 text-slate-700 font-medium" />
-               </div>
-            </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="flex justify-between items-center text-xs text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({filteredLogs.length} bản ghi)</span></div>
-            {filteredLogs.length === 0 ? (
-                 <p className="text-sm text-slate-400 text-center py-10 bg-white rounded-xl border border-dashed border-slate-300">Không có bản ghi nào.</p>
-            ) : (
-                 filteredLogs.map((log) => {
-                     const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
-                     const p2 = Number(log.elec2?.bt||0) + Number(log.elec2?.cd||0) + Number(log.elec2?.td||0);
-                     const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
-                     
-                     return (
-                     <div key={log.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-cyan-300 transition-colors">
-                         <div className="flex justify-between items-start mb-3 border-b border-slate-100 pb-3">
-                             <div>
-                                 <h4 className="font-bold text-slate-800 text-base leading-tight flex items-center"><CalendarClock className="w-4 h-4 mr-1.5 text-slate-400"/>Ngày {log.date}</h4>
-                             </div>
-                             <div className="flex flex-col gap-1 items-end">
-                                 <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {log.technicianName}</span>
-                                 {/* Tách 2 nút sửa */}
-                                 <div className="flex gap-1 mt-1">
-                                     <button onClick={() => handleEdit(log, 'elec')} className="bg-yellow-50 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Điện</button>
-                                     <button onClick={() => handleEdit(log, 'water')} className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-100 border border-blue-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Nước</button>
-                                 </div>
-                             </div>
-                         </div>
-                         
-                         <div className="grid grid-cols-2 gap-3 mb-3">
-                             <div className="bg-yellow-50 p-2 rounded-lg border border-yellow-100 flex flex-col justify-center">
-                                 <p className="text-[10px] text-yellow-600 font-bold uppercase mb-1 flex items-center"><Zap className="w-3 h-3 mr-1"/> Điện T.Thụ</p>
-                                 <p className="font-bold text-yellow-800 text-base">{(p1+p2).toFixed(1)} <span className="text-[10px] font-normal text-yellow-600">Kw (T1+T2)</span></p>
-                             </div>
-                             <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 flex flex-col justify-center">
-                                 <p className="text-[10px] text-blue-600 font-bold uppercase mb-1 flex items-center"><Droplets className="w-3 h-3 mr-1"/> Nước T.Thụ (Thô)</p>
-                                 <p className="font-bold text-blue-800 text-base">{waterTotal} <span className="text-[10px] font-normal text-blue-600">Tổng m3 (Ghi nhận)</span></p>
-                             </div>
-                         </div>
-                         
-                         {log.note && <p className="text-slate-700 text-sm whitespace-pre-wrap bg-slate-50 p-2 rounded text-xs border border-slate-100 mb-3">{log.note}</p>}
-
-                         {log.images && log.images.length > 0 && (
-                           <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                             {log.images.map((img, idx) => (
-                                <img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" alt="Log" />
-                             ))}
-                           </div>
-                         )}
-                     </div>
-                 )})
-            )}
-        </div>
-    </div>
-  );
-};
-
 
 // ============================================================================
 // CHƯƠNG TRÌNH CHÍNH (APP)
@@ -1628,11 +1834,18 @@ export default function App() {
   const [view, setViewInternal] = useState('login'); 
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Các state chỉnh sửa (Edit)
   const [utilityEditItem, setUtilityEditItem] = useState(null);
-  
-  // Trạng thái để biết người dùng đang mở Sổ Điện ('elec') hay Sổ Nước ('water')
   const [utilityMode, setUtilityMode] = useState('elec'); 
-  
+  const [editLogData, setEditLogData] = useState(null);
+  const [editTaskData, setEditTaskData] = useState(null);
+
+  // Các state quản lý Lọc & Kế thừa
+  const [machineFilter, setMachineFilter] = useState('all'); // 'all', 'operational', 'issue'
+  const [taskFilter, setTaskFilter] = useState('all'); // 'all', 'pending'
+  const [initialTaskData, setInitialTaskData] = useState(null); // Dữ liệu của task đang dở cần tiếp tục
+
   // XỬ LÝ DỮ LIỆU LAI (HYBRID: OFFLINE HOẶC CLOUD)
   const [usersList, setUsersList] = useState(() => {
     if (db) return []; 
@@ -1751,6 +1964,7 @@ export default function App() {
     return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); };
   }, [fbUser, db]);
 
+  // === CÁC HÀM XỬ LÝ LƯU/XÓA DATA TẬP TRUNG TẠI APP ===
   const saveUserData = async (uObj) => {
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', uObj.id), uObj);
       else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); }
@@ -1759,22 +1973,39 @@ export default function App() {
       if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', id));
       else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); }
   };
+  
   const saveMachineData = async (newMachineObj) => { 
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj);
       else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); }
   }; 
+  const handleDeleteMachineApp = async (id) => {
+      if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', id));
+      else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); }
+  };
+
   const saveInventoryData = async (newInvObj) => {
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'inventory', newInvObj.id), newInvObj);
       else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); }
   };
+  
   const saveLogData = async (logEntry) => {
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(logEntry.id)), logEntry);
-      else { const nList = [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); }
+      else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); }
   };
+  const handleDeleteLogApp = async (id) => {
+      if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id)));
+      else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); }
+  };
+
   const saveDailyTaskData = async (taskObj) => {
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj);
-      else { const nList = [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); }
+      else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); }
   };
+  const handleDeleteDailyTaskApp = async (id) => {
+      if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id)));
+      else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); }
+  };
+
   const saveUtilityLogData = async (logObj) => {
       if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj);
       else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); }
@@ -1806,94 +2037,64 @@ export default function App() {
     if (!googleSheetUrl) return;
     try {
       let payload = {};
-      
       if (logData.formType === 'utility_log') {
-          payload = {
-              id: logData.id,
-              formType: 'utility_log',
-              date: logData.date,
-              technician: logData.technicianName,
-              note: logData.note,
-              elec1_json: JSON.stringify(logData.elec1),
-              elec2_json: JSON.stringify(logData.elec2),
-              water_json: JSON.stringify(logData.water),
-              images: logData.images
-          };
+          payload = { id: logData.id, formType: 'utility_log', date: logData.date, technician: logData.technicianName, note: logData.note, elec1_json: JSON.stringify(logData.elec1), elec2_json: JSON.stringify(logData.elec2), water_json: JSON.stringify(logData.water), images: logData.images };
       } else if (logData.formType === 'daily_task') {
-          payload = {
-              formType: 'daily_task', id: logData.id, date: logData.date, technician: logData.technicianName,
-              taskName: logData.taskName, startTime: logData.startTime, endTime: logData.endTime,
-              type: logData.type, note: logData.note, status: logData.status, images: logData.images,
-              parts: logData.parts ? logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : ''
-          };
+          payload = { formType: 'daily_task', id: logData.id, date: logData.date, technician: logData.technicianName, taskName: logData.taskName, startTime: logData.startTime, endTime: logData.endTime, type: logData.type, note: logData.note, status: logData.status, images: logData.images, parts: logData.parts ? logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '' };
       } else {
-          payload = {
-              id: logData.id,
-              formType: 'maintenance',
-              machineId: logData.machineId,
-              machineName: selectedMachine?.name || '',
-              date: logData.date,
-              technician: logData.technician,
-              type: logData.type,
-              note: logData.note,
-              status: logData.status,
-              parts: logData.parts ? logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '',
-              images: logData.images
-          };
+          payload = { id: logData.id, formType: 'maintenance', machineId: logData.machineId, machineName: selectedMachine?.name || '', date: logData.date, technician: logData.technician, type: logData.type, note: logData.note, status: logData.status, parts: logData.parts ? logData.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '', images: logData.images };
       }
 
-      await fetch(googleSheetUrl, { 
-        method: 'POST', 
-        body: JSON.stringify(payload),
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }
-      });
-      console.log("Đã xuất báo cáo lên Google Sheet");
-    } catch (error) {
-      console.error("Lỗi gửi Google Sheet:", error);
-    }
+      await fetch(googleSheetUrl, { method: 'POST', body: JSON.stringify(payload), headers: { 'Content-Type': 'text/plain;charset=utf-8' } });
+    } catch (error) { console.error("Lỗi gửi Google Sheet:", error); }
   };
 
-  const handleSaveDailyTask = async (newLog) => {
-      const entry = { id: Date.now(), formType: 'daily_task', ...newLog };
+  const handleSaveDailyTask = async (newLog, isEditingRecord = false) => {
+      // Dùng id có sẵn nếu đang sửa, nếu mới thì tạo id mới
+      const entryId = isEditingRecord && editTaskData ? editTaskData.id : Date.now();
+      const entry = { ...newLog, id: entryId, formType: 'daily_task' };
+      
       await saveDailyTaskData(entry);
       
-      for (const usedPart of newLog.parts) {
-          const foundPart = inventory.find(i => i.name === usedPart.name);
-          if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) });
+      // Chỉ trừ vật tư khi LƯU MỚI (hoặc KẾ THỪA MỚI) để tránh trừ trùng khi bấm SỬA LẠI.
+      if (!isEditingRecord) {
+          for (const usedPart of entry.parts) {
+              const foundPart = inventory.find(i => i.name === usedPart.name);
+              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) });
+          }
+          if(googleSheetUrl) pushToGoogleSheet(entry);
       }
       
-      if(googleSheetUrl) pushToGoogleSheet(entry);
-      
-      showNotification('Đã lưu báo cáo hằng ngày!');
+      showNotification(isEditingRecord ? 'Đã cập nhật công việc!' : 'Đã lưu báo cáo hằng ngày!');
       setView(user.role === 'admin' ? 'daily_task_history' : 'home');
   };
 
   const handleSaveUtilityLog = async (data) => {
       const entry = { formType: 'utility_log', ...data };
       await saveUtilityLogData(entry);
-      
-      if (googleSheetUrl) {
-          pushToGoogleSheet(entry);
-      }
-      
-      showNotification(db ? 'Đã lưu sổ điện nước!' : 'Đã lưu cục bộ (Offline)');
+      if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); // Chỉ đẩy GS khi tạo mới
+      showNotification('Đã lưu dữ liệu!');
       setView(user.role === 'admin' ? 'utility_history' : 'home');
   };
 
-  const handleSaveLog = async (newLog) => {
-    const logEntry = { id: Date.now(), machineId: selectedMachine.id, date: new Date().toISOString().split('T')[0], technician: newLog.technicianName || user.name, ...newLog };
+  const handleSaveLog = async (newLog, isEditingRecord = false) => {
+    const entryId = isEditingRecord && editLogData ? editLogData.id : Date.now();
+    const logEntry = { ...newLog, id: entryId, machineId: selectedMachine.id, date: editLogData?.date || new Date().toISOString().split('T')[0], technician: newLog.technicianName || user.name };
     await saveLogData(logEntry);
+    
     const updatedMachine = { ...selectedMachine, status: newLog.status === 'Hoàn thành' ? 'operational' : 'maintenance' };
     setSelectedMachine(updatedMachine);
 
-    for (const usedPart of newLog.parts) {
-        const foundPart = inventory.find(i => i.name === usedPart.name);
-        if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) });
+    // Không trừ kho lại nếu đang Sửa báo cáo
+    if (!isEditingRecord) {
+        for (const usedPart of newLog.parts) {
+            const foundPart = inventory.find(i => i.name === usedPart.name);
+            if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) });
+        }
+        if (googleSheetUrl) pushToGoogleSheet({ formType: 'maintenance', ...logEntry });
     }
-
-    if (googleSheetUrl) pushToGoogleSheet({ formType: 'maintenance', ...logEntry });
     
-    showNotification('Đã lưu báo cáo máy!');
+    showNotification(isEditingRecord ? 'Đã cập nhật báo cáo!' : 'Đã lưu báo cáo máy!');
     setView('details');
   };
 
@@ -1911,27 +2112,28 @@ export default function App() {
       <div className="w-full max-w-md h-full bg-slate-100 shadow-2xl flex flex-col relative overflow-hidden">
         <div className="h-1 bg-blue-600 w-full shrink-0"></div>
         <div className="flex-1 overflow-hidden relative flex flex-col">
-          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} />}
+          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
-          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} />}
+          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user}/>}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'qr_print' && <QrPrintView machines={machines} setView={setView} />}
-          {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} />}
-          {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} />}
-          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} />}
+          {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
           
-          {/* Menu chọn chế độ ghi Điện hoặc Nước */}
+          {/* DAILY TASKS */}
+          {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData}/>}
+          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} />}
+          
+          {/* METER / UTILITY */}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
-          {/* Màn hình ghi Điện/Nước phụ thuộc vào biến utilityMode */}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
-          {/* Màn hình lịch sử Điện/Nước */}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} />}
           
+          {/* MACHINE SPECIFIC */}
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
-          {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} />}
-          {view === 'details' && selectedMachine && <DetailsView user={user} logs={logs} selectedMachine={selectedMachine} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} handleDeleteMachine={(id) => { saveMachineData({...machines.find(m => m.id === id), _delete: true}) }} />}
-          {view === 'form' && <LogFormView selectedMachine={selectedMachine} user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveLog={handleSaveLog} />}
+          {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
+          {view === 'details' && selectedMachine && <DetailsView user={user} logs={logs} selectedMachine={selectedMachine} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} handleDeleteMachineApp={handleDeleteMachineApp} handleDeleteLogApp={handleDeleteLogApp} setEditLogData={setEditLogData} />}
+          {view === 'form' && <LogFormView selectedMachine={selectedMachine} user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveLog={handleSaveLog} editLogData={editLogData} />}
         </div>
         {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-lg shadow-xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
       </div>
