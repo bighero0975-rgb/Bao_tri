@@ -150,7 +150,103 @@ const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => 
 };
 
 // ============================================================================
-// CÁC THÀNH PHẦN GIAO DIỆN
+// COMPONENT DÙNG CHUNG: DROPDOWN CHỌN VẬT TƯ CÓ TÌM KIẾM
+// ============================================================================
+const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPart, setTempPart, theme = 'blue' }) => {
+    const [search, setSearch] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filtered = inventory.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+
+    const handleSelect = (val) => {
+        if (val === 'CUSTOM') {
+            setIsCustomPart(true);
+            setTempPart({ name: '', unit: '', quantity: '' });
+        } else {
+            setIsCustomPart(false);
+            const selectedItem = inventory.find(i => i.name === val);
+            setTempPart({ ...tempPart, name: val, unit: selectedItem ? selectedItem.unit : '' });
+        }
+        setIsOpen(false);
+        setSearch(''); // Xóa text tìm kiếm sau khi chọn xong
+    };
+
+    const activeColor = theme === 'purple' ? 'text-purple-600' : 'text-blue-600';
+    const focusRing = theme === 'purple' ? 'focus:ring-purple-500' : 'focus:ring-blue-500';
+    const borderActive = theme === 'purple' ? 'border-purple-500 ring-purple-500' : 'border-blue-500 ring-blue-500';
+
+    return (
+        <div className="relative" ref={wrapperRef}>
+            {/* Vùng bấm để mở dropdown */}
+            <div 
+                className={`w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white flex justify-between items-center cursor-pointer transition-all ${isOpen ? `ring-2 ring-opacity-20 ${borderActive}` : ''}`}
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <span className={`block truncate ${!tempPart.name && !isCustomPart ? "text-slate-500" : "text-slate-800 font-bold"}`}>
+                    {isCustomPart ? "+ Nhập vật tư ngoài / Tạo mới" : (tempPart.name || '-- Chọn vật tư trong kho --')}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </div>
+
+            {/* Menu Dropdown */}
+            {isOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 flex flex-col overflow-hidden">
+                    {/* Ô nhập Tìm kiếm */}
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 shrink-0">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                            <input 
+                                type="text"
+                                autoFocus
+                                placeholder="Nhập tên vật tư để tìm..."
+                                className={`w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 ${focusRing}`}
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    {/* Danh sách kết quả */}
+                    <div className="overflow-y-auto flex-1 custom-scrollbar">
+                        <div 
+                            className={`p-3 text-sm font-bold cursor-pointer hover:bg-slate-100 border-b border-slate-100 flex items-center ${activeColor}`}
+                            onClick={() => handleSelect('CUSTOM')}
+                        >
+                            <Plus className="w-4 h-4 mr-1.5" /> Nhập vật tư ngoài / Tạo mới
+                        </div>
+                        {filtered.length > 0 ? filtered.map(item => (
+                            <div 
+                                key={item.id}
+                                className="p-3 text-sm cursor-pointer hover:bg-slate-50 border-b border-slate-50 flex justify-between items-center transition-colors"
+                                onClick={() => handleSelect(item.name)}
+                            >
+                                <span className="font-medium text-slate-700 truncate mr-2">{item.name}</span>
+                                <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded whitespace-nowrap font-medium">Tồn: {item.quantity} {item.unit}</span>
+                            </div>
+                        )) : (
+                            <div className="p-6 text-center text-sm text-slate-400">
+                                Không tìm thấy <b>"{search}"</b>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ============================================================================
+// CÁC THÀNH PHẦN GIAO DIỆN CHÍNH
 // ============================================================================
 
 const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
@@ -496,15 +592,15 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                       <label className="text-xs font-bold text-slate-500 mb-1 block">Cao điểm (Kw)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-red-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].cd} onChange={e => handleElecChange(tramKey, 'cd', e.target.value)} />
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].cd} onChange={e => handleElecChange(tramKey, 'cd', e.target.value)} />
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                       <label className="text-xs font-bold text-slate-500 mb-1 block">Thấp điểm (Kw)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-green-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].td} onChange={e => handleElecChange(tramKey, 'td', e.target.value)} />
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].td} onChange={e => handleElecChange(tramKey, 'td', e.target.value)} />
                   </div>
                   <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
                       <label className="text-xs font-bold text-slate-500 mb-1 block">Vô công (Kvar)</label>
-                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-purple-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].vc} onChange={e => handleElecChange(tramKey, 'vc', e.target.value)} />
+                      <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-lg font-bold text-slate-800" value={formData[tramKey].vc} onChange={e => handleElecChange(tramKey, 'vc', e.target.value)} />
                   </div>
               </div>
 
@@ -1515,24 +1611,14 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
           <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế</label>
               <div className="flex flex-col gap-2 mb-2 bg-white p-3 rounded-lg border border-slate-200">
-                  <select className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
-                      value={isCustomPart ? 'CUSTOM' : tempPart.name} 
-                      onChange={(e) => { 
-                          const val = e.target.value;
-                          if (val === 'CUSTOM') {
-                              setIsCustomPart(true);
-                              setTempPart({ name: '', unit: '', quantity: '' });
-                          } else {
-                              setIsCustomPart(false);
-                              const selectedItem = inventory.find(i => i.name === val); 
-                              setTempPart({ ...tempPart, name: val, unit: selectedItem ? selectedItem.unit : '' }); 
-                          }
-                      }}
-                  >
-                      <option value="">-- Chọn vật tư trong kho --</option>
-                      <option value="CUSTOM" className="font-bold text-blue-600">+ Nhập vật tư ngoài / Tạo mới</option>
-                      {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity} {item.unit})</option>))}
-                  </select>
+                  <SearchablePartSelect 
+                      inventory={inventory} 
+                      isCustomPart={isCustomPart} 
+                      setIsCustomPart={setIsCustomPart} 
+                      tempPart={tempPart} 
+                      setTempPart={setTempPart} 
+                      theme="blue"
+                  />
 
                   {isCustomPart && (
                       <input placeholder="Tên vật tư (Nhập tay)" className="w-full p-2 border border-blue-300 rounded-lg text-base bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />
@@ -1684,24 +1770,14 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
               <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Vật tư sử dụng</label>
                   <div className="flex flex-col gap-2 mb-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <select className="w-full p-2 border border-slate-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-purple-500" 
-                          value={isCustomPart ? 'CUSTOM' : tempPart.name} 
-                          onChange={(e) => { 
-                              const val = e.target.value;
-                              if (val === 'CUSTOM') {
-                                  setIsCustomPart(true);
-                                  setTempPart({ name: '', unit: '', quantity: '' });
-                              } else {
-                                  setIsCustomPart(false);
-                                  const itm = inventory.find(i => i.name === val); 
-                                  setTempPart({ ...tempPart, name: val, unit: itm ? itm.unit : '' }); 
-                              }
-                          }}
-                      >
-                          <option value="">-- Kho vật tư --</option>
-                          <option value="CUSTOM" className="font-bold text-purple-600">+ Nhập vật tư ngoài / Tạo mới</option>
-                          {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity})</option>))}
-                      </select>
+                      <SearchablePartSelect 
+                          inventory={inventory} 
+                          isCustomPart={isCustomPart} 
+                          setIsCustomPart={setIsCustomPart} 
+                          tempPart={tempPart} 
+                          setTempPart={setTempPart} 
+                          theme="purple"
+                      />
 
                       {isCustomPart && (
                           <input placeholder="Nhập tên vật tư mới..." className="w-full p-2 border border-purple-300 rounded text-sm bg-purple-50 outline-none focus:ring-2 focus:ring-purple-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />
