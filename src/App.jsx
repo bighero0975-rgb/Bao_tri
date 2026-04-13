@@ -289,8 +289,8 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
             <div className="flex items-center gap-3">
                <div className="bg-white/20 p-2.5 rounded-xl backdrop-blur-sm shadow-inner"><User className="w-6 h-6 text-white"/></div>
                <div>
-                  <p className="text-blue-100 text-xs font-medium">Xin chào KTV,</p>
-                  <h1 className="text-white font-bold text-lg leading-tight truncate max-w-[150px]">{user.name}</h1>
+                  <p className="text-blue-100 text-xs font-medium">Xin chào,</p>
+                  <h1 className="text-white font-bold text-lg leading-tight break-words">{user.name}</h1>
                </div>
             </div>
             <div className="flex items-center gap-2">
@@ -427,7 +427,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
       water: { tong: '', tuoiCay: '', vanPhong: '', nhaAnVpc: '', nhaAnXuong: '', congChinh: '', congPhu: '' }
   });
 
-  const [activeTab, setActiveTab] = useState(mode === 'water' ? 'water' : 'elec1'); 
+  const [activeTab, useState] = React.useState(mode === 'water' ? 'water' : 'elec1'); 
 
   const prevLog = [...utilityLogs]
       .filter(log => log.id !== formData.id && new Date(log.date) <= new Date(formData.date))
@@ -792,7 +792,6 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
   
-  // State phục vụ tính năng XEM/SỬA/XÓA
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', status: 'operational' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -978,12 +977,10 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                         </div>
                         <div className="flex items-center gap-3">
                            <div className={`w-3 h-3 rounded-full ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
-                           {user?.role === 'admin' && (
-                               <div className="flex gap-1 ml-2 border-l border-slate-200 pl-2">
-                                  <button onClick={() => startEdit(m)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded transition-colors"><Edit className="w-4 h-4" /></button>
-                                  <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-100 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
-                               </div>
-                           )}
+                           <div className="flex gap-1 ml-2 border-l border-slate-200 pl-2">
+                              <button onClick={() => startEdit(m)} className="p-1.5 text-slate-400 hover:text-blue-600 bg-slate-50 hover:bg-blue-100 rounded transition-colors"><Edit className="w-4 h-4" /></button>
+                              <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="p-1.5 text-slate-400 hover:text-red-600 bg-slate-50 hover:bg-red-100 rounded transition-colors"><Trash2 className="w-4 h-4" /></button>
+                           </div>
                         </div>
                      </div>
                  )}
@@ -1330,7 +1327,7 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
               <button onClick={() => setView('home')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6" /></button>
               <h2 className="font-bold text-slate-800">Chi tiết thiết bị</h2>
               <div>
-                 {user?.role === 'admin' && !isEditingMachine && (
+                 {!isEditingMachine && (
                    <button onClick={() => setIsEditingMachine(true)} className="p-2 -mr-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors">
                        <Edit className="w-5 h-5" />
                    </button>
@@ -1417,12 +1414,10 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
                                 <div className="bg-slate-100 px-2 py-1 rounded text-[11px] font-medium text-slate-600 flex items-center">
                                     <User className="w-3 h-3 mr-1" /> {log.technician}
                                 </div>
-                                {user?.role === 'admin' && (
-                                   <div className="flex gap-1 mt-1">
-                                      <button onClick={() => startEditLog(log)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded bg-slate-50 transition-colors"><Edit className="w-3.5 h-3.5" /></button>
-                                      <button onClick={() => setDeleteModal({ isOpen: true, type: 'log', id: log.id })} className="p-1.5 text-red-500 hover:bg-red-50 rounded bg-slate-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                                   </div>
-                                )}
+                                <div className="flex gap-1 mt-1">
+                                   <button onClick={() => startEditLog(log)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded bg-slate-50 transition-colors"><Edit className="w-3.5 h-3.5" /></button>
+                                   <button onClick={() => setDeleteModal({ isOpen: true, type: 'log', id: log.id })} className="p-1.5 text-red-500 hover:bg-red-50 rounded bg-slate-50 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
                              </div>
                          </div>
                          <p className="text-slate-700 text-sm my-3 whitespace-pre-wrap">{log.note}</p>
@@ -1455,7 +1450,6 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
 };
 
 const LogFormView = ({ selectedMachine, user, inventory, setView, showNotification, handleSaveLog, editLogData }) => {
-  // Nếu có dữ liệu sửa, lấy nguyên ID cũ. Ngược lại là tạo mới.
   const [formData, setFormData] = useState(editLogData || { 
       id: Date.now(),
       technicianName: user?.name || '', 
@@ -1465,13 +1459,17 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
       parts: [], 
       images: [] 
   });
+  
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+  const [isCustomPart, setIsCustomPart] = useState(false);
 
   const addPart = () => { 
       if(tempPart.name && tempPart.quantity) { 
-          setFormData({...formData, parts: [...formData.parts, tempPart]}); setTempPart({ name: '', unit: '', quantity: '' }); 
+          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
+          setTempPart({ name: '', unit: '', quantity: '' }); 
+          setIsCustomPart(false);
       } else {
-          showNotification('Vui lòng chọn vật tư và nhập số lượng', 'error');
+          showNotification('Vui lòng chọn/nhập tên vật tư và số lượng', 'error');
       }
   };
   
@@ -1515,16 +1513,38 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Người thực hiện</label><input type="text" className="w-full p-3 rounded-lg border border-slate-300 bg-white text-base focus:ring-2 focus:ring-blue-500 outline-none" value={formData.technicianName || formData.technician} onChange={e => setFormData({...formData, technicianName: e.target.value})} placeholder="Tên KTV..." /></div>
           <div><label className="block text-sm font-medium text-slate-700 mb-1">Loại công việc</label><select className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none bg-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo trì định kỳ</option><option>Sửa chữa sự cố</option><option>Thay thế linh kiện</option></select></div>
           <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế (lấy từ Kho)</label>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Vật tư thay thế</label>
               <div className="flex flex-col gap-2 mb-2 bg-white p-3 rounded-lg border border-slate-200">
-                  <select className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.name} onChange={(e) => { const selectedItem = inventory.find(i => i.name === e.target.value); setTempPart({ ...tempPart, name: e.target.value, unit: selectedItem ? selectedItem.unit : '' }); }}>
+                  <select className="w-full p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                      value={isCustomPart ? 'CUSTOM' : tempPart.name} 
+                      onChange={(e) => { 
+                          const val = e.target.value;
+                          if (val === 'CUSTOM') {
+                              setIsCustomPart(true);
+                              setTempPart({ name: '', unit: '', quantity: '' });
+                          } else {
+                              setIsCustomPart(false);
+                              const selectedItem = inventory.find(i => i.name === val); 
+                              setTempPart({ ...tempPart, name: val, unit: selectedItem ? selectedItem.unit : '' }); 
+                          }
+                      }}
+                  >
                       <option value="">-- Chọn vật tư trong kho --</option>
+                      <option value="CUSTOM" className="font-bold text-blue-600">+ Nhập vật tư ngoài / Tạo mới</option>
                       {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity} {item.unit})</option>))}
                   </select>
-                  <div className="flex gap-2"><input placeholder="Đơn vị" disabled className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-slate-100 text-slate-500" value={tempPart.unit} /><input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} /></div>
+
+                  {isCustomPart && (
+                      <input placeholder="Tên vật tư (Nhập tay)" className="w-full p-2 border border-blue-300 rounded-lg text-base bg-blue-50 focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />
+                  )}
+
+                  <div className="flex gap-2">
+                      <input placeholder="Đơn vị" disabled={!isCustomPart} className={`w-1/2 p-2 border border-slate-300 rounded-lg text-base ${!isCustomPart ? 'bg-slate-100 text-slate-500' : 'bg-white focus:ring-2 focus:ring-blue-500 outline-none'}`} value={tempPart.unit} onChange={e => setTempPart({...tempPart, unit: e.target.value})} />
+                      <input placeholder="Số lượng dùng" type="number" className="w-1/2 p-2 border border-slate-300 rounded-lg text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
+                  </div>
                   <button onClick={addPart} className="bg-blue-600 text-white p-2 rounded-lg flex items-center justify-center font-medium text-sm mt-1 hover:bg-blue-700"><Plus className="w-4 h-4 mr-1" /> Thêm vào báo cáo</button>
               </div>
-              <div className="space-y-2">{formData.parts?.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
+              <div className="space-y-2">{formData.parts?.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-2 rounded flex justify-between text-sm items-center shadow-sm"><span className="font-medium text-slate-800">{p.name}</span><span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded text-xs font-bold">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
           </div>
           <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">Hình ảnh hiện trường</label>
@@ -1550,9 +1570,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const nowStr = new Date().toTimeString().slice(0, 5);
   const dateStr = new Date().toISOString().split('T')[0];
 
-  // Nếu là editTaskData: Lấy nguyên ID và dữ liệu cũ
-  // Nếu là initialTaskData (Kế thừa): Tạo ID mới, lấy thông tin chung
-  // Nếu cả 2 null: Tạo mới hoàn toàn
   const isEditing = !!editTaskData;
   const sourceData = editTaskData || initialTaskData;
 
@@ -1570,12 +1587,16 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       parts: isEditing ? (editTaskData.parts || []) : [], 
       images: isEditing ? (editTaskData.images || []) : [] 
   });
+  
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+  const [isCustomPart, setIsCustomPart] = useState(false);
 
   const addPart = () => { 
       if(tempPart.name && tempPart.quantity) { 
-          setFormData({...formData, parts: [...formData.parts, tempPart]}); setTempPart({ name: '', unit: '', quantity: '' }); 
-      } else showNotification('Chọn vật tư và nhập số lượng!', 'error');
+          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
+          setTempPart({ name: '', unit: '', quantity: '' }); 
+          setIsCustomPart(false);
+      } else showNotification('Chọn/nhập vật tư và số lượng!', 'error');
   };
   
   const handleImageUpload = (e) => {
@@ -1663,12 +1684,32 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
               <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Vật tư sử dụng</label>
                   <div className="flex flex-col gap-2 mb-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <select className="w-full p-2 border border-slate-300 rounded text-sm bg-white" value={tempPart.name} onChange={(e) => { const itm = inventory.find(i => i.name === e.target.value); setTempPart({ ...tempPart, name: e.target.value, unit: itm ? itm.unit : '' }); }}>
+                      <select className="w-full p-2 border border-slate-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-purple-500" 
+                          value={isCustomPart ? 'CUSTOM' : tempPart.name} 
+                          onChange={(e) => { 
+                              const val = e.target.value;
+                              if (val === 'CUSTOM') {
+                                  setIsCustomPart(true);
+                                  setTempPart({ name: '', unit: '', quantity: '' });
+                              } else {
+                                  setIsCustomPart(false);
+                                  const itm = inventory.find(i => i.name === val); 
+                                  setTempPart({ ...tempPart, name: val, unit: itm ? itm.unit : '' }); 
+                              }
+                          }}
+                      >
                           <option value="">-- Kho vật tư --</option>
+                          <option value="CUSTOM" className="font-bold text-purple-600">+ Nhập vật tư ngoài / Tạo mới</option>
                           {inventory.map(item => (<option key={item.id} value={item.name}>{item.name} (Tồn: {item.quantity})</option>))}
                       </select>
+
+                      {isCustomPart && (
+                          <input placeholder="Nhập tên vật tư mới..." className="w-full p-2 border border-purple-300 rounded text-sm bg-purple-50 outline-none focus:ring-2 focus:ring-purple-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />
+                      )}
+
                       <div className="flex gap-2">
-                          <input placeholder="Số lượng" type="number" className="flex-1 p-2 border border-slate-300 rounded text-sm bg-white" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
+                          <input placeholder="Đơn vị" disabled={!isCustomPart} className={`flex-1 p-2 border border-slate-300 rounded text-sm ${!isCustomPart ? 'bg-slate-100 text-slate-500' : 'bg-white outline-none focus:ring-2 focus:ring-purple-500'}`} value={tempPart.unit} onChange={e => setTempPart({...tempPart, unit: e.target.value})} />
+                          <input placeholder="Số lượng" type="number" className="flex-1 p-2 border border-slate-300 rounded text-sm bg-white outline-none focus:ring-2 focus:ring-purple-500" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
                           <button onClick={addPart} className="bg-slate-800 text-white px-3 rounded text-sm font-medium"><Plus className="w-4 h-4" /></button>
                       </div>
                   </div>
@@ -1775,12 +1816,10 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                  <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {task.technicianName}</span>
                                  <div className="flex items-center gap-2 mt-1">
                                     <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{task.status}</span>
-                                    {user?.role === 'admin' && (
-                                       <div className="flex gap-1 ml-1 border-l pl-2 border-slate-100">
-                                          <button onClick={() => startEdit(task)} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><Edit className="w-3.5 h-3.5" /></button>
-                                          <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
-                                       </div>
-                                    )}
+                                    <div className="flex gap-1 ml-1 border-l pl-2 border-slate-100">
+                                       <button onClick={() => startEdit(task)} className="p-1 text-blue-500 hover:bg-blue-50 rounded"><Edit className="w-3.5 h-3.5" /></button>
+                                       <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1 text-red-500 hover:bg-red-50 rounded"><Trash2 className="w-3.5 h-3.5" /></button>
+                                    </div>
                                  </div>
                              </div>
                          </div>
