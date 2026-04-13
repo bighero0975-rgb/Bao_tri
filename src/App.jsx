@@ -20,7 +20,6 @@ const firebaseConfig = isCustomConfigured
     ? myFirebaseConfig 
     : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
 
-// FIX: Loại bỏ các ký tự dấu / và . trong appId để tránh lỗi đường dẫn Firebase (Invalid collection reference)
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
 const safeAppId = rawAppId.replace(/[\/\.]/g, '_');
 
@@ -42,7 +41,6 @@ const INITIAL_USERS = [
   { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance' }
 ];
 
-// --- Hàm tải thư viện xử lý Excel (SheetJS) ---
 const loadXLSX = async () => {
   if (window.XLSX) return window.XLSX;
   return new Promise((resolve, reject) => {
@@ -54,7 +52,6 @@ const loadXLSX = async () => {
   });
 };
 
-// --- COMPONENT CAMERA THẬT ---
 const NativeCameraScanner = ({ onScan }) => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -141,7 +138,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
           <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg shadow-blue-500/30">
             <Wrench className="w-12 h-12 text-white" />
           </div>
-          <h1 className="text-3xl font-bold">TechMaintain</h1>
+          <h1 className="text-3xl font-bold">Martech Boiler</h1>
           <p className="text-slate-400 text-sm">Hệ thống quản lý bảo trì & công việc</p>
         </div>
         
@@ -172,59 +169,222 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
   );
 };
 
-const DashboardView = ({ user, machines, dailyTasks, utilityLogs, handleLogout, setView, db }) => (
-  <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
-    <div className="bg-white p-4 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
-      <div><h1 className="font-bold text-xl text-slate-800">Dashboard</h1><p className="text-xs text-slate-500">Admin: {user.name}</p></div>
-      <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-2"><LogOut className="w-5 h-5" /></button>
-    </div>
-    <div className="flex-1 overflow-y-auto p-4 space-y-6">
-      <div className="grid grid-cols-2 gap-3">
-         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 shadow-sm">
-            <p className="text-blue-600 text-xs uppercase font-bold">Tổng thiết bị</p>
-            <p className="text-2xl font-bold text-blue-800 mt-1">{machines.length}</p>
-         </div>
-         <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm cursor-pointer" onClick={() => setView('daily_task_history')}>
-            <p className="text-purple-600 text-xs uppercase font-bold">Báo cáo Ngày</p>
-            <p className="text-2xl font-bold text-purple-800 mt-1">{dailyTasks.length}</p>
-         </div>
-         <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100 shadow-sm col-span-2 flex justify-between items-center cursor-pointer" onClick={() => setView('utility_history')}>
-            <div><p className="text-cyan-600 text-xs uppercase font-bold">Sổ Điện Nước</p><p className="text-2xl font-bold text-cyan-800 mt-1">{utilityLogs?.length || 0} <span className="text-sm font-normal text-cyan-600">bản ghi</span></p></div>
-            <div className="flex gap-2"><Zap className="w-6 h-6 text-yellow-500"/><Droplets className="w-6 h-6 text-blue-400"/></div>
-         </div>
+const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db }) => {
+  const machinesOperational = machines.filter(m => m.status === 'operational').length;
+  const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
+  const pendingDailyTasks = dailyTasks.filter(t => t.status === 'Đang xử lý').length;
+  const pendingMachineLogs = (logs || []).filter(l => l.status === 'Cần theo dõi').length;
+  const totalPending = pendingDailyTasks + pendingMachineLogs;
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+      <div className="bg-white p-4 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
+        <div><h1 className="font-bold text-xl text-slate-800">Dashboard</h1><p className="text-xs text-slate-500">Admin: {user.name}</p></div>
+        <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 p-2"><LogOut className="w-5 h-5" /></button>
       </div>
-      
-      <div>
-        <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị hệ thống</h3>
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-           <button onClick={() => setView('user_management')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-emerald-100 p-2 rounded-lg text-emerald-600"><User className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Tài khoản (KTV)</p><p className="text-xs text-slate-500">Tạo tài khoản & Mật khẩu đăng nhập</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('daily_task_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-pink-100 p-2 rounded-lg text-pink-600"><CalendarClock className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Sổ Ghi Công Việc</p><p className="text-xs text-slate-500">Xem Báo cáo công việc hằng ngày</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('utility_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-cyan-100 p-2 rounded-lg text-cyan-600"><Droplets className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Sổ Ghi Điện Nước</p><p className="text-xs text-slate-500">Xem lịch sử chỉ số điện, nước</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
-              <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cài đặt Google Sheet</p><p className="text-xs text-slate-500">Cấu hình liên kết tự động xuất báo cáo</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
-           <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors bg-blue-50/30">
-              <div className="flex items-center space-x-3"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Wrench className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-blue-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-blue-600/70">Vào giao diện quét QR & Báo cáo</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
-           </button>
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-20">
+        <div className="space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center"><Database className="w-4 h-4 mr-2 text-blue-600"/> Trạng thái Máy móc ({machines.length})</h3>
+            <div className="flex gap-3">
+               <div className="flex-1 bg-green-50 p-3 rounded-xl border border-green-100 cursor-pointer transition-transform active:scale-95" onClick={() => setView('machines')}>
+                  <p className="text-green-600 text-[10px] uppercase font-bold flex items-center mb-1"><CheckCircle className="w-3 h-3 mr-1"/>Bình thường</p>
+                  <p className="text-2xl font-bold text-green-700">{machinesOperational}</p>
+               </div>
+               <div className="flex-1 bg-red-50 p-3 rounded-xl border border-red-100 cursor-pointer transition-transform active:scale-95" onClick={() => setView('machines')}>
+                  <p className="text-red-600 text-[10px] uppercase font-bold flex items-center mb-1"><AlertTriangle className="w-3 h-3 mr-1"/>Lỗi / Bảo trì</p>
+                  <p className="text-2xl font-bold text-red-700">{machinesIssue}</p>
+               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+             <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => setView('daily_task_history')}>
+                <p className="text-orange-600 text-[10px] uppercase font-bold flex items-center mb-1"><Clock className="w-3 h-3 mr-1"/> CV Tồn đọng</p>
+                <p className="text-2xl font-bold text-orange-700">{totalPending}</p>
+             </div>
+             <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 shadow-sm cursor-pointer transition-transform active:scale-95" onClick={() => setView('daily_task_history')}>
+                <p className="text-purple-600 text-[10px] uppercase font-bold flex items-center mb-1"><CalendarClock className="w-3 h-3 mr-1"/> Báo cáo Ngày</p>
+                <p className="text-2xl font-bold text-purple-700">{dailyTasks.length}</p>
+             </div>
+             <div className="bg-cyan-50 p-4 rounded-xl border border-cyan-100 shadow-sm col-span-2 flex justify-between items-center cursor-pointer transition-transform active:scale-95" onClick={() => setView('utility_history')}>
+                <div><p className="text-cyan-600 text-[10px] uppercase font-bold flex items-center mb-1"><Droplets className="w-3 h-3 mr-1"/> Sổ Điện Nước</p><p className="text-2xl font-bold text-cyan-800">{utilityLogs?.length || 0} <span className="text-sm font-normal text-cyan-600">bản ghi</span></p></div>
+                <div className="flex gap-2"><Zap className="w-6 h-6 text-yellow-500"/><Droplets className="w-6 h-6 text-blue-400"/></div>
+             </div>
+          </div>
+        </div>
+        
+        <div>
+          <h3 className="font-bold text-slate-800 mb-3 flex items-center"><Settings className="w-4 h-4 mr-2" /> Quản trị hệ thống</h3>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+             <button onClick={() => setView('user_management')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-emerald-100 p-2 rounded-lg text-emerald-600"><User className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Tài khoản (KTV)</p><p className="text-xs text-slate-500">Tạo tài khoản & Mật khẩu</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('machines')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Database className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Quản lý Thiết Bị</p><p className="text-xs text-slate-500">Xem danh sách, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('inventory')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-orange-100 p-2 rounded-lg text-orange-600"><Boxes className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Kho Vật Tư</p><p className="text-xs text-slate-500">Xem tồn kho, nhập/xuất Excel</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('daily_task_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-pink-100 p-2 rounded-lg text-pink-600"><CalendarClock className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Sổ Ghi Công Việc</p><p className="text-xs text-slate-500">Xem Báo cáo công việc hằng ngày</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('utility_history')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-cyan-100 p-2 rounded-lg text-cyan-600"><Droplets className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Sổ Ghi Điện Nước</p><p className="text-xs text-slate-500">Xem lịch sử chỉ số</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('settings')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b border-slate-100">
+                <div className="flex items-center space-x-3"><div className="bg-green-100 p-2 rounded-lg text-green-600"><FileSpreadsheet className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-slate-800">Cài đặt Google Sheet</p><p className="text-xs text-slate-500">Cấu hình liên kết tự động</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+             <button onClick={() => setView('home')} className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors bg-blue-50/30">
+                <div className="flex items-center space-x-3"><div className="bg-blue-100 p-2 rounded-lg text-blue-600"><Wrench className="w-5 h-5" /></div><div className="text-left"><p className="font-medium text-blue-800">Chế độ Kỹ thuật viên</p><p className="text-xs text-blue-600/70">Vào giao diện quét QR & Báo cáo</p></div></div><ArrowLeft className="w-5 h-5 rotate-180 text-slate-300" />
+             </button>
+          </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// =========================================================================
+// MÀN HÌNH HOME COMPACT (BENTO GRID STYLE)
+// =========================================================================
+const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout }) => {
+  const machinesOperational = machines.filter(m => m.status === 'operational').length;
+  const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
+  
+  const pendingDaily = dailyTasks.filter(t => t.status === 'Đang xử lý').length;
+  const pendingLogs = logs.filter(l => l.status === 'Cần theo dõi').length;
+  const totalPending = pendingDaily + pendingLogs;
+
+  return (
+    <div className="flex flex-col h-full bg-slate-100">
+      <div className="bg-blue-600 px-5 pt-8 pb-12 rounded-b-[2rem] shrink-0 relative shadow-md z-0">
+         <div className="flex justify-between items-center">
+            <div className="flex items-center gap-3">
+               <div className="bg-white/20 p-2.5 rounded-xl backdrop-blur-sm shadow-inner"><User className="w-6 h-6 text-white"/></div>
+               <div>
+                  <p className="text-blue-100 text-xs font-medium">Xin chào KTV,</p>
+                  <h1 className="text-white font-bold text-lg leading-tight truncate max-w-[150px]">{user.name}</h1>
+               </div>
+            </div>
+            <div className="flex items-center gap-2">
+               {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-700 font-bold text-[10px] uppercase bg-blue-50 px-2 py-1.5 rounded-lg shadow-sm active:scale-95 transition-transform">Admin</button>}
+               <button onClick={handleLogout} className="bg-white/10 p-2 rounded-full hover:bg-red-500 hover:text-white text-blue-50 transition-colors shadow-sm"><LogOut className="w-4 h-4" /></button>
+            </div>
+         </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 -mt-6 pb-20 space-y-4 custom-scrollbar relative z-10">
+         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 grid grid-cols-3 gap-2 divide-x divide-slate-100">
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('manual_select')}>
+               <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Máy tốt</p>
+               <p className="text-xl font-black text-green-600 leading-none">{machinesOperational}</p>
+            </div>
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('manual_select')}>
+               <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Lỗi / Bảo trì</p>
+               <p className="text-xl font-black text-red-500 leading-none">{machinesIssue}</p>
+            </div>
+            <div className="text-center px-1 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg" onClick={() => setView('daily_task_history')}>
+               <p className="text-[9px] font-bold text-slate-400 uppercase mb-1">Tồn đọng</p>
+               <p className="text-xl font-black text-orange-500 leading-none">{totalPending}</p>
+            </div>
+         </div>
+
+         <button onClick={() => setView('scanner')} className="w-full bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg hover:bg-slate-800 transition-transform active:scale-[0.98]">
+             <div className="bg-white/20 p-2 rounded-xl"><QrCode className="w-6 h-6" /></div>
+             <span className="font-bold text-lg">Quét Mã QR Máy</span>
+         </button>
+
+         <div className="grid grid-cols-2 gap-3">
+             <button onClick={() => setView('manual_select')} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-blue-400 transition-all active:scale-95">
+                 <div className="bg-blue-50 p-2.5 rounded-xl"><ListFilter className="w-5 h-5 text-blue-600"/></div>
+                 <div className="text-left"><p className="font-bold text-sm text-slate-800">Chọn Máy</p><p className="text-[10px] text-slate-500 mt-0.5">Tìm kiếm thủ công</p></div>
+             </button>
+
+             <button onClick={() => setView('inventory')} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-orange-400 transition-all active:scale-95">
+                 <div className="bg-orange-50 p-2.5 rounded-xl"><Boxes className="w-5 h-5 text-orange-600"/></div>
+                 <div className="text-left"><p className="font-bold text-sm text-slate-800">Kho Vật Tư</p><p className="text-[10px] text-slate-500 mt-0.5">Xem tồn kho linh kiện</p></div>
+             </button>
+
+             <button onClick={() => setView('daily_task_form')} className="bg-purple-50 p-4 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 hover:bg-purple-100 transition-all active:scale-95">
+                 <div className="bg-purple-200 p-2.5 rounded-xl"><CalendarClock className="w-5 h-5 text-purple-700"/></div>
+                 <div className="text-left"><p className="font-bold text-sm text-purple-900">Báo Cáo Ngày</p><p className="text-[10px] text-purple-600 mt-0.5">Việc ngoài / không QR</p></div>
+             </button>
+
+             <button onClick={() => setView('daily_task_history')} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 hover:border-slate-400 transition-all active:scale-95">
+                 <div className="bg-slate-100 p-2.5 rounded-xl"><History className="w-5 h-5 text-slate-600"/></div>
+                 <div className="text-left"><p className="font-bold text-sm text-slate-800">Sổ Lịch Sử</p><p className="text-[10px] text-slate-500 mt-0.5">Xem lại việc đã làm</p></div>
+             </button>
+
+             <button onClick={() => setView('meter_menu')} className="col-span-2 bg-gradient-to-r from-cyan-50 to-blue-50 p-4 rounded-2xl border border-cyan-100 shadow-sm flex items-center justify-between hover:shadow-md transition-all active:scale-[0.98]">
+                 <div className="flex items-center gap-3">
+                    <div className="bg-white p-2.5 rounded-xl shadow-sm flex gap-1.5"><Zap className="w-5 h-5 text-yellow-500"/><Droplets className="w-5 h-5 text-blue-500"/></div>
+                    <div className="text-left"><p className="font-bold text-[15px] text-cyan-900">Quản lý Điện / Nước</p><p className="text-[10px] text-cyan-700 mt-0.5">Chỉ số tiêu thụ & Lịch sử</p></div>
+                 </div>
+                 <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-cyan-600 font-bold">&rarr;</div>
+             </button>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+// =========================================================================
+// MÀN HÌNH MENU GHI ĐIỆN NƯỚC COMPACT
+// =========================================================================
+const MeterMenuView = ({ setView, user, setUtilityMode }) => (
+  <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="p-4 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between z-10 shadow-sm">
+        <div className="flex items-center space-x-3">
+           <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors">
+               <ArrowLeft className="w-6 h-6 text-slate-600" />
+           </button>
+           <h2 className="font-bold text-slate-800 text-lg">Quản lý Điện / Nước</h2>
+        </div>
+    </div>
+
+    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+            <button
+                onClick={() => { setUtilityMode('elec'); setView('utility_form'); }}
+                className="bg-yellow-50 text-yellow-800 border border-yellow-200 p-5 rounded-2xl flex flex-col items-start gap-3 shadow-sm hover:bg-yellow-100 active:scale-95 transition-transform"
+            >
+                <div className="bg-yellow-200 p-2.5 rounded-xl"><Zap className="w-6 h-6 text-yellow-700" /></div>
+                <div className="text-left">
+                   <span className="font-bold text-base block">Ghi Số Điện</span>
+                   <span className="text-[10px] text-yellow-600">Trạm 1 & Trạm 2</span>
+                </div>
+            </button>
+
+            <button
+                onClick={() => { setUtilityMode('water'); setView('utility_form'); }}
+                className="bg-blue-50 text-blue-800 border border-blue-200 p-5 rounded-2xl flex flex-col items-start gap-3 shadow-sm hover:bg-blue-100 active:scale-95 transition-transform"
+            >
+                <div className="bg-blue-200 p-2.5 rounded-xl"><Droplets className="w-6 h-6 text-blue-700" /></div>
+                <div className="text-left">
+                   <span className="font-bold text-base block">Ghi Số Nước</span>
+                   <span className="text-[10px] text-blue-600">Tổng & Các xưởng</span>
+                </div>
+            </button>
+        </div>
+
+        <button
+            onClick={() => setView('utility_history')}
+            className="w-full bg-white text-slate-700 border border-slate-200 p-5 rounded-2xl flex items-center justify-between shadow-sm hover:border-slate-400 active:scale-95 transition-transform"
+        >
+            <div className="flex items-center gap-4">
+               <div className="bg-slate-100 p-3 rounded-xl"><History className="w-6 h-6 text-slate-500" /></div>
+               <div className="text-left">
+                  <span className="font-bold text-base block">Sổ Lịch Sử</span>
+                  <span className="text-[10px] text-slate-500">Xem dữ liệu đã ghi</span>
+               </div>
+            </div>
+            <div className="text-slate-300">&rarr;</div>
+        </button>
     </div>
   </div>
 );
 
-// Quản lý Nhân sự (Tài khoản Đăng nhập)
 const UserManagementView = ({ usersList, setView, showNotification, saveUserData, handleDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -237,7 +397,6 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
       if (!editForm.username || !editForm.password || !editForm.name) {
           return showNotification('Vui lòng điền đủ Tên ĐN, Mật khẩu, Họ tên!', 'error');
       }
-      // Check duplicate username if adding new
       if (isAdding && usersList.find(u => u.username === editForm.username)) {
           return showNotification('Tên đăng nhập đã tồn tại!', 'error');
       }
@@ -255,17 +414,8 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
       setIsAdding(false);
   };
 
-  const startAdd = () => {
-      setIsAdding(true);
-      setEditingId(null);
-      setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance' });
-  }
-
-  const startEdit = (u) => {
-      setIsAdding(false);
-      setEditingId(u.id);
-      setEditForm(u);
-  }
+  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance' }); }
+  const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm(u); }
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -684,48 +834,20 @@ const QrPrintView = ({ machines, setView }) => (
     <div className="flex-1 overflow-y-auto p-8 bg-slate-100 print:bg-white print:p-0">
       <div className="grid grid-cols-2 gap-8 print:grid-cols-3 print:gap-4">
           {machines.map(m => (
-              <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black"><h3 className="font-bold text-lg mb-2">{m.name}</h3><img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} alt={m.name} className="w-32 h-32 object-contain" /><p className="font-mono text-sm mt-2 font-bold">{m.id}</p><p className="text-xs text-slate-500">{m.model}</p></div>
+              <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black">
+                  <h3 className="font-bold text-lg mb-2">{m.name}</h3>
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} 
+                    alt={m.name} 
+                    className="w-32 h-32 object-contain"
+                  />
+                  <p className="font-mono text-sm mt-2 font-bold">{m.id}</p>
+                  <p className="text-xs text-slate-500">{m.model}</p>
+              </div>
           ))}
       </div>
     </div>
     <style>{`@media print { .no-print { display: none !important; } }`}</style>
-  </div>
-);
-
-// --- MÀN HÌNH HOME CỦA KTV ---
-const HomeView = ({ user, setView, handleLogout, db }) => (
-  <div className="flex flex-col items-center justify-center h-full space-y-6 p-6 relative overflow-y-auto pb-20">
-    <div className="absolute top-4 right-4 flex items-center space-x-3">{user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-lg">Dashboard Admin</button>}<button onClick={handleLogout} className="text-slate-400 hover:text-red-500"><LogOut className="w-5 h-5" /></button></div>
-    
-    <div className="text-center space-y-2 mt-8">
-        <div className="bg-blue-600 p-4 rounded-2xl inline-block shadow-lg"><User className="w-12 h-12 text-white" /></div>
-        <h1 className="text-2xl font-bold text-slate-800">Xin chào, {user.name}</h1>
-        <p className="text-xs font-mono text-slate-500 bg-slate-100 inline-block px-2 py-0.5 rounded">@{user.username}</p>
-    </div>
-    
-    <div className="w-full max-w-xs space-y-4 pt-4 border-t border-slate-200">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-2">Bảo trì Máy móc (Có QR)</h3>
-        <button onClick={() => setView('scanner')} className="w-full bg-slate-900 text-white py-3.5 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform"><QrCode className="w-5 h-5" /> <span className="font-semibold text-base">Quét Mã QR</span></button>
-        <button onClick={() => setView('manual_select')} className="w-full bg-white text-slate-700 border border-slate-200 py-3.5 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><ListFilter className="w-5 h-5 text-slate-500" /> <span className="font-semibold text-base">Chọn Máy Thủ Công</span></button>
-    </div>
-
-    <div className="w-full max-w-xs space-y-4 pt-4 border-t border-slate-200">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-2">Công việc hằng ngày (Không QR)</h3>
-        <button onClick={() => setView('daily_task_form')} className="w-full bg-purple-600 text-white py-3.5 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-xl active:scale-95 transition-transform"><CalendarClock className="w-5 h-5" /> <span className="font-semibold text-base">Viết Báo Cáo Ngày</span></button>
-        <button onClick={() => setView('daily_task_history')} className="w-full bg-purple-50 text-purple-700 border border-purple-200 py-3.5 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-purple-100 active:scale-95 transition-transform"><History className="w-5 h-5" /> <span className="font-semibold text-base">Sổ Công Việc</span></button>
-    </div>
-
-    <div className="w-full max-w-xs space-y-4 pt-4 border-t border-slate-200">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-2">Ghi Điện Nước</h3>
-        <div className="grid grid-cols-2 gap-3">
-            <button onClick={() => setView('utility_form')} className="bg-cyan-600 text-white py-3 px-4 rounded-xl flex flex-col items-center justify-center gap-1 shadow-xl active:scale-95 transition-transform"><Zap className="w-5 h-5" /> <span className="font-semibold text-sm">Ghi Số Mới</span></button>
-            <button onClick={() => setView('utility_history')} className="bg-cyan-50 text-cyan-700 border border-cyan-200 py-3 px-4 rounded-xl flex flex-col items-center justify-center gap-1 shadow-sm hover:bg-cyan-100 active:scale-95 transition-transform"><History className="w-5 h-5" /> <span className="font-semibold text-sm">Lịch Sử</span></button>
-        </div>
-    </div>
-
-    <div className="w-full max-w-xs pt-4 border-t border-slate-200">
-        <button onClick={() => setView('inventory')} className="w-full bg-white text-slate-700 border border-slate-200 py-3 px-6 rounded-xl flex items-center justify-center space-x-3 shadow-sm hover:bg-slate-50 active:scale-95 transition-transform"><Boxes className="w-5 h-5 text-orange-500" /> <span className="font-medium text-sm">Xem Kho Vật Tư</span></button>
-    </div>
   </div>
 );
 
@@ -936,9 +1058,6 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
   );
 };
 
-// ============================================================================
-// COMPONENT: LogFormView (Báo cáo máy móc có QR)
-// ============================================================================
 const LogFormView = ({ selectedMachine, user, inventory, setView, showNotification, handleSaveLog }) => {
   const [formData, setFormData] = useState({ technicianName: user?.name || '', type: 'Bảo trì định kỳ', note: '', status: 'Hoàn thành', parts: [], images: [] });
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
@@ -1006,7 +1125,10 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
                   <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-lg cursor-pointer bg-white hover:bg-slate-50 hover:border-blue-400 text-slate-400 hover:text-blue-500 transition-colors"><Camera className="w-6 h-6 mb-1" /><span className="text-[10px]">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
               </div>
           </div>
-          <div className="pb-4"><label className="block text-sm font-medium text-slate-700 mb-1">Mô tả chi tiết</label><textarea rows="5" className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[120px]" placeholder="Nhập chi tiết công việc, nguyên nhân, cách khắc phục..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea></div>
+          <div className="pb-4">
+              <label className="block text-sm font-medium text-slate-700 mb-2">Mô tả chi tiết</label>
+              <textarea rows="5" className="w-full p-3 rounded-lg border border-slate-300 text-base focus:ring-2 focus:ring-blue-500 outline-none resize-none min-h-[120px]" placeholder="Nhập chi tiết công việc, nguyên nhân, cách khắc phục..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+          </div>
           <div className="grid grid-cols-2 gap-3"><button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white transition-colors ${formData.status === 'Hoàn thành' ? 'bg-green-50 border-green-500 text-green-700 shadow-sm' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}><CheckCircle className="w-5 h-5" /> <span className="font-medium">Xong</span></button><button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-3 rounded-lg border flex items-center justify-center space-x-2 bg-white transition-colors ${formData.status === 'Cần theo dõi' ? 'bg-yellow-50 border-yellow-500 text-yellow-700 shadow-sm' : 'border-slate-200 text-slate-400 hover:bg-slate-50'}`}><AlertCircle className="w-5 h-5" /> <span className="font-medium">Chưa xong</span></button></div>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-100 bg-white/90 backdrop-blur-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.05)]"><button onClick={() => {if(!formData.note) return showNotification('Nhập ghi chú!', 'error'); handleSaveLog(formData);}} className="w-full bg-slate-900 text-white py-3.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 hover:bg-slate-800 transition-transform active:scale-95"><Save className="w-5 h-5" /> Lưu Báo Cáo</button></div>
@@ -1014,9 +1136,6 @@ const LogFormView = ({ selectedMachine, user, inventory, setView, showNotificati
   );
 };
 
-// ============================================================================
-// COMPONENT: DailyTaskFormView (Báo cáo không có máy cụ thể)
-// ============================================================================
 const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
   const dateStr = new Date().toISOString().split('T')[0];
@@ -1134,9 +1253,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-// ============================================================================
-// COMPONENT: DailyTaskHistoryView (Lịch sử báo cáo công việc hằng ngày)
-// ============================================================================
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterDateStr, setFilterDateStr] = useState(new Date().toISOString().split('T')[0]); // Default today
@@ -1220,10 +1336,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user }) => {
   );
 };
 
-// ============================================================================
-// TÍNH NĂNG MỚI: FORM GHI ĐIỆN NƯỚC CHUYÊN SÂU & LỊCH SỬ
-// ============================================================================
-const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs }) => {
+const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
   const isEditing = !!editData;
   const dateStr = new Date().toISOString().split('T')[0];
   
@@ -1236,9 +1349,8 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
       water: { tong: '', tuoiCay: '', vanPhong: '', nhaAnVpc: '', nhaAnXuong: '', congChinh: '', congPhu: '' }
   });
 
-  const [activeTab, setActiveTab] = useState('elec1'); // elec1, elec2, water
+  const [activeTab, setActiveTab] = useState(mode === 'water' ? 'water' : 'elec1'); 
 
-  // TÌM BẢN GHI GẦN NHẤT TRƯỚC ĐÓ ĐỂ TÍNH TIÊU THỤ NƯỚC
   const prevLog = [...utilityLogs]
       .filter(log => log.id !== formData.id && new Date(log.date) <= new Date(formData.date))
       .sort((a,b) => b.id - a.id)[0];
@@ -1348,26 +1460,32 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
     <div className="flex flex-col h-full bg-slate-100 relative">
       <div className="p-4 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-              <button onClick={() => { setView(isEditing ? 'utility_history' : 'home'); setEditData(null); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
-              <div><h2 className="font-bold text-slate-800 flex items-center">{isEditing ? 'Sửa Bản Ghi' : 'Ghi Điện Nước'}</h2></div>
+              <button onClick={() => { setView(isEditing ? 'utility_history' : 'meter_menu'); setEditData(null); }} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+              <div>
+                  <h2 className="font-bold text-slate-800 flex items-center">
+                      {isEditing ? 'Sửa Bản Ghi' : (mode === 'elec' ? 'Ghi Số Điện' : 'Ghi Số Nước')}
+                  </h2>
+              </div>
           </div>
           <input type="date" className="p-1.5 rounded-lg border border-slate-300 text-sm focus:ring-2 outline-none font-medium bg-slate-50" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
       </div>
 
-      <div className="flex bg-white border-b border-slate-200 shrink-0">
-          <button onClick={() => setActiveTab('elec1')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec1' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 1</button>
-          <button onClick={() => setActiveTab('elec2')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec2' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 2</button>
-          <button onClick={() => setActiveTab('water')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'water' ? 'border-blue-500 text-blue-600 bg-blue-50/30' : 'border-transparent text-slate-500'}`}><Droplets className="w-4 h-4"/> Nước</button>
-      </div>
+      {/* Chỉ hiển thị tab Điện 1 và Điện 2 nếu đang ở chế độ Ghi Số Điện */}
+      {mode === 'elec' && (
+          <div className="flex bg-white border-b border-slate-200 shrink-0">
+              <button onClick={() => setActiveTab('elec1')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec1' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 1</button>
+              <button onClick={() => setActiveTab('elec2')} className={`flex-1 py-3 text-sm font-bold border-b-2 flex justify-center items-center gap-1 transition-colors ${activeTab === 'elec2' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/30' : 'border-transparent text-slate-500'}`}><Zap className="w-4 h-4"/> Trạm 2</button>
+          </div>
+      )}
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-32">
-          {activeTab === 'elec1' && <ElecInputGroup tramName="Trạm Điện 1" tramKey="elec1" />}
-          {activeTab === 'elec2' && <ElecInputGroup tramName="Trạm Điện 2" tramKey="elec2" />}
+          {mode === 'elec' && activeTab === 'elec1' && <ElecInputGroup tramName="Trạm Điện 1" tramKey="elec1" />}
+          {mode === 'elec' && activeTab === 'elec2' && <ElecInputGroup tramName="Trạm Điện 2" tramKey="elec2" />}
           
-          {activeTab === 'water' && (
+          {mode === 'water' && (
               <div className="space-y-3 animate-fade-in">
                   <div className="bg-blue-50 text-blue-700 p-3 rounded-lg text-xs flex items-center shadow-sm">
-                      <Droplets className="w-4 h-4 mr-2" /> Hệ thống tự động lấy chỉ số ngày gần nhất để tính Tiêu thụ.
+                      <Droplets className="w-4 h-4 mr-2 shrink-0" /> Hệ thống tự động lấy chỉ số ngày gần nhất để tính Tiêu thụ.
                   </div>
                   {waterFields.map(field => (
                       <div key={field.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
@@ -1408,7 +1526,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   );
 };
 
-const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData }) => {
+const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   
@@ -1418,8 +1536,9 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
       return matchTech && matchDate;
   });
 
-  const handleEdit = (log) => {
+  const handleEdit = (log, mode) => {
       setEditData(log);
+      setUtilityMode(mode); 
       setView('utility_form');
   };
 
@@ -1427,7 +1546,7 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
     <div className="flex flex-col h-full bg-slate-50 relative">
         <div className="p-4 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
             <div className="flex items-center space-x-3 mb-4">
-               <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
+               <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
                <h2 className="font-bold text-slate-800 flex items-center">Lịch Sử Điện Nước</h2>
             </div>
             <div className="flex gap-2">
@@ -1462,9 +1581,13 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                              <div>
                                  <h4 className="font-bold text-slate-800 text-base leading-tight flex items-center"><CalendarClock className="w-4 h-4 mr-1.5 text-slate-400"/>Ngày {log.date}</h4>
                              </div>
-                             <div className="flex gap-2">
+                             <div className="flex flex-col gap-1 items-end">
                                  <span className="bg-slate-100 px-2 py-1 rounded text-[10px] font-bold text-slate-600 flex items-center"><User className="w-3 h-3 mr-1" /> {log.technicianName}</span>
-                                 <button onClick={() => handleEdit(log)} className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-100 flex items-center"><Edit className="w-3 h-3 mr-1" /> Sửa</button>
+                                 {/* Tách 2 nút sửa */}
+                                 <div className="flex gap-1 mt-1">
+                                     <button onClick={() => handleEdit(log, 'elec')} className="bg-yellow-50 text-yellow-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Điện</button>
+                                     <button onClick={() => handleEdit(log, 'water')} className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-100 border border-blue-200 flex items-center shadow-sm"><Edit className="w-3 h-3 mr-1" /> Sửa Nước</button>
+                                 </div>
                              </div>
                          </div>
                          
@@ -1506,6 +1629,9 @@ export default function App() {
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
   const [utilityEditItem, setUtilityEditItem] = useState(null);
+  
+  // Trạng thái để biết người dùng đang mở Sổ Điện ('elec') hay Sổ Nước ('water')
+  const [utilityMode, setUtilityMode] = useState('elec'); 
   
   // XỬ LÝ DỮ LIỆU LAI (HYBRID: OFFLINE HOẶC CLOUD)
   const [usersList, setUsersList] = useState(() => {
@@ -1565,7 +1691,6 @@ export default function App() {
     const handlePopState = (event) => {
         if (event.state && event.state.view) {
             let nextView = event.state.view;
-            // Nếu người dùng đang đăng nhập mà cố lùi về 'login', chặn lại và đưa về màn hình chính
             if (user && nextView === 'login') {
                 nextView = user.role === 'admin' ? 'dashboard' : 'home';
                 window.history.replaceState({ view: nextView }, '', '');
@@ -1577,7 +1702,6 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [user]);
-  // ====================================================
 
   useEffect(() => {
     if (!auth) { setIsCloudSyncing(false); return; }
@@ -1660,7 +1784,6 @@ export default function App() {
     const foundUser = usersList.find(u => u.username === username && u.password === password);
     if (foundUser) {
       setUser(foundUser);
-      // Dùng param replace = true để xóa đè lịch sử login, không cho back về trang đăng nhập
       setView(foundUser.role === 'admin' ? 'dashboard' : 'home', true);
       showNotification(`Xin chào, ${foundUser.name}`);
     } else showNotification('Tài khoản hoặc mật khẩu không đúng!', 'error');
@@ -1788,17 +1911,23 @@ export default function App() {
       <div className="w-full max-w-md h-full bg-slate-100 shadow-2xl flex flex-col relative overflow-hidden">
         <div className="h-1 bg-blue-600 w-full shrink-0"></div>
         <div className="flex-1 overflow-hidden relative flex flex-col">
-          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} handleLogout={handleLogout} setView={setView} db={db} />}
+          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
           {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} />}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'qr_print' && <QrPrintView machines={machines} setView={setView} />}
-          {view === 'home' && <HomeView user={user} setView={setView} handleLogout={handleLogout} db={db} />}
+          {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} />}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} />}
           {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} />}
-          {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} />}
-          {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} />}
+          
+          {/* Menu chọn chế độ ghi Điện hoặc Nước */}
+          {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
+          {/* Màn hình ghi Điện/Nước phụ thuộc vào biến utilityMode */}
+          {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
+          {/* Màn hình lịch sử Điện/Nước */}
+          {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} />}
+          
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
           {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} />}
           {view === 'details' && selectedMachine && <DetailsView user={user} logs={logs} selectedMachine={selectedMachine} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} handleDeleteMachine={(id) => { saveMachineData({...machines.find(m => m.id === id), _delete: true}) }} />}
