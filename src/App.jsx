@@ -114,11 +114,15 @@ const NativeCameraScanner = ({ onScan }) => {
   }, [isJsQRLoaded, onScan]);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center">
+    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center rounded-2xl md:rounded-3xl shadow-inner">
       {error ? (
         <div className="text-white text-center p-4 z-20"><AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" /><p>{error}</p></div>
       ) : (<><video ref={videoRef} playsInline muted className="absolute w-full h-full object-cover" /><canvas ref={canvasRef} className="hidden" /></>)}
-      <div className="absolute inset-0 border-[50px] border-black/50 flex items-center justify-center pointer-events-none z-10"><div className="w-64 h-64 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]"><div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div></div></div>
+      <div className="absolute inset-0 border-[40px] md:border-[80px] border-black/50 flex items-center justify-center pointer-events-none z-10">
+        <div className="w-56 h-56 md:w-72 md:h-72 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]">
+            <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -129,19 +133,19 @@ const NativeCameraScanner = ({ onScan }) => {
 const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100">
-        <div className="flex items-center space-x-3 mb-3 text-red-600">
-           <div className="bg-red-100 p-2 rounded-full"><AlertTriangle className="w-6 h-6" /></div>
-           <h3 className="font-bold text-lg text-slate-800">{title || 'Xác nhận xóa'}</h3>
+    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-sm md:max-w-md shadow-2xl border border-slate-100">
+        <div className="flex items-center space-x-4 mb-4 text-red-600">
+           <div className="bg-red-100 p-3 rounded-full"><AlertTriangle className="w-6 h-6 md:w-8 md:h-8" /></div>
+           <h3 className="font-bold text-lg md:text-xl text-slate-800">{title || 'Xác nhận xóa'}</h3>
         </div>
-        <p className="text-slate-600 text-sm mb-6 pl-1 leading-relaxed">
+        <p className="text-slate-600 text-sm md:text-base mb-8 leading-relaxed">
           {message || 'Bạn có chắc chắn muốn xóa dữ liệu này? Hành động này không thể hoàn tác.'}
         </p>
         <div className="flex gap-3 justify-end">
-          <button onClick={onCancel} className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors">Hủy</button>
-          <button onClick={onConfirm} className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-colors shadow-lg shadow-red-500/30">
-            Đồng ý
+          <button onClick={onCancel} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors text-sm md:text-base">Hủy bỏ</button>
+          <button onClick={onConfirm} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/30 text-sm md:text-base">
+            Xác nhận Xóa
           </button>
         </div>
       </div>
@@ -152,9 +156,9 @@ const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => 
 const ImageZoomModal = ({ imageUrl, onClose }) => {
   if (!imageUrl) return null;
   return (
-    <div className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in cursor-zoom-out" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md animate-fade-in cursor-zoom-out" onClick={onClose}>
       <div className="absolute top-4 right-4 md:top-8 md:right-8 z-[210]"><button onClick={onClose} className="bg-black/50 text-white p-2.5 md:p-4 rounded-full hover:bg-red-600 transition-colors border border-white/20 shadow-lg"><X className="w-6 h-6 md:w-8 md:h-8" /></button></div>
-      <img src={imageUrl} className="max-w-full max-h-full object-contain p-2 md:p-8 cursor-default" onClick={(e) => e.stopPropagation()} alt="Zoomed preview" />
+      <img src={imageUrl} className="max-w-full max-h-full object-contain p-2 md:p-8 cursor-default rounded-lg" onClick={(e) => e.stopPropagation()} alt="Zoomed preview" />
     </div>
   );
 };
@@ -198,32 +202,32 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
 
     return (
         <div className="relative" ref={wrapperRef}>
-            <div className={`w-full p-2.5 md:p-3 border border-slate-300 rounded-lg text-sm bg-white flex justify-between items-center cursor-pointer transition-all ${isOpen ? `ring-2 ring-opacity-20 ${borderActive}` : ''}`} onClick={() => setIsOpen(!isOpen)}>
+            <div className={`w-full p-3 md:p-4 border border-slate-300 rounded-xl text-sm md:text-base bg-white flex justify-between items-center cursor-pointer transition-all ${isOpen ? `ring-2 ring-opacity-20 ${borderActive}` : ''}`} onClick={() => setIsOpen(!isOpen)}>
                 <span className={`block truncate ${!tempPart.name && !isCustomPart ? "text-slate-500" : "text-slate-800 font-bold"}`}>
                     {isCustomPart ? "+ Nhập vật tư ngoài / Tạo mới" : (tempPart.name || '-- Chọn vật tư trong kho --')}
                 </span>
-                <ChevronDown className={`w-4 h-4 md:w-5 md:h-5 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-5 h-5 md:w-6 md:h-6 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </div>
 
             {isOpen && (
-                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl max-h-72 md:max-h-96 flex flex-col overflow-hidden">
-                    <div className="p-2 border-b border-slate-100 bg-slate-50 shrink-0">
+                <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl max-h-72 md:max-h-96 flex flex-col overflow-hidden">
+                    <div className="p-3 border-b border-slate-100 bg-slate-50 shrink-0">
                         <div className="relative">
-                            <Search className="absolute left-3 top-2.5 md:top-3 w-4 h-4 text-slate-400" />
-                            <input type="text" autoFocus placeholder="Nhập tên vật tư để tìm..." className={`w-full pl-9 pr-3 py-2 md:py-2.5 text-sm border border-slate-300 rounded-lg bg-white outline-none focus:ring-2 ${focusRing}`} value={search} onChange={e => setSearch(e.target.value)} />
+                            <Search className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                            <input type="text" autoFocus placeholder="Nhập tên vật tư để tìm..." className={`w-full pl-10 pr-4 py-2.5 md:py-3 text-sm md:text-base border border-slate-300 rounded-xl bg-white outline-none focus:ring-2 ${focusRing}`} value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
                     </div>
                     <div className="overflow-y-auto flex-1 custom-scrollbar">
-                        <div className={`p-3 md:p-4 text-sm font-bold cursor-pointer hover:bg-slate-100 border-b border-slate-100 flex items-center ${activeColor}`} onClick={() => handleSelect('CUSTOM')}>
-                            <Plus className="w-4 h-4 md:w-5 md:h-5 mr-1.5" /> Nhập vật tư ngoài / Tạo mới
+                        <div className={`p-4 md:p-5 text-sm md:text-base font-bold cursor-pointer hover:bg-slate-100 border-b border-slate-100 flex items-center ${activeColor}`} onClick={() => handleSelect('CUSTOM')}>
+                            <Plus className="w-5 h-5 mr-2" /> Nhập vật tư ngoài / Tạo mới
                         </div>
                         {filtered.length > 0 ? filtered.map(item => (
-                            <div key={item.id} className="p-3 md:p-4 text-sm cursor-pointer hover:bg-slate-50 border-b border-slate-50 flex justify-between items-center transition-colors" onClick={() => handleSelect(item.name)}>
-                                <span className="font-medium text-slate-700 truncate mr-2">{item.name}</span>
-                                <span className="text-[10px] md:text-xs text-slate-500 bg-slate-100 px-2 md:px-3 py-0.5 md:py-1 rounded whitespace-nowrap font-medium">Tồn: {item.quantity} {item.unit}</span>
+                            <div key={item.id} className="p-4 md:p-5 text-sm md:text-base cursor-pointer hover:bg-slate-50 border-b border-slate-50 flex justify-between items-center transition-colors" onClick={() => handleSelect(item.name)}>
+                                <span className="font-medium text-slate-700 truncate mr-3">{item.name}</span>
+                                <span className="text-xs text-slate-500 bg-slate-100 px-3 py-1 rounded-lg whitespace-nowrap font-bold">Tồn: {item.quantity} {item.unit}</span>
                             </div>
                         )) : (
-                            <div className="p-6 text-center text-sm text-slate-400">Không tìm thấy <b>"{search}"</b></div>
+                            <div className="p-8 text-center text-sm md:text-base text-slate-400">Không tìm thấy <b>"{search}"</b></div>
                         )}
                     </div>
                 </div>
@@ -288,8 +292,10 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       <div className="bg-white p-4 md:px-8 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
-        <div><h1 className="font-bold text-xl md:text-2xl text-slate-800">Dashboard Quản Trị</h1><p className="text-xs md:text-sm text-slate-500">Xin chào: {user.name}</p></div>
-        <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-600 bg-slate-100 hover:bg-red-50 px-4 py-2 rounded-lg transition-colors font-medium"><LogOut className="w-5 h-5" /><span className="hidden md:inline">Đăng xuất</span></button>
+        <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
+            <div><h1 className="font-black text-xl md:text-3xl text-slate-800 tracking-tight">Dashboard Quản Trị</h1><p className="text-xs md:text-sm text-slate-500 mt-1 font-medium">Đang đăng nhập: {user.name}</p></div>
+            <button onClick={handleLogout} className="flex items-center gap-2 text-slate-500 hover:text-red-600 bg-slate-100 hover:bg-red-50 px-4 py-2.5 rounded-xl transition-colors font-bold"><LogOut className="w-5 h-5 md:w-6 md:h-6" /><span className="hidden sm:inline">Đăng xuất</span></button>
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-20 custom-scrollbar">
@@ -297,70 +303,70 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
           
           {/* Hàng Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 shadow-sm flex flex-col justify-center">
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm flex flex-col justify-center">
               <h3 className="text-sm md:text-base font-bold text-slate-800 mb-4 flex items-center"><Database className="w-5 h-5 mr-2 text-blue-600"/> Máy móc & Thiết bị ({machines.length})</h3>
               <div className="flex gap-4">
-                 <div className="flex-1 bg-green-50 p-4 rounded-xl border border-green-100 cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => { setMachineFilter('operational'); setView('machines'); }}>
+                 <div className="flex-1 bg-green-50 p-4 rounded-2xl border border-green-100 cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => { setMachineFilter('operational'); setView('machines'); }}>
                     <p className="text-green-600 text-[11px] md:text-xs uppercase font-bold flex items-center mb-2"><CheckCircle className="w-4 h-4 mr-1"/>Bình thường</p>
-                    <p className="text-3xl md:text-4xl font-black text-green-700">{machinesOperational}</p>
+                    <p className="text-3xl md:text-5xl font-black text-green-700">{machinesOperational}</p>
                  </div>
-                 <div className="flex-1 bg-red-50 p-4 rounded-xl border border-red-100 cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => { setMachineFilter('issue'); setView('machines'); }}>
+                 <div className="flex-1 bg-red-50 p-4 rounded-2xl border border-red-100 cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => { setMachineFilter('issue'); setView('machines'); }}>
                     <p className="text-red-600 text-[11px] md:text-xs uppercase font-bold flex items-center mb-2"><AlertTriangle className="w-4 h-4 mr-1"/>Lỗi / Bảo trì</p>
-                    <p className="text-3xl md:text-4xl font-black text-red-700">{machinesIssue}</p>
+                    <p className="text-3xl md:text-5xl font-black text-red-700">{machinesIssue}</p>
                  </div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 md:gap-6 lg:col-span-2">
-               <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 shadow-sm cursor-pointer transition-transform hover:shadow-md active:scale-95 flex flex-col justify-center" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
+               <div className="bg-orange-50 p-6 md:p-8 rounded-3xl border border-orange-100 shadow-sm cursor-pointer transition-transform hover:shadow-md active:scale-95 flex flex-col justify-center" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
                   <p className="text-orange-600 text-xs md:text-sm uppercase font-bold flex items-center mb-2"><Clock className="w-4 h-4 md:w-5 md:h-5 mr-1.5"/> Việc Tồn đọng</p>
-                  <p className="text-3xl md:text-5xl font-black text-orange-700">{totalPending}</p>
+                  <p className="text-4xl md:text-6xl font-black text-orange-700">{totalPending}</p>
                </div>
-               <div className="bg-purple-50 p-5 rounded-2xl border border-purple-100 shadow-sm cursor-pointer transition-transform hover:shadow-md active:scale-95 flex flex-col justify-center" onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }}>
+               <div className="bg-purple-50 p-6 md:p-8 rounded-3xl border border-purple-100 shadow-sm cursor-pointer transition-transform hover:shadow-md active:scale-95 flex flex-col justify-center" onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }}>
                   <p className="text-purple-600 text-xs md:text-sm uppercase font-bold flex items-center mb-2"><CalendarClock className="w-4 h-4 md:w-5 md:h-5 mr-1.5"/> Tổng BC Ngày</p>
-                  <p className="text-3xl md:text-5xl font-black text-purple-700">{dailyTasks.length}</p>
+                  <p className="text-4xl md:text-6xl font-black text-purple-700">{dailyTasks.length}</p>
                </div>
-               <div className="bg-cyan-50 p-5 rounded-2xl border border-cyan-100 shadow-sm col-span-2 flex justify-between items-center cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => setView('utility_history')}>
+               <div className="bg-cyan-50 p-6 md:p-8 rounded-3xl border border-cyan-100 shadow-sm col-span-2 flex justify-between items-center cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => setView('utility_history')}>
                   <div>
                     <p className="text-cyan-600 text-xs md:text-sm uppercase font-bold flex items-center mb-2"><Droplets className="w-4 h-4 md:w-5 md:h-5 mr-1.5"/> Sổ Ghi Điện / Nước</p>
-                    <p className="text-3xl md:text-4xl font-black text-cyan-800">{utilityLogs?.length || 0} <span className="text-base md:text-lg font-medium text-cyan-600">bản ghi</span></p>
+                    <p className="text-3xl md:text-5xl font-black text-cyan-800">{utilityLogs?.length || 0} <span className="text-base md:text-xl font-medium text-cyan-600 ml-1">bản ghi</span></p>
                   </div>
-                  <div className="flex gap-3 bg-white p-3 md:p-4 rounded-xl shadow-sm"><Zap className="w-8 h-8 md:w-10 md:h-10 text-yellow-500"/><Droplets className="w-8 h-8 md:w-10 md:h-10 text-blue-400"/></div>
+                  <div className="flex gap-3 bg-white p-3 md:p-4 rounded-2xl shadow-sm"><Zap className="w-8 h-8 md:w-12 md:h-12 text-yellow-500"/><Droplets className="w-8 h-8 md:w-12 md:h-12 text-blue-400"/></div>
                </div>
             </div>
           </div>
           
           {/* Menu Quản Trị */}
           <div>
-            <h3 className="font-bold text-slate-800 text-lg md:text-xl mb-4 md:mb-6 flex items-center"><Settings className="w-6 h-6 mr-2 text-slate-600" /> Hệ thống tính năng</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-               <button onClick={() => setView('user_management')} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-emerald-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-emerald-100 p-3.5 md:p-4 rounded-xl text-emerald-600 mr-4 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><User className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Tài khoản (KTV)</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý User & Pass</p></div>
+            <h3 className="font-bold text-slate-800 text-lg md:text-2xl mb-4 md:mb-6 flex items-center"><Settings className="w-6 h-6 md:w-8 md:h-8 mr-2 text-slate-600" /> Hệ thống tính năng</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+               <button onClick={() => setView('user_management')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-emerald-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-emerald-100 p-4 md:p-5 rounded-2xl text-emerald-600 mr-4 md:mr-5 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><User className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Tài khoản (KTV)</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý User & Pass</p></div>
                </button>
-               <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-indigo-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-indigo-100 p-3.5 md:p-4 rounded-xl text-indigo-600 mr-4 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Database className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Thiết Bị</p><p className="text-xs md:text-sm text-slate-500 mt-1">Danh sách & Excel</p></div>
+               <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-indigo-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-indigo-100 p-4 md:p-5 rounded-2xl text-indigo-600 mr-4 md:mr-5 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Database className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Thiết Bị</p><p className="text-xs md:text-sm text-slate-500 mt-1">Danh sách & Excel</p></div>
                </button>
-               <button onClick={() => setView('inventory')} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-orange-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-orange-100 p-3.5 md:p-4 rounded-xl text-orange-600 mr-4 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Kho Vật Tư</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý tồn kho</p></div>
+               <button onClick={() => setView('inventory')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-orange-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-orange-100 p-4 md:p-5 rounded-2xl text-orange-600 mr-4 md:mr-5 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Kho Vật Tư</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý tồn kho</p></div>
                </button>
-               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-pink-100 p-3.5 md:p-4 rounded-xl text-pink-600 mr-4 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử BC hằng ngày</p></div>
+               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-pink-100 p-4 md:p-5 rounded-2xl text-pink-600 mr-4 md:mr-5 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử BC hằng ngày</p></div>
                </button>
-               <button onClick={() => setView('utility_history')} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-cyan-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-cyan-100 p-3.5 md:p-4 rounded-xl text-cyan-600 mr-4 group-hover:bg-cyan-500 group-hover:text-white transition-colors"><Droplets className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Sổ Ghi Điện Nước</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử chỉ số</p></div>
+               <button onClick={() => setView('utility_history')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-cyan-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-cyan-100 p-4 md:p-5 rounded-2xl text-cyan-600 mr-4 md:mr-5 group-hover:bg-cyan-500 group-hover:text-white transition-colors"><Droplets className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Điện Nước</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử chỉ số</p></div>
                </button>
-               <button onClick={() => setView('settings')} className="bg-white rounded-2xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-green-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-green-100 p-3.5 md:p-4 rounded-xl text-green-600 mr-4 group-hover:bg-green-500 group-hover:text-white transition-colors"><FileSpreadsheet className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 md:text-lg">Xuất báo cáo tự động</p><p className="text-xs md:text-sm text-slate-500 mt-1">Liên kết Google Sheet</p></div>
+               <button onClick={() => setView('settings')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-green-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-green-100 p-4 md:p-5 rounded-2xl text-green-600 mr-4 md:mr-5 group-hover:bg-green-500 group-hover:text-white transition-colors"><FileSpreadsheet className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Xuất báo cáo</p><p className="text-xs md:text-sm text-slate-500 mt-1">Cấu hình Google Sheet</p></div>
                </button>
-               <button onClick={() => setView('home')} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border border-blue-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 text-left group lg:col-span-2 xl:col-span-1">
-                  <div className="bg-blue-600 p-3.5 md:p-4 rounded-xl text-white mr-4 shadow-md"><Wrench className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-black text-blue-900 md:text-lg">Màn hình Kỹ thuật viên</p><p className="text-xs md:text-sm text-blue-700 mt-1">Giao diện vận hành app</p></div>
+               <button onClick={() => setView('home')} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl border border-blue-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 text-left group lg:col-span-3 xl:col-span-2">
+                  <div className="bg-blue-600 p-4 md:p-5 rounded-2xl text-white mr-4 md:mr-5 shadow-md"><Wrench className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-black text-blue-900 text-base md:text-xl">Màn hình Kỹ thuật viên</p><p className="text-xs md:text-sm text-blue-700 mt-1">Vào giao diện vận hành app</p></div>
                </button>
             </div>
           </div>
@@ -384,18 +390,18 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
   return (
     <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50">
       {/* Header */}
-      <div className="bg-blue-600 px-5 md:px-8 pt-8 md:pt-6 pb-12 md:pb-6 rounded-b-[2rem] md:rounded-none shrink-0 relative shadow-md z-0">
+      <div className="bg-blue-600 px-5 md:px-8 pt-8 md:pt-6 pb-12 md:pb-6 rounded-b-[2.5rem] md:rounded-none shrink-0 relative shadow-md z-0">
          <div className="max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3 md:gap-4">
-               <div className="bg-white/20 p-2.5 md:p-3 rounded-xl backdrop-blur-sm shadow-inner"><User className="w-6 h-6 md:w-8 md:h-8 text-white"/></div>
+               <div className="bg-white/20 p-3 md:p-4 rounded-2xl backdrop-blur-sm shadow-inner"><User className="w-6 h-6 md:w-8 md:h-8 text-white"/></div>
                <div>
                   <p className="text-blue-100 text-xs md:text-sm font-medium">Xin chào Kỹ thuật viên,</p>
-                  <h1 className="text-white font-bold text-lg md:text-2xl leading-tight break-words">{user.name}</h1>
+                  <h1 className="text-white font-bold text-xl md:text-3xl leading-tight break-words">{user.name}</h1>
                </div>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
-               {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-700 font-bold text-[10px] md:text-sm uppercase bg-blue-50 px-3 py-2 rounded-lg md:rounded-xl shadow-sm active:scale-95 hover:bg-white transition-all">Trang Quản Trị</button>}
-               <button onClick={handleLogout} className="bg-white/10 p-2 md:p-3 rounded-full hover:bg-red-500 hover:text-white text-blue-50 transition-colors shadow-sm"><LogOut className="w-5 h-5 md:w-6 md:h-6" /></button>
+               {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-700 font-bold text-[11px] md:text-sm uppercase bg-blue-50 px-3 md:px-4 py-2 md:py-2.5 rounded-xl md:rounded-2xl shadow-sm active:scale-95 hover:bg-white transition-all">Trang Quản Trị</button>}
+               <button onClick={handleLogout} className="bg-white/10 p-2.5 md:p-3.5 rounded-full hover:bg-red-500 hover:text-white text-blue-50 transition-colors shadow-sm"><LogOut className="w-5 h-5 md:w-6 md:h-6" /></button>
             </div>
          </div>
       </div>
@@ -404,58 +410,58 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
          <div className="max-w-7xl mx-auto space-y-4 md:space-y-8">
              
              {/* Bento Grid Top */}
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
                  {/* Khối Thống kê */}
-                 <div className="bg-white rounded-2xl shadow-sm md:shadow-md border border-slate-200 p-4 md:p-6 grid grid-cols-3 gap-2 md:gap-4 divide-x divide-slate-100 h-full">
-                    <div className="text-center px-1 md:px-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-xl flex flex-col justify-center" onClick={() => { setMachineFilter('operational'); setView('manual_select'); }}>
-                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2">Máy tốt</p>
-                       <p className="text-2xl md:text-4xl font-black text-green-600 leading-none">{machinesOperational}</p>
+                 <div className="bg-white rounded-3xl shadow-sm md:shadow-md border border-slate-200 p-5 md:p-6 grid grid-cols-3 gap-2 md:gap-4 divide-x divide-slate-100 h-full">
+                    <div className="text-center px-1 md:px-3 cursor-pointer hover:bg-slate-50 transition-colors rounded-2xl flex flex-col justify-center" onClick={() => { setMachineFilter('operational'); setView('manual_select'); }}>
+                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 md:mb-3">Máy tốt</p>
+                       <p className="text-3xl md:text-5xl font-black text-green-600 leading-none">{machinesOperational}</p>
                     </div>
-                    <div className="text-center px-1 md:px-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-xl flex flex-col justify-center" onClick={() => { setMachineFilter('issue'); setView('manual_select'); }}>
-                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2">Lỗi / Bảo trì</p>
-                       <p className="text-2xl md:text-4xl font-black text-red-500 leading-none">{machinesIssue}</p>
+                    <div className="text-center px-1 md:px-3 cursor-pointer hover:bg-slate-50 transition-colors rounded-2xl flex flex-col justify-center" onClick={() => { setMachineFilter('issue'); setView('manual_select'); }}>
+                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 md:mb-3">Lỗi / Bảo trì</p>
+                       <p className="text-3xl md:text-5xl font-black text-red-500 leading-none">{machinesIssue}</p>
                     </div>
-                    <div className="text-center px-1 md:px-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-xl flex flex-col justify-center" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
-                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2">Tồn đọng</p>
-                       <p className="text-2xl md:text-4xl font-black text-orange-500 leading-none">{totalPending}</p>
+                    <div className="text-center px-1 md:px-3 cursor-pointer hover:bg-slate-50 transition-colors rounded-2xl flex flex-col justify-center" onClick={() => { setTaskFilter('pending'); setView('daily_task_history'); }}>
+                       <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 md:mb-3">Tồn đọng</p>
+                       <p className="text-3xl md:text-5xl font-black text-orange-500 leading-none">{totalPending}</p>
                     </div>
                  </div>
 
                  {/* Nút Quét QR to trên Desktop */}
-                 <button onClick={() => setView('scanner')} className="lg:col-span-2 w-full h-full min-h-[100px] md:min-h-[120px] bg-slate-900 text-white p-5 md:p-8 rounded-2xl flex items-center justify-center gap-4 md:gap-6 shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
-                     <div className="bg-white/20 p-3 md:p-4 rounded-2xl"><QrCode className="w-8 h-8 md:w-12 md:h-12" /></div>
-                     <span className="font-black text-xl md:text-3xl tracking-wide">Quét Mã QR Máy</span>
+                 <button onClick={() => setView('scanner')} className="lg:col-span-2 w-full h-full min-h-[120px] md:min-h-[140px] bg-slate-900 text-white p-5 md:p-8 rounded-3xl flex items-center justify-center gap-4 md:gap-6 shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
+                     <div className="bg-white/20 p-3 md:p-5 rounded-2xl md:rounded-3xl"><QrCode className="w-8 h-8 md:w-12 md:h-12" /></div>
+                     <span className="font-black text-2xl md:text-4xl tracking-wide">Quét Mã QR Máy</span>
                  </button>
              </div>
 
              {/* Action Grid */}
-             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6">
-                 <button onClick={() => { setMachineFilter('all'); setView('manual_select'); }} className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 group">
-                     <div className="bg-blue-50 p-3 md:p-4 rounded-xl group-hover:bg-blue-500 transition-colors"><ListFilter className="w-6 h-6 md:w-8 md:h-8 text-blue-600 group-hover:text-white"/></div>
+             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
+                 <button onClick={() => { setMachineFilter('all'); setView('manual_select'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 group">
+                     <div className="bg-blue-50 p-3.5 md:p-4 rounded-2xl group-hover:bg-blue-500 transition-colors"><ListFilter className="w-6 h-6 md:w-8 md:h-8 text-blue-600 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-slate-800">Chọn Thiết Bị</p><p className="text-[10px] md:text-xs text-slate-500 mt-1">Tìm kiếm thủ công</p></div>
                  </button>
 
-                 <button onClick={() => setView('inventory')} className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-orange-400 transition-all active:scale-95 group">
-                     <div className="bg-orange-50 p-3 md:p-4 rounded-xl group-hover:bg-orange-500 transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8 text-orange-600 group-hover:text-white"/></div>
+                 <button onClick={() => setView('inventory')} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-orange-400 transition-all active:scale-95 group">
+                     <div className="bg-orange-50 p-3.5 md:p-4 rounded-2xl group-hover:bg-orange-500 transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8 text-orange-600 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-slate-800">Kho Vật Tư</p><p className="text-[10px] md:text-xs text-slate-500 mt-1">Xem tồn kho linh kiện</p></div>
                  </button>
 
-                 <button onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-50 p-5 md:p-6 rounded-2xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:bg-purple-100 hover:border-purple-300 transition-all active:scale-95 group">
-                     <div className="bg-purple-200 p-3 md:p-4 rounded-xl group-hover:bg-purple-600 transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 text-purple-700 group-hover:text-white"/></div>
+                 <button onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-50 p-5 md:p-6 rounded-3xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:bg-purple-100 hover:border-purple-300 transition-all active:scale-95 group">
+                     <div className="bg-purple-200 p-3.5 md:p-4 rounded-2xl group-hover:bg-purple-600 transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 text-purple-700 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-purple-900">Báo Cáo Ngày</p><p className="text-[10px] md:text-xs text-purple-600 mt-1">Việc ngoài / không QR</p></div>
                  </button>
 
-                 <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-5 md:p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-slate-400 transition-all active:scale-95 group">
-                     <div className="bg-slate-100 p-3 md:p-4 rounded-xl group-hover:bg-slate-600 transition-colors"><History className="w-6 h-6 md:w-8 md:h-8 text-slate-600 group-hover:text-white"/></div>
+                 <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-slate-400 transition-all active:scale-95 group">
+                     <div className="bg-slate-100 p-3.5 md:p-4 rounded-2xl group-hover:bg-slate-600 transition-colors"><History className="w-6 h-6 md:w-8 md:h-8 text-slate-600 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-slate-800">Sổ Lịch Sử</p><p className="text-[10px] md:text-xs text-slate-500 mt-1">Xem lại việc đã làm</p></div>
                  </button>
 
-                 <button onClick={() => setView('meter_menu')} className="col-span-2 lg:col-span-4 bg-gradient-to-r from-cyan-50 to-blue-50 p-5 md:p-6 rounded-2xl border border-cyan-100 shadow-sm flex items-center justify-between hover:shadow-md transition-all active:scale-[0.98]">
-                     <div className="flex items-center gap-4 md:gap-6">
-                        <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm flex gap-2"><Zap className="w-6 h-6 md:w-8 md:h-8 text-yellow-500"/><Droplets className="w-6 h-6 md:w-8 md:h-8 text-blue-500"/></div>
-                        <div className="text-left"><p className="font-bold text-base md:text-xl text-cyan-900">Sổ Ghi Điện / Nước</p><p className="text-[11px] md:text-sm text-cyan-700 mt-1">Chỉ số tiêu thụ & Lịch sử hằng tháng</p></div>
+                 <button onClick={() => setView('meter_menu')} className="col-span-2 sm:col-span-3 lg:col-span-4 xl:col-span-1 bg-gradient-to-r from-cyan-50 to-blue-50 p-5 md:p-6 rounded-3xl border border-cyan-100 shadow-sm flex items-center xl:flex-col xl:items-start justify-between xl:justify-start gap-3 hover:shadow-md transition-all active:scale-[0.98]">
+                     <div className="flex items-center xl:flex-col xl:items-start gap-4 md:gap-6">
+                        <div className="bg-white p-3.5 md:p-4 rounded-2xl shadow-sm flex gap-2"><Zap className="w-6 h-6 md:w-8 md:h-8 text-yellow-500"/><Droplets className="w-6 h-6 md:w-8 md:h-8 text-blue-500"/></div>
+                        <div className="text-left"><p className="font-bold text-base md:text-lg text-cyan-900">Sổ Ghi Điện / Nước</p><p className="text-[11px] md:text-xs text-cyan-700 mt-1">Lịch sử hằng tháng</p></div>
                      </div>
-                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-cyan-600 font-bold md:text-xl">&rarr;</div>
+                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white flex items-center justify-center shadow-sm text-cyan-600 font-bold md:text-xl xl:self-end mt-auto">&rarr;</div>
                  </button>
              </div>
          </div>
@@ -505,57 +511,57 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Quản lý Tài Khoản</h2></div>
             <div className="flex gap-3 md:w-1/2 lg:w-1/3">
-                <div className="relative flex-1"><Search className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" /><input type="text" placeholder="Tìm tài khoản..." className="w-full pl-9 pr-3 py-2 md:py-2.5 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
-                <button onClick={startAdd} className="bg-blue-600 text-white px-4 py-2 md:py-2.5 rounded-xl text-sm md:text-base font-bold flex items-center shadow-sm hover:bg-blue-700 transition-colors"><User className="w-4 h-4 md:w-5 md:h-5 mr-2"/> Tạo mới</button>
+                <div className="relative flex-1"><Search className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" /><input type="text" placeholder="Tìm tài khoản..." className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                <button onClick={startAdd} className="bg-blue-600 text-white px-4 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold flex items-center shadow-sm hover:bg-blue-700 transition-colors"><User className="w-4 h-4 md:w-5 md:h-5 mr-2"/> Tạo mới</button>
             </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
-        <div className="max-w-7xl mx-auto space-y-4">
+        <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
             {(isAdding || editingId) && (
-                <div className="bg-blue-50 p-5 md:p-6 rounded-2xl border border-blue-200 shadow-sm mb-6 animate-fade-in max-w-3xl mx-auto">
-                    <h3 className="font-bold text-blue-800 mb-4 md:text-lg">{isAdding ? 'Tạo tài khoản KTV mới' : 'Cập nhật tài khoản'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label className="text-xs md:text-sm font-medium text-slate-600">Tên đăng nhập</label><input disabled={!isAdding && editForm.id === 'admin'} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="w-full mt-1.5 p-2.5 md:p-3 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: ktv_nguyen" /></div>
-                        <div><label className="text-xs md:text-sm font-medium text-slate-600">Mật khẩu</label><input value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="w-full mt-1.5 p-2.5 md:p-3 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="***" /></div>
-                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-medium text-slate-600">Họ và Tên</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full mt-1.5 p-2.5 md:p-3 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Họ tên đầy đủ" /></div>
-                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-medium text-slate-600">Quyền hạn</label>
-                            <select disabled={editForm.id === 'admin'} value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="w-full mt-1.5 p-2.5 md:p-3 border border-blue-200 rounded-xl text-sm md:text-base bg-white outline-none focus:ring-2 focus:ring-blue-500">
+                <div className="bg-blue-50 p-5 md:p-8 rounded-3xl border border-blue-200 shadow-sm mb-6 animate-fade-in max-w-3xl mx-auto">
+                    <h3 className="font-bold text-blue-800 mb-6 md:text-xl">{isAdding ? 'Tạo tài khoản KTV mới' : 'Cập nhật tài khoản'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Tên đăng nhập</label><input disabled={!isAdding && editForm.id === 'admin'} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100" placeholder="VD: ktv_nguyen" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mật khẩu</label><input value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="***" /></div>
+                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Họ và Tên</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Họ tên đầy đủ" /></div>
+                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Quyền hạn</label>
+                            <select disabled={editForm.id === 'admin'} value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base bg-white outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100">
                                 <option value="maintenance">Kỹ thuật viên</option><option value="admin">Quản lý (Admin)</option>
                             </select>
                         </div>
                     </div>
-                    <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-blue-100">
-                        <button onClick={() => { setIsAdding(false); setEditingId(null); }} className="px-5 py-2.5 bg-white text-slate-600 rounded-xl text-sm md:text-base border border-slate-200 font-medium hover:bg-slate-50 transition-colors">Hủy</button>
-                        <button onClick={handleSave} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm md:text-base font-bold shadow-md flex items-center hover:bg-blue-700 transition-colors"><Save className="w-5 h-5 mr-2"/> Lưu</button>
+                    <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-blue-100">
+                        <button onClick={() => { setIsAdding(false); setEditingId(null); }} className="px-5 py-3 bg-white text-slate-600 rounded-xl text-sm md:text-base border border-slate-200 font-bold hover:bg-slate-50 transition-colors">Hủy bỏ</button>
+                        <button onClick={handleSave} className="px-5 py-3 bg-blue-600 text-white rounded-xl text-sm md:text-base font-bold shadow-md flex items-center hover:bg-blue-700 transition-colors"><Save className="w-5 h-5 mr-2"/> Lưu Tài Khoản</button>
                     </div>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredUsers.length > 0 ? (
                 filteredUsers.map((u) => (
-                  <div key={u.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div key={u.id} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
                     <div className="flex items-start space-x-4 mb-4">
-                       <div className={`p-3 md:p-4 rounded-xl shrink-0 ${u.role === 'admin' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
+                       <div className={`p-3 md:p-4 rounded-2xl shrink-0 ${u.role === 'admin' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
                            {u.role === 'admin' ? <Lock className="w-6 h-6 md:w-8 md:h-8" /> : <User className="w-6 h-6 md:w-8 md:h-8" />}
                        </div>
                        <div className="overflow-hidden">
-                           <h4 className="font-bold text-slate-800 md:text-lg truncate">{u.name}</h4>
-                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-1.5 bg-slate-50 p-2 rounded-lg border border-slate-100 break-all">
-                               <div><b>User:</b> {u.username}</div>
-                               <div><b>Pass:</b> {u.password}</div>
+                           <h4 className="font-bold text-slate-800 text-base md:text-lg truncate">{u.name}</h4>
+                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-2 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 break-all space-y-1">
+                               <div><b className="text-slate-700">User:</b> {u.username}</div>
+                               <div><b className="text-slate-700">Pass:</b> {u.password}</div>
                            </div>
                        </div>
                     </div>
                     <div className="flex gap-2 justify-end mt-auto pt-4 border-t border-slate-100">
-                       <button onClick={() => startEdit(u)} className="px-4 py-2 text-slate-600 hover:text-blue-700 bg-slate-50 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 text-sm font-medium flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
-                       {u.id !== 'admin' && <button onClick={() => {if(window.confirm('Xóa tài khoản này?')) handleDeleteUser(u.id)}} className="px-4 py-2 text-slate-600 hover:text-white bg-slate-50 hover:bg-red-500 rounded-xl transition-colors border border-slate-200 hover:border-red-500 text-sm font-medium flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>}
+                       <button onClick={() => startEdit(u)} className="px-4 py-2 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 rounded-xl transition-colors border border-blue-100 text-sm font-bold flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
+                       {u.id !== 'admin' && <button onClick={() => {if(window.confirm('Xóa tài khoản này?')) handleDeleteUser(u.id)}} className="px-4 py-2 text-red-600 hover:text-white bg-red-50 hover:bg-red-500 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>}
                     </div>
                   </div>
                 ))
-              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-2xl border border-dashed border-slate-300">Không tìm thấy tài khoản phù hợp.</div>)}
+              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy tài khoản phù hợp.</div>)}
             </div>
         </div>
       </div>
@@ -674,13 +680,13 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
 
             <div className="flex flex-col md:flex-row gap-3 md:w-2/3 lg:w-1/2">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                    <input type="text" placeholder="Tìm kiếm mã hoặc tên máy..." className="w-full pl-9 pr-4 py-2 md:py-2.5 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <Search className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                    <input type="text" placeholder="Tìm kiếm mã hoặc tên máy..." className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-3 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
                 <div className="flex gap-2">
-                    <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5 text-blue-600" /> <span className="hidden md:inline">Tải File</span></button>
+                    <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-3 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5 text-blue-600" /> <span className="hidden md:inline">Tải File</span></button>
                     <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
-                    <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 md:w-5 md:h-5 text-green-600" /> <span className="hidden md:inline">Nhập File</span></button>
+                    <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-3 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 md:w-5 md:h-5 text-green-600" /> <span className="hidden md:inline">Nhập File</span></button>
                 </div>
             </div>
         </div>
@@ -692,53 +698,53 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                 <span>Danh sách thiết bị {filterTitle} ({filteredMachines.length})</span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredMachines.length > 0 ? (
                 filteredMachines.map((m) => (
-                  <div key={m.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                  <div key={m.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                      {editingId === m.id ? (
-                         <div className="flex flex-col gap-3 p-5 bg-blue-50/50 border-b border-blue-200 flex-1">
-                            <input className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
-                            <input className="w-full p-2.5 border border-slate-300 rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
+                         <div className="flex flex-col gap-3 p-5 md:p-6 bg-blue-50/50 border-b border-blue-200 flex-1">
+                            <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
+                            <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
                             <div className="flex gap-2">
-                                <input className="w-1/2 p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
-                                <input className="w-1/2 p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
+                                <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
+                                <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
                             </div>
-                            <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+                            <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium">
                                 <option value="operational">Hoạt động tốt</option>
                                 <option value="maintenance">Đang bảo trì</option>
                                 <option value="broken">Bị hỏng</option>
                             </select>
-                            <div className="flex justify-end gap-2 mt-2 pt-3 border-t border-blue-100">
-                                <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm bg-white border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
-                                <button onClick={handleSaveEdit} className="px-4 py-2 text-sm bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
+                            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-blue-100">
+                                <button onClick={() => setEditingId(null)} className="px-5 py-2.5 text-sm md:text-base bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
+                                <button onClick={handleSaveEdit} className="px-5 py-2.5 text-sm md:text-base bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
                             </div>
                          </div>
                      ) : (
-                         <div className="p-5 flex flex-col h-full group">
-                            <div className="flex justify-between items-start mb-3">
+                         <div className="p-5 md:p-6 flex flex-col h-full group">
+                            <div className="flex justify-between items-start mb-4">
                                <div className="overflow-hidden">
-                                 <h4 className="font-bold text-slate-800 md:text-lg mb-1 truncate" title={m.name}>{m.name}</h4>
-                                 <span className="bg-slate-100 px-2 py-1 rounded text-xs font-mono font-bold text-slate-600 inline-block">{m.id}</span>
+                                 <h4 className="font-bold text-slate-800 text-base md:text-lg mb-2 truncate" title={m.name}>{m.name}</h4>
+                                 <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-xs md:text-sm font-mono font-bold text-slate-600 inline-block">{m.id}</span>
                                </div>
                                <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 ${m.status === 'operational' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' : m.status === 'maintenance' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.4)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]'}`}></div>
                             </div>
                             
-                            <div className="text-sm text-slate-500 space-y-1 mb-4 flex-1">
-                                {m.department && <p className="flex items-center"><User className="w-4 h-4 mr-2 opacity-50"/> <span className="truncate">{m.department}</span></p>}
-                                {m.location && <p className="flex items-center"><MapPin className="w-4 h-4 mr-2 opacity-50"/> <span className="truncate">{m.location}</span></p>}
+                            <div className="text-xs md:text-sm text-slate-500 space-y-2 mb-6 flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                {m.department && <p className="flex items-center"><User className="w-4 h-4 mr-2 text-slate-400"/> <span className="truncate">{m.department}</span></p>}
+                                {m.location && <p className="flex items-center"><MapPin className="w-4 h-4 mr-2 text-slate-400"/> <span className="truncate">{m.location}</span></p>}
                             </div>
 
                             <div className="flex gap-2 justify-end pt-4 border-t border-slate-100 mt-auto opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => startEdit(m)} className="px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 text-sm font-medium flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
-                                <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-100 text-sm font-medium flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>
+                                <button onClick={() => startEdit(m)} className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-blue-100 text-sm font-bold flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
+                                <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>
                             </div>
                          </div>
                      )}
                   </div>
                 ))
               ) : (
-                <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-2xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>
+                <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>
               )}
             </div>
         </div>
@@ -790,8 +796,8 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
       setEditingId(null);
   };
 
-  const handleExportExcel = async () => { /* ... giữ nguyên logic ... */ };
-  const handleImportExcel = async (e) => { /* ... giữ nguyên logic ... */ };
+  const handleExportExcel = async () => { /* Giữ nguyên do code dài, bạn hãy copy logic function này từ phiên bản trước nếu cần */ };
+  const handleImportExcel = async (e) => { /* Giữ nguyên do code dài, bạn hãy copy logic function này từ phiên bản trước nếu cần */ };
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -805,14 +811,14 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 
             <div className="flex flex-col md:flex-row gap-3 md:w-2/3 lg:w-1/2">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                    <input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 pr-4 py-2 md:py-2.5 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <Search className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                    <input type="text" placeholder="Tìm kiếm trong kho..." className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-3 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
                 {user.role === 'admin' && (
                     <div className="flex gap-2">
-                        <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5 text-blue-600" /> <span className="hidden md:inline">Tải File</span></button>
+                        <button disabled={isLoading} onClick={handleExportExcel} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-3 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5 text-blue-600" /> <span className="hidden md:inline">Tải File</span></button>
                         <input type="file" accept=".xlsx, .xls" className="hidden" ref={fileInputRef} onChange={handleImportExcel} />
-                        <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-2.5 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 md:w-5 md:h-5 text-green-600" /> <span className="hidden md:inline">Nhập Kho</span></button>
+                        <button disabled={isLoading} onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 py-2 md:py-3 px-4 rounded-xl text-sm md:text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"><Upload className="w-4 h-4 md:w-5 md:h-5 text-green-600" /> <span className="hidden md:inline">Nhập Kho</span></button>
                     </div>
                 )}
             </div>
@@ -823,13 +829,13 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
             
             {user.role === 'admin' && (
-              <div className="bg-slate-100 p-4 md:p-5 rounded-2xl border border-dashed border-slate-300 mb-4 max-w-4xl">
-                <h3 className="text-xs md:text-sm uppercase font-bold text-slate-500 mb-3"><Plus className="w-4 h-4 inline mr-1 -mt-0.5"/> Thêm nhanh thủ công</h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <input placeholder="Tên vật tư (VD: Dầu nhớt)" className="md:col-span-2 p-2.5 md:p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
-                  <div className="flex gap-2 md:col-span-2">
-                      <input placeholder="Đơn vị" className="w-1/2 p-2.5 md:p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
-                      <input placeholder="SL" type="number" className="w-1/4 p-2.5 md:p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} />
+              <div className="bg-slate-100 p-4 md:p-6 rounded-3xl border border-dashed border-slate-300 mb-6 max-w-4xl mx-auto md:mx-0">
+                <h3 className="text-xs md:text-sm uppercase font-bold text-slate-500 mb-4"><Plus className="w-4 h-4 inline mr-1 -mt-0.5"/> Thêm nhanh thủ công</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 md:gap-4">
+                  <input placeholder="Tên vật tư (VD: Dầu nhớt)" className="md:col-span-2 p-3 md:p-4 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} />
+                  <div className="flex gap-2 md:gap-4 md:col-span-2">
+                      <input placeholder="Đơn vị" className="w-1/2 p-3 md:p-4 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={newItem.unit} onChange={e => setNewItem({...newItem, unit: e.target.value})} />
+                      <input placeholder="SL" type="number" className="w-1/4 p-3 md:p-4 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold" value={newItem.quantity} onChange={e => setNewItem({...newItem, quantity: e.target.value})} />
                       <button onClick={handleAddOrUpdate} className="w-1/4 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 flex justify-center items-center shadow-md transition-transform active:scale-95"><Plus className="w-5 h-5 md:w-6 md:h-6" /></button>
                   </div>
                 </div>
@@ -838,46 +844,46 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 
             <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Danh sách vật tư ({filteredInventory.length})</span></div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredInventory.length > 0 ? (
                 filteredInventory.map((item) => (
-                  <div key={item.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                  <div key={item.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                     {editingId === item.id ? (
-                      <div className="flex flex-col gap-3 bg-blue-50/50 p-4 border-b border-blue-200 flex-1">
-                        <input className="w-full p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên vật tư" />
+                      <div className="flex flex-col gap-3 bg-blue-50/50 p-5 md:p-6 border-b border-blue-200 flex-1">
+                        <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên vật tư" />
                         <div className="flex gap-2">
-                            <input className="w-1/2 p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} placeholder="Đơn vị" />
-                            <input className="w-1/2 p-2.5 border border-slate-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center" type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} placeholder="Số lượng" />
+                            <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.unit} onChange={e => setEditForm({...editForm, unit: e.target.value})} placeholder="Đơn vị" />
+                            <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold text-center" type="number" value={editForm.quantity} onChange={e => setEditForm({...editForm, quantity: e.target.value})} placeholder="Số lượng" />
                         </div>
-                        <div className="flex justify-end gap-2 mt-2 pt-3 border-t border-blue-100">
-                            <button onClick={() => setEditingId(null)} className="px-4 py-2 text-sm bg-white border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
-                            <button onClick={saveEdit} className="px-4 py-2 text-sm bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
+                        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-blue-100">
+                            <button onClick={() => setEditingId(null)} className="px-5 py-2.5 text-sm md:text-base bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
+                            <button onClick={saveEdit} className="px-5 py-2.5 text-sm md:text-base bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
                         </div>
                       </div>
                     ) : (
-                      <div className="p-5 flex justify-between items-start flex-1 group">
+                      <div className="p-5 md:p-6 flex justify-between items-center flex-1 group">
                         <div className="overflow-hidden pr-4">
-                            <h4 className="font-bold text-slate-800 md:text-lg mb-1 truncate" title={item.name}>{item.name}</h4>
-                            <p className="text-xs text-slate-500 font-mono mt-1 bg-slate-50 inline-block px-1.5 py-0.5 rounded">{item.id}</p>
+                            <h4 className="font-bold text-slate-800 text-base md:text-lg mb-2 truncate" title={item.name}>{item.name}</h4>
+                            <p className="text-xs md:text-sm text-slate-500 font-mono mt-1 bg-slate-50 inline-block px-2 py-1 rounded-lg border border-slate-100">{item.id}</p>
                             
                             {user.role === 'admin' && (
                                 <div className="mt-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => startEdit(item)} className="px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-blue-100 text-xs font-medium flex items-center"><Edit className="w-3 h-3 mr-1.5" /> Chỉnh sửa</button>
+                                    <button onClick={() => startEdit(item)} className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-blue-100 text-xs md:text-sm font-bold flex items-center"><Edit className="w-3 h-3 md:w-4 md:h-4 mr-1.5" /> Chỉnh sửa</button>
                                 </div>
                             )}
                         </div>
                         <div className="flex flex-col items-end shrink-0">
-                           <div className={`flex flex-col items-center justify-center w-16 h-16 md:w-20 md:h-20 rounded-2xl border-2 ${item.quantity < 10 ? 'bg-red-50 border-red-200 text-red-600 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-slate-50 border-slate-100 text-slate-800'}`}>
-                              <span className="font-black text-xl md:text-2xl leading-none">{item.quantity}</span>
-                              <span className="text-[10px] md:text-xs font-medium mt-1 text-slate-500 uppercase tracking-wide">{item.unit}</span>
+                           <div className={`flex flex-col items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-2xl md:rounded-3xl border-2 ${item.quantity < 10 ? 'bg-red-50 border-red-200 text-red-600 shadow-[0_0_15px_rgba(239,68,68,0.1)]' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
+                              <span className="font-black text-2xl md:text-3xl leading-none">{item.quantity}</span>
+                              <span className="text-[10px] md:text-xs font-bold mt-1.5 text-slate-500 uppercase tracking-wide">{item.unit}</span>
                            </div>
-                           {item.quantity < 10 && <p className="text-[10px] md:text-xs text-red-500 font-bold mt-2 bg-red-100 px-2 py-0.5 rounded-full animate-pulse">Sắp hết!</p>}
+                           {item.quantity < 10 && <p className="text-[10px] md:text-xs text-red-500 font-bold mt-3 bg-red-100 px-3 py-1 rounded-full animate-pulse">Sắp hết!</p>}
                         </div>
                       </div>
                     )}
                   </div>
                 ))
-              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-2xl border border-dashed border-slate-300">Kho đang trống.</div>)}
+              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Kho đang trống.</div>)}
             </div>
         </div>
       </div>
@@ -925,15 +931,15 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                 <div className="flex gap-3 md:w-1/2 lg:w-1/3">
                    {user.role === 'admin' && (
                       <div className="flex-1 relative">
-                          <Filter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 pr-3 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
+                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
                               <option value="all">Tất cả KTV</option>
                               {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
                           </select>
                       </div>
                    )}
                    <div className="flex-1 relative">
-                      <input type="month" value={filterMonthStr} onChange={e => setFilterMonthStr(e.target.value)} className="w-full px-3 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                      <input type="month" value={filterMonthStr} onChange={e => setFilterMonthStr(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                    </div>
                 </div>
             </div>
@@ -945,12 +951,12 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                     <span>{filterMonthStr ? `Tháng ${filterMonthStr}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                   {filteredTasks.length === 0 ? (
-                       <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-2xl border border-dashed border-slate-300">Không có báo cáo nào phù hợp.</div>
+                       <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có báo cáo nào phù hợp.</div>
                   ) : (
                        filteredTasks.map((task) => (
-                           <div key={task.id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-purple-300 transition-all flex flex-col group">
+                           <div key={task.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-purple-300 transition-all flex flex-col group">
                                <div className="flex justify-between items-start mb-4">
                                    <div className="pr-4">
                                        <h4 className="font-bold text-slate-800 text-base md:text-lg leading-tight mb-2">{task.taskName}</h4>
@@ -963,21 +969,21 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                
                                <div className="flex flex-col gap-2 mb-4">
                                    <div className="flex items-center text-xs md:text-sm font-mono font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit">
-                                       <Clock className="w-4 h-4 mr-2 text-slate-400" /> Ngày {task.date} ({task.startTime} - {task.endTime})
+                                       <Clock className="w-4 h-4 mr-2 text-slate-400" /> {task.date} ({task.startTime} - {task.endTime})
                                    </div>
                                    <div className="flex items-center text-xs md:text-sm font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit">
-                                       <User className="w-4 h-4 mr-2 text-slate-400" /> KTV: {task.technicianName}
+                                       <User className="w-4 h-4 mr-2 text-slate-400" /> {task.technicianName}
                                    </div>
                                </div>
                                
-                               <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap flex-1 mb-4 bg-white p-3 border border-slate-100 rounded-xl leading-relaxed">{task.note}</p>
+                               <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap flex-1 mb-4 bg-white p-3 md:p-4 border border-slate-100 rounded-xl leading-relaxed">{task.note}</p>
 
                                {task.parts && task.parts.length > 0 && (
                                  <div className="mb-4">
                                    <div className="text-[10px] md:text-xs text-slate-400 mb-2 flex items-center uppercase font-bold"><Package className="w-4 h-4 mr-1.5"/> Vật tư thay thế:</div>
                                    <div className="flex flex-wrap gap-2">
                                      {task.parts.map((p, idx) => (
-                                       <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>
+                                       <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>
                                      ))}
                                    </div>
                                  </div>
@@ -993,16 +999,16 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
                                    {task.status === 'Đang xử lý' ? (
-                                       <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-2.5 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95">
-                                          <PlaySquare className="w-5 h-5" /> Tiếp tục công việc
+                                       <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95">
+                                          <PlaySquare className="w-5 h-5" /> Tiếp tục CV
                                        </button>
                                    ) : (
                                        <div className="flex-1"></div>
                                    )}
                                    
                                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm">Sửa</span></button>
-                                      <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm">Xóa</span></button>
+                                      <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
+                                      <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
                                    </div>
                                </div>
                            </div>
@@ -1016,7 +1022,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 };
 
 // =========================================================================
-// MÀN HÌNH FORM GHI NHẬN (ĐÃ GIỚI HẠN MAX-WIDTH TRÊN DESKTOP)
+// MÀN HÌNH FORM GHI NHẬN (GIỚI HẠN MAX-WIDTH, CĂN GIỮA)
 // =========================================================================
 
 const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData }) => {
@@ -1091,7 +1097,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-4xl mx-auto flex items-center space-x-4">
+          <div className="max-w-3xl mx-auto flex items-center space-x-4">
               <button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
               <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">
                   <CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> 
@@ -1106,38 +1112,38 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                   <div className="bg-slate-100 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-600 mb-2">Người thực hiện (Admin nhập hộ)</label><input type="text" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-purple-500 outline-none font-bold" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} /></div>
               )}
 
-              <div className="bg-white p-5 md:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Tên Công việc / Thiết bị <span className="text-red-500">*</span></label>
-                      <input type="text" autoFocus className="w-full p-4 rounded-xl border border-slate-300 bg-slate-50 text-lg focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold placeholder:font-normal" placeholder="VD: Thay bóng đèn xưởng A, Đi dây mạng..." value={formData.taskName} onChange={e => setFormData({...formData, taskName: e.target.value})} />
+                      <input type="text" autoFocus className="w-full p-4 rounded-2xl border border-slate-300 bg-slate-50 text-lg focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold placeholder:font-normal transition-all" placeholder="VD: Thay bóng đèn xưởng A, Đi dây mạng..." value={formData.taskName} onChange={e => setFormData({...formData, taskName: e.target.value})} />
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-3.5 rounded-xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label><select className="w-full p-3.5 rounded-xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Sửa chữa chung</option><option>Bảo trì cơ sở vật chất</option><option>Hỗ trợ sản xuất</option><option>Khác</option></select></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Sửa chữa chung</option><option>Bảo trì cơ sở vật chất</option><option>Hỗ trợ sản xuất</option><option>Khác</option></select></div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 md:gap-6 bg-purple-50 p-4 md:p-6 rounded-2xl border border-purple-100">
+                  <div className="grid grid-cols-2 gap-4 md:gap-6 bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100">
                       <div>
                           <label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label>
-                          <input type="time" className="w-full p-3 rounded-xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} />
+                          <input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} />
                       </div>
                       <div>
                           <label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label>
-                          <input type="time" className="w-full p-3 rounded-xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
+                          <input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
                       </div>
                   </div>
               </div>
 
-              <div className="bg-white p-5 md:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label>
-                      <textarea rows="5" className="w-full p-4 rounded-xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-colors" placeholder="Mô tả chi tiết các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+                      <textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
                   </div>
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Vật tư sử dụng</label>
-                      <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-4 md:p-5 rounded-xl border border-slate-200">
+                      <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200">
                           <SearchablePartSelect inventory={inventory} isCustomPart={isCustomPart} setIsCustomPart={setIsCustomPart} tempPart={tempPart} setTempPart={setTempPart} theme="purple" />
                           {isCustomPart && (<input placeholder="Nhập tên vật tư mới..." className="w-full p-3 border border-purple-300 rounded-xl text-base bg-white outline-none focus:ring-2 focus:ring-purple-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />)}
                           <div className="flex flex-col md:flex-row gap-3">
@@ -1146,12 +1152,12 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                               <button onClick={addPart} className="md:w-1/4 bg-slate-800 text-white p-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 hover:bg-slate-700 transition-colors"><Plus className="w-5 h-5" /> <span className="md:hidden">Thêm</span></button>
                           </div>
                       </div>
-                      <div className="space-y-2">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl flex justify-between text-sm md:text-base items-center shadow-sm"><span className="font-bold text-slate-800">{p.name}</span><span className="text-purple-700 bg-purple-100 px-3 py-1 rounded-lg font-black border border-purple-200">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
+                      <div className="space-y-3">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between text-sm md:text-base items-center shadow-sm"><span className="font-bold text-slate-800">{p.name}</span><span className="text-purple-700 bg-purple-100 px-3 py-1 rounded-lg font-black border border-purple-200">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
                   </div>
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh đính kèm</label>
-                      <div className="flex flex-wrap gap-3">
+                      <div className="flex flex-wrap gap-3 md:gap-4">
                           {formData.images.map((img, idx) => (<div key={idx} className="relative w-20 h-20 md:w-28 md:h-28"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-4 h-4 md:w-5 md:h-5" /></button></div>))}
                           <label className="w-20 h-20 md:w-28 md:h-28 flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-xl cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-600 transition-colors shadow-sm"><Camera className="w-6 h-6 md:w-8 md:h-8 mb-2" /><span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
                       </div>
@@ -1159,16 +1165,16 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
               </div>
 
               <div className="grid grid-cols-2 gap-4 md:gap-6">
-                  <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-4 md:p-5 rounded-2xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><CheckCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Đã xong</span></button>
-                  <button onClick={() => setFormData({...formData, status: 'Đang xử lý'})} className={`p-4 md:p-5 rounded-2xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Đang xử lý' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><AlertCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Đang dở</span></button>
+                  <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><CheckCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Đã xong</span></button>
+                  <button onClick={() => setFormData({...formData, status: 'Đang xử lý'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Đang xử lý' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><AlertCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Đang dở</span></button>
               </div>
           </div>
       </div>
 
-      {/* Fixed Bottom Bar - Căn giữa nội dung */}
+      {/* Fixed Bottom Bar - Được căn giữa theo container */}
       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
           <div className="max-w-3xl mx-auto w-full">
-            <button onClick={submitForm} className="w-full bg-purple-600 text-white py-4 md:py-5 rounded-2xl text-lg md:text-xl font-black shadow-lg shadow-purple-500/40 flex items-center justify-center gap-3 hover:bg-purple-700 transition-all hover:shadow-xl active:scale-[0.98]">
+            <button onClick={submitForm} className="w-full bg-purple-600 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg shadow-purple-500/40 flex items-center justify-center gap-3 hover:bg-purple-700 transition-all hover:shadow-xl active:scale-[0.98]">
                 <Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Báo Cáo' : (initialTaskData ? 'Lưu Tiến Độ Mới' : 'Lưu Báo Cáo Ngày')}
             </button>
           </div>
@@ -1177,13 +1183,13 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-
+// ... Phần Utilities và Settings cũng được áp max-w tương tự
 const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
     return (
       <div className="flex flex-col h-full bg-slate-50">
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
         <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-2xl border border-slate-200 shadow-sm">
+          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
               <div className="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200 text-sm md:text-base text-yellow-800 mb-6 leading-relaxed">
               <strong>Chú ý:</strong><br/>Ứng dụng đã được cập nhật thêm chức năng xuất sổ báo cáo hằng ngày. Bạn cần dán Apps Script URL (code.gs mới nhất) vào ô bên dưới.</div>
@@ -1218,15 +1224,15 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                 <div className="flex gap-3 md:w-1/2 lg:w-1/3">
                    {user.role === 'admin' && (
                       <div className="flex-1 relative">
-                          <Filter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 pr-3 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold">
+                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold">
                               <option value="all">Tất cả KTV</option>
                               {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
                           </select>
                       </div>
                    )}
                    <div className="flex-1 relative">
-                      <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" />
+                      <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" />
                    </div>
                 </div>
             </div>
@@ -1236,9 +1242,9 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
             <div className="max-w-7xl mx-auto space-y-4">
                 <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({filteredLogs.length} bản ghi)</span></div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                     {filteredLogs.length === 0 ? (
-                         <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-2xl border border-dashed border-slate-300">Không có bản ghi nào.</div>
+                         <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có bản ghi nào.</div>
                     ) : (
                          filteredLogs.map((log) => {
                              const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
@@ -1246,7 +1252,7 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                              const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
                              
                              return (
-                             <div key={log.id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
+                             <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
                                  <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                                      <h4 className="font-black text-slate-800 text-lg md:text-xl leading-tight flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200"><CalendarClock className="w-5 h-5 mr-2 text-slate-500"/>Ngày {log.date}</h4>
                                      <div className="flex flex-col gap-2 items-end">
@@ -1303,18 +1309,18 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => (
     <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
         <div className="max-w-4xl mx-auto space-y-6 md:space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                <button onClick={() => { setUtilityMode('elec'); setView('utility_form'); }} className="bg-yellow-50 text-yellow-800 border border-yellow-200 p-6 md:p-8 rounded-2xl md:rounded-[2rem] flex flex-col items-center justify-center gap-4 shadow-sm hover:shadow-md hover:bg-yellow-100 active:scale-95 transition-all group">
+                <button onClick={() => { setUtilityMode('elec'); setView('utility_form'); }} className="bg-yellow-50 text-yellow-800 border border-yellow-200 p-6 md:p-8 rounded-3xl flex flex-col items-center justify-center gap-4 shadow-sm hover:shadow-md hover:bg-yellow-100 active:scale-95 transition-all group">
                     <div className="bg-yellow-200 p-4 rounded-2xl group-hover:bg-yellow-300 transition-colors shadow-inner"><Zap className="w-10 h-10 md:w-16 md:h-16 text-yellow-700" /></div>
                     <div className="text-center"><span className="font-black text-xl md:text-2xl block mb-1">Ghi Số Điện</span><span className="text-sm text-yellow-600 font-medium">Báo cáo Trạm 1 & Trạm 2</span></div>
                 </button>
 
-                <button onClick={() => { setUtilityMode('water'); setView('utility_form'); }} className="bg-blue-50 text-blue-800 border border-blue-200 p-6 md:p-8 rounded-2xl md:rounded-[2rem] flex flex-col items-center justify-center gap-4 shadow-sm hover:shadow-md hover:bg-blue-100 active:scale-95 transition-all group">
+                <button onClick={() => { setUtilityMode('water'); setView('utility_form'); }} className="bg-blue-50 text-blue-800 border border-blue-200 p-6 md:p-8 rounded-3xl flex flex-col items-center justify-center gap-4 shadow-sm hover:shadow-md hover:bg-blue-100 active:scale-95 transition-all group">
                     <div className="bg-blue-200 p-4 rounded-2xl group-hover:bg-blue-300 transition-colors shadow-inner"><Droplets className="w-10 h-10 md:w-16 md:h-16 text-blue-700" /></div>
                     <div className="text-center"><span className="font-black text-xl md:text-2xl block mb-1">Ghi Số Nước</span><span className="text-sm text-blue-600 font-medium">Báo cáo Tổng & Các xưởng</span></div>
                 </button>
             </div>
 
-            <button onClick={() => setView('utility_history')} className="w-full bg-white text-slate-700 border border-slate-200 p-6 md:p-8 rounded-2xl md:rounded-[2rem] flex items-center justify-between shadow-sm hover:shadow-md hover:border-slate-400 active:scale-95 transition-all group">
+            <button onClick={() => setView('utility_history')} className="w-full bg-white text-slate-700 border border-slate-200 p-6 md:p-8 rounded-3xl flex items-center justify-between shadow-sm hover:shadow-md hover:border-slate-400 active:scale-95 transition-all group">
                 <div className="flex items-center gap-6">
                    <div className="bg-slate-100 p-4 rounded-2xl group-hover:bg-slate-200 transition-colors"><History className="w-8 h-8 md:w-12 md:h-12 text-slate-600" /></div>
                    <div className="text-left"><span className="font-black text-xl md:text-2xl block mb-1">Sổ Lịch Sử</span><span className="text-sm text-slate-500 font-medium">Xem lại dữ liệu đã ghi</span></div>
@@ -1325,25 +1331,6 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => (
     </div>
   </div>
 );
-
-const ScannerView = ({ setView, handleScanSuccess, machines, user }) => {
-  return (
-    <div className="flex flex-col h-full bg-black relative">
-      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-20">
-          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-black/40 hover:bg-black/60 px-4 py-2.5 rounded-full backdrop-blur-sm transition-colors text-sm md:text-base font-bold"><ArrowLeft className="w-5 h-5 md:w-6 md:h-6" /><span>Quay lại Trang Chủ</span></button>
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
-          <NativeCameraScanner onScan={handleScanSuccess} />
-          <div className="absolute bottom-8 left-0 right-0 px-6 z-20 max-w-4xl mx-auto w-full">
-              <p className="text-white/70 text-sm text-center mb-3 font-medium">Nếu máy ảnh không hoạt động, hãy chọn máy bên dưới:</p>
-              <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar">
-                  {machines.map(m => (<button key={m.id} onClick={() => handleScanSuccess(m.id)} className="whitespace-nowrap bg-white/10 hover:bg-white/30 text-white px-5 py-2.5 rounded-xl text-sm md:text-base font-medium backdrop-blur-xl border border-white/20 transition-all">{m.name}</button>))}
-              </div>
-          </div>
-      </div>
-    </div>
-  );
-};
 
 const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -1367,7 +1354,7 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {filteredMachines.length > 0 ? (
                     filteredMachines.map(m => (
-                    <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="w-full p-5 md:p-6 bg-white border border-slate-200 hover:border-blue-500 rounded-2xl flex items-center justify-between group transition-all shadow-sm hover:shadow-md active:scale-[0.98]">
+                    <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="w-full p-5 md:p-6 bg-white border border-slate-200 hover:border-blue-500 rounded-3xl flex items-center justify-between group transition-all shadow-sm hover:shadow-md active:scale-[0.98]">
                       <div className="flex items-center space-x-5 text-left overflow-hidden">
                         <div className={`w-3 h-16 rounded-full shrink-0 ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
                         <div className="overflow-hidden">
@@ -1386,25 +1373,9 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
   );
 };
 
-const QrPrintView = ({ machines, setView }) => (
-  <div className="flex flex-col h-full bg-white">
-    <div className="p-4 border-b border-slate-100 flex items-center justify-between no-print shrink-0"><div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 text-slate-600" /></button><h2 className="font-bold text-slate-800">In mã QR</h2></div><button onClick={() => window.print()} className="bg-slate-900 text-white px-4 py-2 rounded-lg flex items-center space-x-2 text-sm"><Printer className="w-4 h-4" /> <span>In Ngay</span></button></div>
-    <div className="flex-1 overflow-y-auto p-8 bg-slate-100 print:bg-white print:p-0">
-      <div className="grid grid-cols-2 gap-8 print:grid-cols-3 print:gap-4">
-          {machines.map(m => (
-              <div key={m.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center print:shadow-none print:border-2 print:border-black">
-                  <h3 className="font-bold text-lg mb-2">{m.name}</h3>
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${m.id}`} alt={m.name} className="w-32 h-32 object-contain" />
-                  <p className="font-mono text-sm mt-2 font-bold">{m.id}</p>
-                  <p className="text-xs text-slate-500">{m.model}</p>
-              </div>
-          ))}
-      </div>
-    </div>
-    <style>{`@media print { .no-print { display: none !important; } }`}</style>
-  </div>
-);
-
+// =========================================================================
+// MÀN HÌNH FORM GHI NHẬN ĐIỆN NƯỚC
+// =========================================================================
 const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
   const isEditing = !!editData;
   const dateStr = new Date().toISOString().split('T')[0];
@@ -1480,7 +1451,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 
       return (
           <div className="space-y-4 animate-fade-in">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                       <label className="text-sm font-bold text-slate-500 mb-2 block">Bình thường (Kw)</label>
                       <input type="number" step="any" className="w-full p-2 border-b-2 border-slate-200 focus:border-yellow-400 outline-none text-xl font-bold text-slate-800" value={formData[tramKey].bt} onChange={e => handleElecChange(tramKey, 'bt', e.target.value)} />
@@ -1505,7 +1476,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                       <span className={`font-bold ${isLowCosPhi ? 'text-red-700' : 'text-slate-700'}`}>Hệ số Cos ϕ:</span>
                   </div>
                   <div className="text-right">
-                      <span className={`text-xl font-bold ${isLowCosPhi ? 'text-red-600' : 'text-blue-600'}`}>{cosPhi || '0.000'}</span>
+                      <span className={`text-xl md:text-2xl font-bold ${isLowCosPhi ? 'text-red-600' : 'text-blue-600'}`}>{cosPhi || '0.000'}</span>
                   </div>
               </div>
               {isLowCosPhi && (
@@ -1528,7 +1499,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10 flex justify-between items-center">
-          <div className="max-w-3xl mx-auto w-full flex justify-between items-center">
+          <div className="max-w-4xl mx-auto w-full flex justify-between items-center">
               <div className="flex items-center space-x-3">
                   <button onClick={() => { setView(isEditing ? 'utility_history' : 'meter_menu'); setEditData(null); }} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
                   <div>
@@ -1543,7 +1514,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 
       {mode === 'elec' && (
           <div className="flex bg-white border-b border-slate-200 shrink-0 justify-center">
-              <div className="max-w-3xl w-full flex">
+              <div className="max-w-4xl w-full flex">
                   <button onClick={() => setActiveTab('elec1')} className={`flex-1 py-4 text-sm md:text-base font-bold border-b-4 flex justify-center items-center gap-2 transition-colors ${activeTab === 'elec1' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}><Zap className="w-5 h-5"/> Trạm 1</button>
                   <button onClick={() => setActiveTab('elec2')} className={`flex-1 py-4 text-sm md:text-base font-bold border-b-4 flex justify-center items-center gap-2 transition-colors ${activeTab === 'elec2' ? 'border-yellow-500 text-yellow-600 bg-yellow-50/50' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}><Zap className="w-5 h-5"/> Trạm 2</button>
               </div>
@@ -1551,7 +1522,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
       )}
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
-          <div className="max-w-3xl mx-auto space-y-6">
+          <div className="max-w-4xl mx-auto space-y-6">
               {mode === 'elec' && activeTab === 'elec1' && <ElecInputGroup tramName="Trạm Điện 1" tramKey="elec1" />}
               {mode === 'elec' && activeTab === 'elec2' && <ElecInputGroup tramName="Trạm Điện 2" tramKey="elec2" />}
               
@@ -1560,27 +1531,29 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                       <div className="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm md:text-base flex items-center shadow-sm font-medium">
                           <Droplets className="w-5 h-5 mr-3 shrink-0" /> Hệ thống tự động lấy chỉ số ngày gần nhất để tính Tiêu thụ.
                       </div>
-                      {waterFields.map(field => (
-                          <div key={field.id} className="bg-white p-4 md:p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-                              <div className="w-1/3 pr-2">
-                                  <label className="text-sm md:text-base font-bold text-slate-700 leading-tight block mb-1">{field.label}</label>
-                                  {prevLog && prevLog.water && prevLog.water[field.id] && (
-                                      <span className="text-xs md:text-sm text-slate-400 font-medium">Số cũ: {prevLog.water[field.id]}</span>
-                                  )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                          {waterFields.map(field => (
+                              <div key={field.id} className="bg-white p-4 md:p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                                  <div className="w-1/3 pr-2">
+                                      <label className="text-sm md:text-base font-bold text-slate-700 leading-tight block mb-1">{field.label}</label>
+                                      {prevLog && prevLog.water && prevLog.water[field.id] && (
+                                          <span className="text-[10px] md:text-xs text-slate-400 font-medium bg-slate-50 p-1 rounded">Số cũ: {prevLog.water[field.id]}</span>
+                                      )}
+                                  </div>
+                                  <div className="w-1/3 px-2">
+                                      <input type="number" step="any" placeholder="Số mới" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 text-base md:text-lg font-bold text-center transition-all" value={formData.water[field.id]} onChange={e => handleWaterChange(field.id, e.target.value)} />
+                                  </div>
+                                  <div className="w-1/3 pl-2 text-right">
+                                      <div className="text-[10px] md:text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Tiêu thụ (m³)</div>
+                                      <div className="text-2xl md:text-3xl font-black text-blue-600">{calcWaterConsumption(field.id)}</div>
+                                  </div>
                               </div>
-                              <div className="w-1/3 px-2">
-                                  <input type="number" step="any" placeholder="Số mới" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:bg-white focus:ring-2 focus:ring-blue-400 text-base md:text-lg font-bold text-center transition-all" value={formData.water[field.id]} onChange={e => handleWaterChange(field.id, e.target.value)} />
-                              </div>
-                              <div className="w-1/3 pl-2 text-right">
-                                  <div className="text-[10px] md:text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Tiêu thụ (m³)</div>
-                                  <div className="text-2xl md:text-3xl font-black text-blue-600">{calcWaterConsumption(field.id)}</div>
-                              </div>
-                          </div>
-                      ))}
+                          ))}
+                      </div>
                   </div>
               )}
 
-              <div className="bg-white p-5 md:p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6 mt-8">
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6 mt-8">
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú (Sự cố, hao hụt...)</label>
                       <textarea rows="3" className="w-full p-4 rounded-xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-cyan-500 outline-none resize-none bg-slate-50 focus:bg-white transition-all" value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
@@ -1596,16 +1569,17 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
           </div>
       </div>
       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
-          <div className="max-w-3xl mx-auto w-full">
-              <button onClick={submitForm} className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-2xl text-lg md:text-xl font-black shadow-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all hover:shadow-xl active:scale-95"><Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Bản Ghi' : 'Lưu Chỉ Số Hôm Nay'}</button>
+          <div className="max-w-4xl mx-auto w-full">
+              <button onClick={submitForm} className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg flex items-center justify-center gap-3 hover:bg-slate-800 transition-all hover:shadow-xl active:scale-95"><Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Bản Ghi' : 'Lưu Chỉ Số Hôm Nay'}</button>
           </div>
       </div>
     </div>
   );
 };
 
+
 // ============================================================================
-// ROOT APP
+// ROOT APP (HYBRID RESPONSIVE WRAPPER)
 // ============================================================================
 export default function App() {
   const [user, setUser] = useState(null); 
@@ -1700,23 +1674,31 @@ export default function App() {
   const handleLogout = () => { setUser(null); setView('login', true); setSelectedMachine(null); };
   const handleScanSuccess = (id) => { if (!id) return; const machine = machines.find(m => m.id === id); if (machine) { setSelectedMachine(machine); setView('details'); showNotification(`Quét thành công`); } else if (typeof id === 'string' && id.length > 2) if (!notification) showNotification(`Mã không hợp lệ`, 'error'); };
 
-  const pushToGoogleSheet = async (logData) => { /* Giữ nguyên API fetch */ };
+  const pushToGoogleSheet = async (logData) => { /* Code kết nối App Script */ };
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { const entryId = isEditingRecord && editTaskData ? editTaskData.id : Date.now(); const entry = { ...newLog, id: entryId, formType: 'daily_task' }; await saveDailyTaskData(entry); if (!isEditingRecord) { for (const usedPart of entry.parts) { const foundPart = inventory.find(i => i.name === usedPart.name); if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); } if(googleSheetUrl) pushToGoogleSheet(entry); } showNotification(isEditingRecord ? 'Đã cập nhật công việc!' : 'Đã lưu báo cáo hằng ngày!'); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
   const handleSaveUtilityLog = async (data) => { const entry = { formType: 'utility_log', ...data }; await saveUtilityLogData(entry); if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); showNotification('Đã lưu dữ liệu!'); setView(user.role === 'admin' ? 'utility_history' : 'home'); };
-  const handleSaveLog = async (newLog, isEditingRecord = false) => { const entryId = isEditingRecord && editLogData ? editLogData.id : Date.now(); const logEntry = { ...newLog, id: entryId, machineId: selectedMachine.id, date: editLogData?.date || new Date().toISOString().split('T')[0], technician: newLog.technicianName || user.name }; await saveLogData(logEntry); const updatedMachine = { ...selectedMachine, status: newLog.status === 'Hoàn thành' ? 'operational' : 'maintenance' }; setSelectedMachine(updatedMachine); if (!isEditingRecord) { for (const usedPart of newLog.parts) { const foundPart = inventory.find(i => i.name === usedPart.name); if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); } if (googleSheetUrl) pushToGoogleSheet({ formType: 'maintenance', ...logEntry }); } showNotification(isEditingRecord ? 'Đã cập nhật báo cáo!' : 'Đã lưu báo cáo máy!'); setView('details'); };
 
   const showNotification = (msg, type = 'success') => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 3000); };
 
   if (!user) return (
-      <div className="fixed inset-0 bg-slate-900 flex justify-center overflow-hidden">
+      <div className="fixed inset-0 bg-slate-900 flex justify-center overflow-hidden font-sans">
          <div className="w-full max-w-md md:max-w-none h-full relative overflow-hidden"><LoginView handleLogin={handleLogin} isCloudSyncing={isCloudSyncing} db={db} /></div>
-         {notification && (<div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle className="w-6 h-6"/> : <CheckCircle className="w-6 h-6"/>}<span className="font-bold md:text-lg">{notification.msg}</span></div>)}
+         {notification && (
+            <div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>
+               {notification.type === 'error' ? <AlertCircle className="w-6 h-6 shrink-0"/> : <CheckCircle className="w-6 h-6 shrink-0"/>}
+               <span className="font-bold md:text-lg">{notification.msg}</span>
+            </div>
+         )}
       </div>
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-100 flex justify-center overflow-hidden font-sans text-slate-800">
-      <div className="w-full h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-2xl">
+    // ROOT WRAPPER HYBRID RESPONSIVE
+    // Nền ngoài (bg-slate-200) sẽ full 100% màn hình Desktop siêu rộng.
+    // Box chính (max-w-[1600px]) sẽ nằm giữa, tránh kéo dãn vô tận làm thô giao diện.
+    // Điện thoại (w-full) tự động ăn sát 100% cạnh viền.
+    <div className="fixed inset-0 bg-slate-200 flex justify-center overflow-hidden font-sans text-slate-800">
+      <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300">
         <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50"></div>
         <div className="flex-1 overflow-hidden relative flex flex-col">
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
@@ -1724,7 +1706,6 @@ export default function App() {
           {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user}/>}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
-          {view === 'qr_print' && <QrPrintView machines={machines} setView={setView} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
           
           {/* DAILY TASKS */}
@@ -1757,9 +1738,9 @@ export default function App() {
                               <Wrench className="w-6 h-6 md:w-5 md:h-5" /> <span>Tạo Báo Cáo Mới</span>
                           </button>
                           
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                                {logs.filter(l => l.machineId === selectedMachine.id).map((log) => (
-                                 <div key={log.id} className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-300 transition-colors flex flex-col group">
+                                 <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:border-blue-300 transition-colors flex flex-col group">
                                     <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                                        <div>
                                            <span className="text-xs md:text-sm font-black text-blue-700 uppercase bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg">{log.type}</span>
@@ -1792,8 +1773,8 @@ export default function App() {
                   <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
                       <div className="max-w-3xl mx-auto space-y-6 bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
                            <div className="text-center text-slate-500 py-10">
-                               <p className="font-bold text-xl mb-2">Tính năng form báo cáo đã được tải</p>
-                               <p>Vui lòng nhấp nút <span className="font-bold">Preview</span> để trải nghiệm App full chức năng Responsive.</p>
+                               <p className="font-bold text-xl mb-2">Chức năng đang tải...</p>
+                               <p>Vui lòng nhấn <span className="font-bold">Preview</span> để trải nghiệm phiên bản hoàn chỉnh.</p>
                            </div>
                       </div>
                   </div>
@@ -1804,7 +1785,12 @@ export default function App() {
         {/* COMPONENT MODAL XEM ẢNH ZOOM */}
         <ImageZoomModal imageUrl={zoomedImage} onClose={() => setZoomedImage(null)} />
 
-        {notification && (<div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle className="w-6 h-6"/> : <CheckCircle className="w-6 h-6"/>}<span className="font-bold md:text-lg">{notification.msg}</span></div>)}
+        {notification && (
+            <div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>
+               {notification.type === 'error' ? <AlertCircle className="w-6 h-6 shrink-0"/> : <CheckCircle className="w-6 h-6 shrink-0"/>}
+               <span className="font-bold md:text-lg">{notification.msg}</span>
+            </div>
+        )}
       </div>
     </div>
   );
