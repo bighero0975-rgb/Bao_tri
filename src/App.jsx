@@ -124,7 +124,7 @@ const NativeCameraScanner = ({ onScan }) => {
 };
 
 // ============================================================================
-// COMPONENT DÙNG CHUNG: BẢNG CẢNH BÁO XÓA (MODAL)
+// COMPONENT DÙNG CHUNG: BẢNG CẢNH BÁO XÓA & XEM ẢNH ZOOM
 // ============================================================================
 const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
@@ -145,6 +145,32 @@ const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => 
           </button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// Component Modal xem ảnh lớn
+const ImageZoomModal = ({ imageUrl, onClose }) => {
+  if (!imageUrl) return null;
+  return (
+    <div 
+      className="fixed inset-0 z-[200] bg-black/90 flex flex-col items-center justify-center backdrop-blur-sm animate-fade-in cursor-zoom-out"
+      onClick={onClose}
+    >
+      <div className="absolute top-4 right-4 z-[210]">
+        <button 
+          onClick={onClose} 
+          className="bg-black/50 text-white p-2.5 rounded-full hover:bg-red-600 transition-colors border border-white/20 shadow-lg"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+      <img 
+        src={imageUrl} 
+        className="max-w-full max-h-full object-contain p-2 cursor-default" 
+        onClick={(e) => e.stopPropagation()} 
+        alt="Zoomed preview" 
+      />
     </div>
   );
 };
@@ -523,7 +549,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
       water: { tong: '', tuoiCay: '', vanPhong: '', nhaAnVpc: '', nhaAnXuong: '', congChinh: '', congPhu: '' }
   });
 
-  const [activeTab, useState] = React.useState(mode === 'water' ? 'water' : 'elec1'); 
+  const [activeTab, setActiveTab] = useState(mode === 'water' ? 'water' : 'elec1'); 
 
   const prevLog = [...utilityLogs]
       .filter(log => log.id !== formData.id && new Date(log.date) <= new Date(formData.date))
@@ -672,7 +698,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                               <input type="number" step="any" placeholder="Số mới" className="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold text-center" value={formData.water[field.id]} onChange={e => handleWaterChange(field.id, e.target.value)} />
                           </div>
                           <div className="w-1/3 pl-2 text-right">
-                              <div className="text-[10px] text-slate-500 uppercase font-bold">Tiêu thụ ($m^3$)</div>
+                              <div className="text-[10px] text-slate-500 uppercase font-bold">Tiêu thụ (m³)</div>
                               <div className="text-lg font-bold text-blue-600">{calcWaterConsumption(field.id)}</div>
                           </div>
                       </div>
@@ -702,7 +728,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 // =========================================================================
 // MÀN HÌNH LỊCH SỬ ĐIỆN NƯỚC
 // =========================================================================
-const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode }) => {
+const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   
@@ -782,7 +808,13 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                          {log.images && log.images.length > 0 && (
                            <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
                              {log.images.map((img, idx) => (
-                                <img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" alt="Log" />
+                                <img 
+                                  key={idx} 
+                                  src={img} 
+                                  onClick={() => setZoomedImage(img)}
+                                  className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
+                                  alt="Log" 
+                                />
                              ))}
                            </div>
                          )}
@@ -1375,11 +1407,11 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
   );
 };
 
-const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, handleDeleteMachineApp, handleDeleteLogApp, setEditLogData, showNotification }) => {
+const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, handleDeleteMachineApp, handleDeleteLogApp, setEditLogData, showNotification, setZoomedImage }) => {
   const machineLogs = logs.filter(l => l.machineId === selectedMachine.id);
   const [isEditingMachine, setIsEditingMachine] = useState(false);
   const [editMachineData, setEditMachineData] = useState(selectedMachine);
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: '', id: null }); // type: 'machine' hoặc 'log'
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, type: '', id: null });
 
   useEffect(() => {
     setEditMachineData(selectedMachine);
@@ -1531,7 +1563,13 @@ const DetailsView = ({ selectedMachine, setView, logs, user, saveMachineData, ha
                          {log.images && log.images.length > 0 && (
                            <div className="flex gap-2 mt-2 overflow-x-auto pb-1 custom-scrollbar">
                              {log.images.map((img, idx) => (
-                                <img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" alt="Báo cáo" />
+                                <img 
+                                  key={idx} 
+                                  src={img} 
+                                  onClick={() => setZoomedImage(img)}
+                                  className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
+                                  alt="Báo cáo" 
+                                />
                              ))}
                            </div>
                          )}
@@ -1812,7 +1850,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification }) => {
+const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterDateStr, setFilterDateStr] = useState(taskFilter === 'pending' ? '' : new Date().toISOString().split('T')[0]); 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
@@ -1919,7 +1957,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                          {task.images && task.images.length > 0 && (
                            <div className="flex gap-2 mt-3 overflow-x-auto pb-1 custom-scrollbar">
                              {task.images.map((img, idx) => (
-                                <img key={idx} src={img} className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0" alt="BC" />
+                                <img 
+                                  key={idx} 
+                                  src={img} 
+                                  onClick={() => setZoomedImage(img)}
+                                  className="w-16 h-16 object-cover rounded-lg border border-slate-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity" 
+                                  alt="BC" 
+                                />
                              ))}
                            </div>
                          )}
@@ -1949,6 +1993,9 @@ export default function App() {
   const [view, setViewInternal] = useState('login'); 
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
+  
+  // Trạng thái cho Cửa sổ Zoom Ảnh
+  const [zoomedImage, setZoomedImage] = useState(null);
   
   // Các state chỉnh sửa (Edit)
   const [utilityEditItem, setUtilityEditItem] = useState(null);
@@ -2237,19 +2284,23 @@ export default function App() {
           
           {/* DAILY TASKS */}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData}/>}
-          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} />}
+          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} />}
           
           {/* METER / UTILITY */}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
-          {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} />}
+          {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
           
           {/* MACHINE SPECIFIC */}
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
           {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
-          {view === 'details' && selectedMachine && <DetailsView user={user} logs={logs} selectedMachine={selectedMachine} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} handleDeleteMachineApp={handleDeleteMachineApp} handleDeleteLogApp={handleDeleteLogApp} setEditLogData={setEditLogData} />}
+          {view === 'details' && selectedMachine && <DetailsView user={user} logs={logs} selectedMachine={selectedMachine} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} handleDeleteMachineApp={handleDeleteMachineApp} handleDeleteLogApp={handleDeleteLogApp} setEditLogData={setEditLogData} setZoomedImage={setZoomedImage} />}
           {view === 'form' && <LogFormView selectedMachine={selectedMachine} user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveLog={handleSaveLog} editLogData={editLogData} />}
         </div>
+        
+        {/* COMPONENT MODAL XEM ẢNH ZOOM */}
+        <ImageZoomModal imageUrl={zoomedImage} onClose={() => setZoomedImage(null)} />
+
         {notification && (<div className={`absolute top-4 left-4 right-4 p-4 rounded-lg shadow-xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`}>{notification.type === 'error' ? <AlertCircle /> : <CheckCircle />}<span className="font-medium">{notification.msg}</span></div>)}
       </div>
     </div>
