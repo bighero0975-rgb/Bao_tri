@@ -135,7 +135,7 @@ const NativeCameraScanner = ({ onScan }) => {
 };
 
 // ============================================================================
-// COMPONENT DÙNG CHUNG: BẢNG CẢNH BÁO XÓA & XEM ẢNH ZOOM
+// COMPONENT DÙNG CHUNG
 // ============================================================================
 const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
@@ -146,14 +146,10 @@ const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => 
            <div className="bg-red-100 p-3 rounded-full"><AlertTriangle className="w-6 h-6 md:w-8 md:h-8" /></div>
            <h3 className="font-bold text-lg md:text-xl text-slate-800">{title || 'Xác nhận xóa'}</h3>
         </div>
-        <p className="text-slate-600 text-sm md:text-base mb-8 leading-relaxed">
-          {message || 'Bạn có chắc chắn muốn xóa dữ liệu này? Hành động này không thể hoàn tác.'}
-        </p>
+        <p className="text-slate-600 text-sm md:text-base mb-8 leading-relaxed">{message || 'Bạn có chắc chắn muốn xóa dữ liệu này? Hành động này không thể hoàn tác.'}</p>
         <div className="flex gap-3 justify-end">
           <button onClick={onCancel} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors text-sm md:text-base">Hủy bỏ</button>
-          <button onClick={onConfirm} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/30 text-sm md:text-base">
-            Xác nhận Xóa
-          </button>
+          <button onClick={onConfirm} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/30 text-sm md:text-base">Xác nhận Xóa</button>
         </div>
       </div>
     </div>
@@ -170,20 +166,13 @@ const ImageZoomModal = ({ imageUrl, onClose }) => {
   );
 };
 
-// ============================================================================
-// COMPONENT DÙNG CHUNG: DROPDOWN CHỌN VẬT TƯ CÓ TÌM KIẾM
-// ============================================================================
 const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPart, setTempPart, theme = 'blue' }) => {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef(null);
 
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
+        const handleClickOutside = (event) => { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setIsOpen(false); };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
@@ -199,8 +188,7 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
             const selectedItem = inventory.find(i => i.name === val);
             setTempPart({ ...tempPart, name: val, unit: selectedItem ? selectedItem.unit : '' });
         }
-        setIsOpen(false);
-        setSearch(''); 
+        setIsOpen(false); setSearch(''); 
     };
 
     const activeColor = theme === 'purple' ? 'text-purple-600' : 'text-blue-600';
@@ -244,7 +232,7 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
 };
 
 // ============================================================================
-// CÁC THÀNH PHẦN GIAO DIỆN CHÍNH (ĐÃ TỐI ƯU RESPONSIVE)
+// VIEWS CHÍNH CỦA HỆ THỐNG
 // ============================================================================
 
 const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
@@ -255,9 +243,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
     <div className="flex flex-col items-center justify-center h-full p-6 bg-slate-900 text-white animate-fade-in overflow-y-auto">
       <div className="w-full max-w-md space-y-8 my-auto">
         <div className="text-center space-y-3">
-          <div className="bg-blue-600 p-5 rounded-3xl inline-block shadow-lg shadow-blue-500/30">
-            <Wrench className="w-16 h-16 text-white" />
-          </div>
+          <div className="bg-blue-600 p-5 rounded-3xl inline-block shadow-lg shadow-blue-500/30"><Wrench className="w-16 h-16 text-white" /></div>
           <h1 className="text-4xl font-black tracking-tight">Martech Boiler</h1>
           <p className="text-slate-400 text-base">Hệ thống quản lý bảo trì & công việc</p>
         </div>
@@ -307,8 +293,6 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 md:space-y-8 pb-20 custom-scrollbar">
         <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
-          
-          {/* Hàng Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm flex flex-col justify-center">
               <h3 className="text-sm md:text-base font-bold text-slate-800 mb-4 flex items-center"><Database className="w-5 h-5 mr-2 text-blue-600"/> Máy móc & Thiết bị ({machines.length})</h3>
@@ -343,7 +327,6 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
             </div>
           </div>
           
-          {/* Menu Quản Trị */}
           <div>
             <h3 className="font-bold text-slate-800 text-lg md:text-2xl mb-4 md:mb-6 flex items-center"><Settings className="w-6 h-6 md:w-8 md:h-8 mr-2 text-slate-600" /> Hệ thống tính năng</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
@@ -383,9 +366,6 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
   );
 };
 
-// =========================================================================
-// MÀN HÌNH HOME COMPACT (BENTO GRID STYLE) -> RESPONSIVE
-// =========================================================================
 const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, setMachineFilter, setTaskFilter, setInitialTaskData, setEditTaskData }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
@@ -396,15 +376,11 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
 
   return (
     <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50">
-      {/* Header */}
       <div className="bg-blue-600 px-5 md:px-8 pt-8 md:pt-6 pb-12 md:pb-6 rounded-b-[2.5rem] md:rounded-none shrink-0 relative shadow-md z-0">
          <div className="max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3 md:gap-4">
                <div className="bg-white/20 p-3 md:p-4 rounded-2xl backdrop-blur-sm shadow-inner"><User className="w-6 h-6 md:w-8 md:h-8 text-white"/></div>
-               <div>
-                  <p className="text-blue-100 text-xs md:text-sm font-medium">Xin chào,</p>
-                  <h1 className="text-white font-bold text-xl md:text-3xl leading-tight break-words">{user.name}</h1>
-               </div>
+               <div><p className="text-blue-100 text-xs md:text-sm font-medium">Xin chào,</p><h1 className="text-white font-bold text-xl md:text-3xl leading-tight break-words">{user.name}</h1></div>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
                {user.role === 'admin' && <button onClick={() => setView('dashboard')} className="text-blue-700 font-bold text-[11px] md:text-sm uppercase bg-blue-50 px-3 md:px-4 py-2 md:py-2.5 rounded-xl md:rounded-2xl shadow-sm active:scale-95 hover:bg-white transition-all">Trang Quản Trị</button>}
@@ -415,10 +391,7 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
 
       <div className="flex-1 overflow-y-auto px-4 md:px-8 -mt-6 md:mt-0 md:pt-8 pb-20 space-y-4 md:space-y-8 custom-scrollbar relative z-10">
          <div className="max-w-7xl mx-auto space-y-4 md:space-y-8">
-             
-             {/* Bento Grid Top */}
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-                 {/* Khối Thống kê */}
                  <div className="bg-white rounded-3xl shadow-sm md:shadow-md border border-slate-200 p-5 md:p-6 grid grid-cols-3 gap-2 md:gap-4 divide-x divide-slate-100 h-full">
                     <div className="text-center px-1 md:px-3 cursor-pointer hover:bg-slate-50 transition-colors rounded-2xl flex flex-col justify-center" onClick={() => { setMachineFilter('operational'); setView('manual_select'); }}>
                        <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase mb-2 md:mb-3">Máy tốt</p>
@@ -434,14 +407,12 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
                     </div>
                  </div>
 
-                 {/* Nút Quét QR */}
                  <button onClick={() => setView('scanner')} className="lg:col-span-2 w-full h-full min-h-[120px] md:min-h-[140px] bg-slate-900 text-white p-5 md:p-8 rounded-3xl flex items-center justify-center gap-4 md:gap-6 shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
                      <div className="bg-white/20 p-3 md:p-5 rounded-2xl md:rounded-3xl"><QrCode className="w-8 h-8 md:w-12 md:h-12" /></div>
                      <span className="font-black text-2xl md:text-4xl tracking-wide">Quét Mã QR Máy</span>
                  </button>
              </div>
 
-             {/* Action Grid */}
              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
                  <button onClick={() => { setMachineFilter('all'); setView('manual_select'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 group">
                      <div className="bg-blue-50 p-3.5 md:p-4 rounded-2xl group-hover:bg-blue-500 transition-colors"><ListFilter className="w-6 h-6 md:w-8 md:h-8 text-blue-600 group-hover:text-white"/></div>
@@ -477,9 +448,6 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
   );
 };
 
-// =========================================================================
-// CÁC THÀNH PHẦN QUÉT QR, CHỌN THỦ CÔNG VÀ SỔ ĐIỆN NƯỚC (ĐÃ KHÔI PHỤC)
-// =========================================================================
 const ScannerView = ({ user, setView, handleScanSuccess, machines }) => {
   return (
     <div className="flex flex-col h-full bg-slate-900 text-white relative">
@@ -569,15 +537,52 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
      date: editData ? editData.date : dateStr,
      note: editData ? editData.note : '',
      images: editData && editData.images ? editData.images : [],
-     elec1: editData?.elec1 || { bt: '', cd: '', td: '' },
-     elec2: editData?.elec2 || { bt: '', cd: '', td: '' },
-     water: editData?.water || { gieng1: '', gieng2: '', gieng3: '', thuycuc: '' }
+     elec1: editData?.elec1 || { bt: '', cd: '', td: '', vc: '', cosphi: '' },
+     elec2: editData?.elec2 || { bt: '', cd: '', td: '', vc: '', cosphi: '' },
+     water: editData?.water || { tong: '', bvChinh: '', bvPhu: '', cantinVPC: '', cantinXuong: '', vpChinh: '', tuoiCay: '' }
   });
 
-  const handleSave = () => {
-     handleSaveUtilityLog(formData);
-     setEditData(null);
+  const handleElecChange = (tram, field, value) => {
+     const newData = { ...formData[tram], [field]: value };
+     if (['bt', 'cd', 'td', 'vc'].includes(field)) {
+         const bt = parseFloat(newData.bt) || 0;
+         const cd = parseFloat(newData.cd) || 0;
+         const td = parseFloat(newData.td) || 0;
+         const vc = parseFloat(newData.vc) || 0;
+         const ap = bt + cd + td;
+         if (ap > 0 || vc > 0) {
+             const cos = ap / Math.sqrt(ap * ap + vc * vc);
+             newData.cosphi = cos.toFixed(3);
+         } else {
+             newData.cosphi = '';
+         }
+     }
+     setFormData({ ...formData, [tram]: newData });
   };
+
+  const renderCosPhiInput = (tram) => {
+     const val = formData[tram].cosphi;
+     const isWarning = val !== '' && parseFloat(val) < 0.9 && parseFloat(val) > 0;
+     
+     return (
+         <div className="col-span-2 sm:col-span-3 mt-2">
+             <label className="text-xs font-bold text-yellow-700 mb-1 flex justify-between items-center">
+                 <span>Cos Phi (Hệ số Công suất) - Tự động tính</span>
+                 {isWarning && <span className="text-red-600 flex items-center animate-pulse bg-red-100 px-2 py-0.5 rounded-md"><AlertTriangle className="w-3 h-3 mr-1"/> &lt; 0.9 (Phạt vô công)</span>}
+             </label>
+             <input 
+                 readOnly 
+                 disabled
+                 placeholder="Hệ thống tự tính" 
+                 type="text" 
+                 value={val} 
+                 className={`w-full p-3.5 border rounded-xl outline-none font-black transition-all cursor-not-allowed ${isWarning ? 'border-red-500 bg-red-50 text-red-700 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'border-yellow-200 bg-yellow-100/50 text-yellow-800 opacity-80'}`} 
+             />
+         </div>
+     );
+  };
+
+  const handleSave = () => { handleSaveUtilityLog(formData); setEditData(null); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
@@ -585,52 +590,63 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
            <button onClick={() => {setEditData(null); setView(user.role === 'admin' ? 'utility_history' : 'meter_menu');}} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-2xl flex-1 flex items-center text-slate-800">{isElec ? <Zap className="w-6 h-6 mr-2 text-yellow-500"/> : <Droplets className="w-6 h-6 mr-2 text-blue-500"/>} Ghi Chỉ Số {isElec ? 'Điện' : 'Nước'}</h2>
        </div>
-       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 max-w-3xl mx-auto w-full pb-32 custom-scrollbar">
-          <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-             <div>
-                <label className="block text-sm font-bold text-slate-600 mb-2">Ngày ghi nhận</label>
-                <input type="date" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-bold transition-all" />
-             </div>
-             
-             {isElec ? (
-                <div className="space-y-6">
-                   <div className="bg-yellow-50 p-4 md:p-6 rounded-2xl border border-yellow-200">
-                      <h4 className="font-black text-yellow-800 text-lg mb-4 flex items-center"><Zap className="w-5 h-5 mr-1.5"/> Trạm 1</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Bình thường</label><input placeholder="Chỉ số" type="number" value={formData.elec1.bt} onChange={e=>setFormData({...formData, elec1: {...formData.elec1, bt: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Cao điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec1.cd} onChange={e=>setFormData({...formData, elec1: {...formData.elec1, cd: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Thấp điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec1.td} onChange={e=>setFormData({...formData, elec1: {...formData.elec1, td: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                      </div>
-                   </div>
-                   <div className="bg-yellow-50 p-4 md:p-6 rounded-2xl border border-yellow-200">
-                      <h4 className="font-black text-yellow-800 text-lg mb-4 flex items-center"><Zap className="w-5 h-5 mr-1.5"/> Trạm 2</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Bình thường</label><input placeholder="Chỉ số" type="number" value={formData.elec2.bt} onChange={e=>setFormData({...formData, elec2: {...formData.elec2, bt: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Cao điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec2.cd} onChange={e=>setFormData({...formData, elec2: {...formData.elec2, cd: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                         <div><label className="text-xs font-bold text-yellow-700 block mb-1">Thấp điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec2.td} onChange={e=>setFormData({...formData, elec2: {...formData.elec2, td: e.target.value}})} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
-                      </div>
-                   </div>
-                </div>
-             ) : (
-                <div className="bg-blue-50 p-4 md:p-6 rounded-2xl border border-blue-200">
-                    <h4 className="font-black text-blue-800 text-lg mb-4 flex items-center"><Droplets className="w-5 h-5 mr-1.5"/> Nước Tiêu Thụ</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Nước Giếng 1</label><input placeholder="Khối (m³)" type="number" value={formData.water.gieng1} onChange={e=>setFormData({...formData, water: {...formData.water, gieng1: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                       <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Nước Giếng 2</label><input placeholder="Khối (m³)" type="number" value={formData.water.gieng2} onChange={e=>setFormData({...formData, water: {...formData.water, gieng2: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                       <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Nước Giếng 3</label><input placeholder="Khối (m³)" type="number" value={formData.water.gieng3} onChange={e=>setFormData({...formData, water: {...formData.water, gieng3: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                       <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Nước Thủy cục</label><input placeholder="Khối (m³)" type="number" value={formData.water.thuycuc} onChange={e=>setFormData({...formData, water: {...formData.water, thuycuc: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+       
+       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
+          <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                 <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-2">Ngày ghi nhận</label>
+                    <input type="date" value={formData.date} onChange={e=>setFormData({...formData, date: e.target.value})} className="w-full p-4 bg-slate-50 border border-slate-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white font-bold transition-all" />
+                 </div>
+                 
+                 {isElec ? (
+                    <div className="space-y-6">
+                       <div className="bg-yellow-50 p-4 md:p-6 rounded-2xl border border-yellow-200">
+                          <h4 className="font-black text-yellow-800 text-lg mb-4 flex items-center"><Zap className="w-5 h-5 mr-1.5"/> Trạm 1</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Bình thường</label><input placeholder="Chỉ số" type="number" value={formData.elec1.bt} onChange={e=>handleElecChange('elec1', 'bt', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Cao điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec1.cd} onChange={e=>handleElecChange('elec1', 'cd', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Thấp điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec1.td} onChange={e=>handleElecChange('elec1', 'td', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Vô công (kVArh)</label><input placeholder="Chỉ số" type="number" value={formData.elec1.vc} onChange={e=>handleElecChange('elec1', 'vc', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             {renderCosPhiInput('elec1')}
+                          </div>
+                       </div>
+                       <div className="bg-yellow-50 p-4 md:p-6 rounded-2xl border border-yellow-200">
+                          <h4 className="font-black text-yellow-800 text-lg mb-4 flex items-center"><Zap className="w-5 h-5 mr-1.5"/> Trạm 2</h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 md:gap-4">
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Bình thường</label><input placeholder="Chỉ số" type="number" value={formData.elec2.bt} onChange={e=>handleElecChange('elec2', 'bt', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Cao điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec2.cd} onChange={e=>handleElecChange('elec2', 'cd', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Thấp điểm</label><input placeholder="Chỉ số" type="number" value={formData.elec2.td} onChange={e=>handleElecChange('elec2', 'td', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             <div><label className="text-xs font-bold text-yellow-700 block mb-1">Vô công (kVArh)</label><input placeholder="Chỉ số" type="number" value={formData.elec2.vc} onChange={e=>handleElecChange('elec2', 'vc', e.target.value)} className="w-full p-3.5 border border-yellow-300 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500 font-bold" /></div>
+                             {renderCosPhiInput('elec2')}
+                          </div>
+                       </div>
                     </div>
-                </div>
-             )}
-             
-             <div>
-                <label className="block text-sm font-bold text-slate-600 mb-2">Ghi chú thêm</label>
-                <textarea placeholder="Mô tả nếu có bất thường..." className="w-full p-4 border border-slate-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] bg-slate-50 focus:bg-white transition-all" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})}></textarea>
-             </div>
+                 ) : (
+                    <div className="bg-blue-50 p-4 md:p-6 rounded-2xl border border-blue-200">
+                        <h4 className="font-black text-blue-800 text-lg mb-4 flex items-center"><Droplets className="w-5 h-5 mr-1.5"/> Nước Tiêu Thụ</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                           <div className="sm:col-span-2"><label className="text-sm font-bold text-blue-800 mb-1.5 block">Đồng hồ tổng</label><input placeholder="Khối (m³)" type="number" value={formData.water.tong} onChange={e=>setFormData({...formData, water: {...formData.water, tong: e.target.value}})} className="w-full p-3.5 border border-blue-400 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold shadow-sm" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Bảo vệ cổng chính</label><input placeholder="Khối (m³)" type="number" value={formData.water.bvChinh} onChange={e=>setFormData({...formData, water: {...formData.water, bvChinh: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Bảo vệ cổng phụ</label><input placeholder="Khối (m³)" type="number" value={formData.water.bvPhu} onChange={e=>setFormData({...formData, water: {...formData.water, bvPhu: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Căn tin VPC</label><input placeholder="Khối (m³)" type="number" value={formData.water.cantinVPC} onChange={e=>setFormData({...formData, water: {...formData.water, cantinVPC: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Căn tin xưởng</label><input placeholder="Khối (m³)" type="number" value={formData.water.cantinXuong} onChange={e=>setFormData({...formData, water: {...formData.water, cantinXuong: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Văn phòng chính</label><input placeholder="Khối (m³)" type="number" value={formData.water.vpChinh} onChange={e=>setFormData({...formData, water: {...formData.water, vpChinh: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Tưới cây</label><input placeholder="Khối (m³)" type="number" value={formData.water.tuoiCay} onChange={e=>setFormData({...formData, water: {...formData.water, tuoiCay: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                        </div>
+                    </div>
+                 )}
+              </div>
+              
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+                 <label className="block text-sm font-bold text-slate-600 mb-2">Ghi chú thêm</label>
+                 <textarea placeholder="Mô tả nếu có bất thường..." className="w-full p-4 border border-slate-300 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] bg-slate-50 focus:bg-white transition-all" value={formData.note} onChange={e=>setFormData({...formData, note: e.target.value})}></textarea>
+              </div>
           </div>
        </div>
-       <div className="absolute bottom-0 w-full p-4 md:p-6 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-20">
-           <div className="max-w-3xl mx-auto">
+
+       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-white/95 backdrop-blur-xl border-t border-slate-200 z-20 shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)]">
+           <div className="max-w-3xl mx-auto w-full">
               <button onClick={handleSave} className={`w-full text-white py-4 md:py-5 rounded-2xl md:rounded-3xl font-black text-lg md:text-xl flex justify-center items-center gap-3 shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${isElec ? 'bg-yellow-600 hover:bg-yellow-700 shadow-yellow-500/40' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/40'}`}>
                  <Save className="w-6 h-6 md:w-7 md:h-7"/> {editData ? 'Cập Nhật Thay Đổi' : 'Lưu Chỉ Số Mới'}
               </button>
@@ -640,9 +656,6 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   );
 };
 
-// =========================================================================
-// MÀN HÌNH QUẢN LÝ TÀI KHOẢN (RESPONSIVE GRID)
-// =========================================================================
 const UserManagementView = ({ usersList, setView, showNotification, saveUserData, handleDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -652,24 +665,11 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   const filteredUsers = usersList.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.username.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleSave = async () => {
-      if (!editForm.username || !editForm.password || !editForm.name) {
-          return showNotification('Vui lòng điền đủ Tên ĐN, Mật khẩu, Họ tên!', 'error');
-      }
-      if (isAdding && usersList.find(u => u.username === editForm.username)) {
-          return showNotification('Tên đăng nhập đã tồn tại!', 'error');
-      }
-
-      await saveUserData({
-          id: editForm.id || `U-${Date.now()}`,
-          username: editForm.username,
-          password: editForm.password,
-          name: editForm.name,
-          role: editForm.role
-      });
-
+      if (!editForm.username || !editForm.password || !editForm.name) { return showNotification('Vui lòng điền đủ Tên ĐN, Mật khẩu, Họ tên!', 'error'); }
+      if (isAdding && usersList.find(u => u.username === editForm.username)) { return showNotification('Tên đăng nhập đã tồn tại!', 'error'); }
+      await saveUserData({ id: editForm.id || `U-${Date.now()}`, username: editForm.username, password: editForm.password, name: editForm.name, role: editForm.role });
       showNotification(isAdding ? 'Đã tạo tài khoản KTV mới' : 'Đã cập nhật tài khoản');
-      setEditingId(null);
-      setIsAdding(false);
+      setEditingId(null); setIsAdding(false);
   };
 
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance' }); }
@@ -739,9 +739,6 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   );
 };
 
-// =========================================================================
-// MÀN HÌNH QUẢN LÝ THIẾT BỊ (RESPONSIVE GRID & THÊM THỦ CÔNG)
-// =========================================================================
 const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -756,89 +753,56 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
   if (machineFilter === 'issue') baseMachines = machines.filter(m => m.status === 'maintenance' || m.status === 'broken');
 
-  const filteredMachines = baseMachines.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.id.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-  
+  const filteredMachines = baseMachines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
   const filterTitle = machineFilter === 'operational' ? '(Máy Đang Tốt)' : machineFilter === 'issue' ? '(Lỗi / Bảo Trì)' : '';
 
-  const startAdd = () => {
-      setIsAdding(true);
-      setEditingId(null);
-      setEditForm({ id: '', name: '', model: '', location: '', department: '', status: 'operational' });
-  };
-
-  const startEdit = (m) => {
-      setIsAdding(false);
-      setEditingId(m.id);
-      setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', status: m.status || 'operational' });
-  };
+  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', status: 'operational' }); };
+  const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', status: m.status || 'operational' }); };
 
   const handleSaveEdit = async () => {
       if (!editForm.name) { showNotification('Vui lòng nhập tên thiết bị!', 'error'); return; }
-      
       let finalId = editForm.id.trim();
       if (isAdding) {
-          if (!finalId) finalId = `M-${Date.now()}`; // Tự tạo mã nếu bỏ trống
-          if (machines.find(m => m.id === finalId)) {
-              showNotification('Mã thiết bị này đã tồn tại!', 'error');
-              return;
-          }
+          if (!finalId) finalId = `M-${Date.now()}`;
+          if (machines.find(m => m.id === finalId)) { showNotification('Mã thiết bị này đã tồn tại!', 'error'); return; }
       }
-
       await saveMachineData({ ...editForm, id: finalId });
-      setEditingId(null);
-      setIsAdding(false);
+      setEditingId(null); setIsAdding(false);
       showNotification(isAdding ? 'Đã thêm thiết bị mới thành công!' : 'Đã cập nhật thiết bị!');
   };
 
   const handleConfirmDelete = async () => {
-      if (deleteModal.id) {
-          await handleDeleteMachineApp(deleteModal.id);
-          showNotification('Đã xóa thiết bị!');
-      }
+      if (deleteModal.id) { await handleDeleteMachineApp(deleteModal.id); showNotification('Đã xóa thiết bị!'); }
       setDeleteModal({ isOpen: false, id: null });
   };
 
   const handleExportExcel = async () => {
       try {
-        setIsLoading(true);
-        const XLSX = await loadXLSX();
+        setIsLoading(true); const XLSX = await loadXLSX();
         const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
         const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
-        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_Sach_May");
-        XLSX.writeFile(workbook, `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_Sach_May"); XLSX.writeFile(workbook, `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
         showNotification('Đã xuất file Excel thành công!');
       } catch (err) { showNotification('Lỗi khi xuất file Excel', 'error'); } finally { setIsLoading(false); }
   };
 
   const handleImportExcel = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
+      const file = e.target.files[0]; if (!file) return;
       try {
-        setIsLoading(true);
-        const XLSX = await loadXLSX();
-        const reader = new FileReader();
+        setIsLoading(true); const XLSX = await loadXLSX(); const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            const data = new Uint8Array(event.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
+            const data = new Uint8Array(event.target.result); const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0]; const worksheet = workbook.Sheets[firstSheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
             if (rows.length < 2) throw new Error("File trống hoặc sai định dạng");
             
             const newMachinesList = [];
             for (let i = 1; i < rows.length; i++) {
-              const cols = rows[i];
-              if (!cols || cols.length === 0) continue;
+              const cols = rows[i]; if (!cols || cols.length === 0) continue;
               const id = cols[0] ? String(cols[0]).trim() : '';
-              if (id) {
-                 newMachinesList.push({ id: id, name: cols[1] ? String(cols[1]).trim() : '', model: cols[2] ? String(cols[2]).trim() : '', location: cols[3] ? String(cols[3]).trim() : '', department: cols[4] ? String(cols[4]).trim() : '', status: cols[5] ? String(cols[5]).trim() : 'operational' });
-              }
+              if (id) newMachinesList.push({ id: id, name: cols[1] ? String(cols[1]).trim() : '', model: cols[2] ? String(cols[2]).trim() : '', location: cols[3] ? String(cols[3]).trim() : '', department: cols[4] ? String(cols[4]).trim() : '', status: cols[5] ? String(cols[5]).trim() : 'operational' });
             }
             let addedCount = 0; let updatedCount = 0;
             const promises = newMachinesList.map(newM => {
@@ -846,8 +810,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                 if (existingIndex > -1) updatedCount++; else addedCount++;
                 return saveMachineData({ ...(machines[existingIndex] || {}), ...newM });
             });
-            await Promise.all(promises);
-            showNotification(`Đã đồng bộ: Cập nhật ${updatedCount}, Thêm mới ${addedCount}`, 'success');
+            await Promise.all(promises); showNotification(`Đã đồng bộ: Cập nhật ${updatedCount}, Thêm mới ${addedCount}`, 'success');
           } catch (err) { showNotification('Lỗi đọc dữ liệu file Excel.', 'error'); } finally { setIsLoading(false); }
         };
         reader.readAsArrayBuffer(file);
@@ -885,7 +848,6 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
         <div className="max-w-7xl mx-auto space-y-4">
             
-            {/* Form tạo mới thiết bị */}
             {isAdding && (
                 <div className="bg-blue-50 p-5 md:p-8 rounded-3xl border border-blue-200 shadow-sm mb-6 animate-fade-in max-w-4xl mx-auto md:mx-0">
                     <h3 className="font-bold text-blue-800 mb-6 md:text-xl">Thêm thiết bị mới thủ công</h3>
@@ -909,9 +871,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                 </div>
             )}
 
-            <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4">
-                <span>Danh sách thiết bị {filterTitle} ({filteredMachines.length})</span>
-            </div>
+            <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>Danh sách thiết bị {filterTitle} ({filteredMachines.length})</span></div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
               {filteredMachines.length > 0 ? (
@@ -926,9 +886,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                                 <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
                             </div>
                             <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium">
-                                <option value="operational">Hoạt động tốt</option>
-                                <option value="maintenance">Đang bảo trì</option>
-                                <option value="broken">Bị hỏng</option>
+                                <option value="operational">Hoạt động tốt</option><option value="maintenance">Đang bảo trì</option><option value="broken">Bị hỏng</option>
                             </select>
                             <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-blue-100">
                                 <button onClick={() => setEditingId(null)} className="px-5 py-2.5 text-sm md:text-base bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
@@ -958,9 +916,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                      )}
                   </div>
                 ))
-              ) : (
-                <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>
-              )}
+              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>)}
             </div>
         </div>
       </div>
@@ -968,9 +924,6 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   );
 };
 
-// =========================================================================
-// KHO VẬT TƯ (RESPONSIVE GRID)
-// =========================================================================
 const InventoryView = ({ inventory, setView, showNotification, saveInventoryData, user }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -996,18 +949,12 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
     setNewItem({ name: '', unit: '', quantity: '' }); 
   };
 
-  const startEdit = (item) => {
-      setEditingId(item.id);
-      setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity });
-  };
+  const startEdit = (item) => { setEditingId(item.id); setEditForm({ name: item.name, unit: item.unit, quantity: item.quantity }); };
 
   const saveEdit = async () => {
       if (!editForm.name || !editForm.unit || editForm.quantity === '') { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
       const existingItem = inventory.find(i => i.id === editingId);
-      if (existingItem) {
-          await saveInventoryData({ ...existingItem, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) });
-          showNotification('Đã cập nhật thành công!');
-      }
+      if (existingItem) { await saveInventoryData({ ...existingItem, name: editForm.name, unit: editForm.unit, quantity: Number(editForm.quantity) }); showNotification('Đã cập nhật thành công!'); }
       setEditingId(null);
   };
 
@@ -1042,7 +989,6 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-6">
-            
             {user.role === 'admin' && (
               <div className="bg-slate-100 p-4 md:p-6 rounded-3xl border border-dashed border-slate-300 mb-6 max-w-4xl mx-auto md:mx-0">
                 <h3 className="text-xs md:text-sm uppercase font-bold text-slate-500 mb-4"><Plus className="w-4 h-4 inline mr-1 -mt-0.5"/> Thêm nhanh thủ công</h3>
@@ -1080,7 +1026,6 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
                         <div className="overflow-hidden pr-4">
                             <h4 className="font-bold text-slate-800 text-base md:text-lg mb-2 truncate" title={item.name}>{item.name}</h4>
                             <p className="text-xs md:text-sm text-slate-500 font-mono mt-1 bg-slate-50 inline-block px-2 py-1 rounded-lg border border-slate-100">{item.id}</p>
-                            
                             {user.role === 'admin' && (
                                 <div className="mt-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                     <button onClick={() => startEdit(item)} className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-blue-100 text-xs md:text-sm font-bold flex items-center"><Edit className="w-3 h-3 md:w-4 md:h-4 mr-1.5" /> Chỉnh sửa</button>
@@ -1106,10 +1051,7 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   );
 };
 
-// =========================================================================
-// MÀN HÌNH FORM BÁO CÁO MÁY CỤ THỂ (DÀNH CHO "TẠO BÁO CÁO MỚI")
-// =========================================================================
-const MachineLogFormView = ({ user, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData }) => {
+const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData }) => {
   const isEditing = !!editLogData;
   const dateStr = new Date().toISOString().split('T')[0];
 
@@ -1122,8 +1064,20 @@ const MachineLogFormView = ({ user, selectedMachine, setView, showNotification, 
       type: isEditing ? editLogData.type : 'Bảo dưỡng định kỳ',
       note: isEditing ? editLogData.note : '',
       status: isEditing ? editLogData.status : 'Hoàn thành',
-      images: isEditing ? (editLogData.images || []) : []
+      images: isEditing ? (editLogData.images || []) : [],
+      parts: isEditing ? (editLogData.parts || []) : []
   });
+
+  const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+  const [isCustomPart, setIsCustomPart] = useState(false);
+
+  const addPart = () => { 
+      if(tempPart.name && tempPart.quantity) { 
+          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
+          setTempPart({ name: '', unit: '', quantity: '' }); 
+          setIsCustomPart(false);
+      } else showNotification('Chọn/nhập vật tư và số lượng!', 'error');
+  };
 
   const handleImageUpload = (e) => {
       const file = e.target.files[0]; if (!file) return;
@@ -1169,24 +1123,27 @@ const MachineLogFormView = ({ user, selectedMachine, setView, showNotification, 
               
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      <div>
-                          <label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label>
-                          <input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label>
-                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                              <option>Bảo dưỡng định kỳ</option>
-                              <option>Sửa chữa đột xuất</option>
-                              <option>Kiểm tra lỗi</option>
-                              <option>Thay thế linh kiện</option>
-                          </select>
-                      </div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo dưỡng định kỳ</option><option>Sửa chữa đột xuất</option><option>Kiểm tra lỗi</option><option>Thay thế linh kiện</option></select></div>
                   </div>
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label>
                       <textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết tình trạng máy, các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+                  </div>
+
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Vật tư thay thế / sử dụng</label>
+                      <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200">
+                          <SearchablePartSelect inventory={inventory} isCustomPart={isCustomPart} setIsCustomPart={setIsCustomPart} tempPart={tempPart} setTempPart={setTempPart} theme="blue" />
+                          {isCustomPart && (<input placeholder="Nhập tên vật tư mới..." className="w-full p-3 border border-blue-300 rounded-xl text-base bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />)}
+                          <div className="flex flex-col md:flex-row gap-3">
+                              <input placeholder="Đơn vị" disabled={!isCustomPart} className={`flex-1 p-3 border border-slate-300 rounded-xl text-base font-medium ${!isCustomPart ? 'bg-slate-100 text-slate-500' : 'bg-white outline-none focus:ring-2 focus:ring-blue-500'}`} value={tempPart.unit} onChange={e => setTempPart({...tempPart, unit: e.target.value})} />
+                              <input placeholder="Số lượng dùng" type="number" className="flex-1 p-3 border border-slate-300 rounded-xl text-base font-bold text-center bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
+                              <button onClick={addPart} className="md:w-1/4 bg-blue-600 text-white p-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><Plus className="w-5 h-5" /> <span className="md:hidden">Thêm</span></button>
+                          </div>
+                      </div>
+                      <div className="space-y-3">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between text-sm md:text-base items-center shadow-sm"><span className="font-bold text-slate-800">{p.name}</span><span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg font-black border border-blue-200">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
                   </div>
 
                   <div>
@@ -1199,9 +1156,7 @@ const MachineLogFormView = ({ user, selectedMachine, setView, showNotification, 
                               </div>
                           ))}
                           <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors shadow-sm">
-                              <Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" />
-                              <span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span>
-                              <input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
+                              <Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
                           </label>
                       </div>
                   </div>
@@ -1225,9 +1180,6 @@ const MachineLogFormView = ({ user, selectedMachine, setView, showNotification, 
   );
 };
 
-// =========================================================================
-// LỊCH SỬ CÔNG VIỆC (RESPONSIVE GRID)
-// =========================================================================
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterMonthStr, setFilterMonthStr] = useState(taskFilter === 'pending' ? '' : new Date().toISOString().slice(0, 7)); 
@@ -1245,11 +1197,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const viewTitle = taskFilter === 'pending' ? 'Công Việc Đang Dở' : 'Sổ Ghi Công Việc';
 
   const startEdit = (task) => { setEditTaskData(task); setInitialTaskData(null); setView('daily_task_form'); };
-
-  const handleConfirmDelete = async () => {
-      if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); }
-      setDeleteModal({ isOpen: false, id: null });
-  };
+  const handleConfirmDelete = async () => { if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); } setDeleteModal({ isOpen: false, id: null }); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
@@ -1257,33 +1205,22 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center space-x-3">
-                   <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
-                   <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2>
-                </div>
-                
+                <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2></div>
                 <div className="flex gap-3 md:w-1/2 lg:w-1/3">
                    {user.role === 'admin' && (
                       <div className="flex-1 relative">
                           <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
-                              <option value="all">Tất cả KTV</option>
-                              {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
-                          </select>
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
-                   <div className="flex-1 relative">
-                      <input type="month" value={filterMonthStr} onChange={e => setFilterMonthStr(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
-                   </div>
+                   <div className="flex-1 relative"><input type="month" value={filterMonthStr} onChange={e => setFilterMonthStr(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" /></div>
                 </div>
             </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4">
-                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4">
-                    <span>{filterMonthStr ? `Tháng ${filterMonthStr}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span>
-                </div>
+                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{filterMonthStr ? `Tháng ${filterMonthStr}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span></div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                   {filteredTasks.length === 0 ? (
@@ -1292,22 +1229,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                        filteredTasks.map((task) => (
                            <div key={task.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-purple-300 transition-all flex flex-col group">
                                <div className="flex justify-between items-start mb-4">
-                                   <div className="pr-4">
-                                       <h4 className="font-bold text-slate-800 text-base md:text-lg leading-tight mb-2">{task.taskName}</h4>
-                                       <span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-md uppercase tracking-wider">{task.type}</span>
-                                   </div>
-                                   <div className="flex flex-col items-end gap-2 shrink-0">
-                                      <span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-md font-bold shadow-sm ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'}`}>{task.status}</span>
-                                   </div>
+                                   <div className="pr-4"><h4 className="font-bold text-slate-800 text-base md:text-lg leading-tight mb-2">{task.taskName}</h4><span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-md uppercase tracking-wider">{task.type}</span></div>
+                                   <div className="flex flex-col items-end gap-2 shrink-0"><span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-md font-bold shadow-sm ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'}`}>{task.status}</span></div>
                                </div>
                                
                                <div className="flex flex-col gap-2 mb-4">
-                                   <div className="flex items-center text-xs md:text-sm font-mono font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit">
-                                       <Clock className="w-4 h-4 mr-2 text-slate-400" /> {task.date} ({task.startTime} - {task.endTime})
-                                   </div>
-                                   <div className="flex items-center text-xs md:text-sm font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit">
-                                       <User className="w-4 h-4 mr-2 text-slate-400" /> {task.technicianName}
-                                   </div>
+                                   <div className="flex items-center text-xs md:text-sm font-mono font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit"><Clock className="w-4 h-4 mr-2 text-slate-400" /> {task.date} ({task.startTime} - {task.endTime})</div>
+                                   <div className="flex items-center text-xs md:text-sm font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit"><User className="w-4 h-4 mr-2 text-slate-400" /> {task.technicianName}</div>
                                </div>
                                
                                <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap flex-1 mb-4 bg-white p-3 md:p-4 border border-slate-100 rounded-xl leading-relaxed">{task.note}</p>
@@ -1315,31 +1243,16 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                {task.parts && task.parts.length > 0 && (
                                  <div className="mb-4">
                                    <div className="text-[10px] md:text-xs text-slate-400 mb-2 flex items-center uppercase font-bold"><Package className="w-4 h-4 mr-1.5"/> Vật tư thay thế:</div>
-                                   <div className="flex flex-wrap gap-2">
-                                     {task.parts.map((p, idx) => (
-                                       <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>
-                                     ))}
-                                   </div>
+                                   <div className="flex flex-wrap gap-2">{task.parts.map((p, idx) => (<span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>))}</div>
                                  </div>
                                )}
 
                                {task.images && task.images.length > 0 && (
-                                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">
-                                   {task.images.map((img, idx) => (
-                                      <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:shadow-md hover:scale-105 transition-all" alt="BC" />
-                                   ))}
-                                 </div>
+                                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">{task.images.map((img, idx) => (<img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:shadow-md hover:scale-105 transition-all" alt="BC" />))}</div>
                                )}
 
                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
-                                   {task.status === 'Đang xử lý' ? (
-                                       <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95">
-                                          <PlaySquare className="w-5 h-5" /> Tiếp tục CV
-                                       </button>
-                                   ) : (
-                                       <div className="flex-1"></div>
-                                   )}
-                                   
+                                   {task.status === 'Đang xử lý' ? (<button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95"><PlaySquare className="w-5 h-5" /> Tiếp tục CV</button>) : (<div className="flex-1"></div>)}
                                    <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                       <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
                                       <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
@@ -1354,10 +1267,6 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
     </div>
   );
 };
-
-// =========================================================================
-// MÀN HÌNH FORM GHI NHẬN HẰNG NGÀY (GIỚI HẠN MAX-WIDTH, CĂN GIỮA)
-// =========================================================================
 
 const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
@@ -1422,58 +1331,32 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       setEditTaskData(null);
   };
 
-  const handleBack = () => {
-      setInitialTaskData(null);
-      setEditTaskData(null);
-      setView(user.role === 'admin' ? 'daily_task_history' : 'home');
-  };
+  const handleBack = () => { setInitialTaskData(null); setEditTaskData(null); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4">
-              <button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
-              <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">
-                  <CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> 
-                  {isEditing ? 'Sửa Báo Cáo Ngày' : (initialTaskData ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}
-              </h2>
-          </div>
+          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (initialTaskData ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
           <div className="max-w-3xl mx-auto space-y-6">
-              {user.role === 'admin' && (
-                  <div className="bg-slate-100 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-600 mb-2">Người thực hiện (Admin nhập hộ)</label><input type="text" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-purple-500 outline-none font-bold" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} /></div>
-              )}
+              {user.role === 'admin' && (<div className="bg-slate-100 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-600 mb-2">Người thực hiện (Admin nhập hộ)</label><input type="text" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-purple-500 outline-none font-bold" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} /></div>)}
 
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Tên Công việc / Thiết bị <span className="text-red-500">*</span></label>
-                      <input type="text" autoFocus className="w-full p-4 rounded-2xl border border-slate-300 bg-slate-50 text-lg focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold placeholder:font-normal transition-all" placeholder="VD: Thay bóng đèn xưởng A, Đi dây mạng..." value={formData.taskName} onChange={e => setFormData({...formData, taskName: e.target.value})} />
-                  </div>
-                  
+                  <div><label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Tên Công việc / Thiết bị <span className="text-red-500">*</span></label><input type="text" autoFocus className="w-full p-4 rounded-2xl border border-slate-300 bg-slate-50 text-lg focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold placeholder:font-normal transition-all" placeholder="VD: Thay bóng đèn xưởng A, Đi dây mạng..." value={formData.taskName} onChange={e => setFormData({...formData, taskName: e.target.value})} /></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Sửa chữa chung</option><option>Bảo trì cơ sở vật chất</option><option>Hỗ trợ sản xuất</option><option>Khác</option></select></div>
                   </div>
-
                   <div className="grid grid-cols-2 gap-4 md:gap-6 bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100">
-                      <div>
-                          <label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label>
-                          <input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} />
-                      </div>
-                      <div>
-                          <label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label>
-                          <input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} />
-                      </div>
+                      <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
+                      <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
                   </div>
               </div>
 
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label>
-                      <textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
-                  </div>
+                  <div><label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label><textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-purple-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea></div>
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Vật tư sử dụng</label>
@@ -1505,7 +1388,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
           </div>
       </div>
 
-      {/* Fixed Bottom Bar - Được căn giữa theo container */}
       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
           <div className="max-w-3xl mx-auto w-full">
             <button onClick={submitForm} className="w-full bg-purple-600 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg shadow-purple-500/40 flex items-center justify-center gap-3 hover:bg-purple-700 transition-all hover:shadow-xl active:scale-[0.98]">
@@ -1517,7 +1399,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-// ... Các màn hình khác
 const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
     return (
       <div className="flex flex-col h-full bg-slate-50">
@@ -1525,8 +1406,6 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleShee
         <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
-              <div className="bg-yellow-50 p-4 md:p-5 rounded-xl border border-yellow-200 text-sm md:text-base text-yellow-800 mb-6 leading-relaxed">
-              <strong>Chú ý:</strong><br/>Ứng dụng đã được cập nhật thêm chức năng xuất sổ báo cáo hằng ngày. Bạn cần dán Apps Script URL (code.gs mới nhất) vào ô bên dưới.</div>
               <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
               <button onClick={() => { setGoogleSheetUrl(googleSheetUrl); localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình Google Sheet!'); setView('dashboard'); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
           </div>
@@ -1559,15 +1438,10 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                    {user.role === 'admin' && (
                       <div className="flex-1 relative">
                           <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold">
-                              <option value="all">Tất cả KTV</option>
-                              {usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
-                          </select>
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
-                   <div className="flex-1 relative">
-                      <input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" />
-                   </div>
+                   <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
                 </div>
             </div>
         </div>
@@ -1589,9 +1463,7 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                              <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
                                  <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                                      <h4 className="font-black text-slate-800 text-lg md:text-xl leading-tight flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200"><CalendarClock className="w-5 h-5 mr-2 text-slate-500"/>Ngày {log.date}</h4>
-                                     <div className="flex flex-col gap-2 items-end">
-                                         <span className="bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 flex items-center"><User className="w-4 h-4 mr-1.5" /> {log.technicianName}</span>
-                                     </div>
+                                     <div className="flex flex-col gap-2 items-end"><span className="bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 flex items-center"><User className="w-4 h-4 mr-1.5" /> {log.technicianName}</span></div>
                                  </div>
                                  
                                  <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4">
@@ -1601,19 +1473,13 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                                      </div>
                                      <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-200 flex flex-col justify-center shadow-sm">
                                          <p className="text-[10px] md:text-xs text-blue-700 font-bold uppercase mb-1.5 flex items-center"><Droplets className="w-4 h-4 mr-1.5"/> Nước T.Thụ</p>
-                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterTotal} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">Tổng m³ (Ghi nhận)</span></p>
+                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterTotal} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">Tổng m³</span></p>
                                      </div>
                                  </div>
                                  
                                  <div className="flex-1">
                                      {log.note && <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 mb-4">{log.note}</p>}
-                                     {log.images && log.images.length > 0 && (
-                                       <div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 custom-scrollbar">
-                                         {log.images.map((img, idx) => (
-                                            <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-sm" alt="Log" />
-                                         ))}
-                                       </div>
-                                     )}
+                                     {log.images && log.images.length > 0 && (<div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 custom-scrollbar">{log.images.map((img, idx) => (<img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-sm" alt="Log" />))}</div>)}
                                  </div>
 
                                  <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
@@ -1735,6 +1601,14 @@ export default function App() {
 
   const handleSaveMachineLog = async (logData) => {
       await saveLogData(logData);
+      
+      if (!editLogData) {
+          for (const usedPart of logData.parts || []) {
+             const foundPart = inventory.find(i => i.name === usedPart.name); 
+             if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+          }
+      }
+
       showNotification('Đã lưu báo cáo cho thiết bị này!');
       setView('details');
   };
@@ -1806,6 +1680,19 @@ export default function App() {
                                        </div>
                                     </div>
                                     <p className="text-slate-700 text-base md:text-lg whitespace-pre-wrap flex-1 mb-4">{log.note}</p>
+                                    
+                                    {/* HIỂN THỊ VẬT TƯ ĐÃ SỬ DỤNG */}
+                                    {log.parts && log.parts.length > 0 && (
+                                       <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                         <div className="text-[10px] md:text-xs text-slate-400 mb-2 flex items-center uppercase font-bold"><Package className="w-4 h-4 mr-1.5"/> Vật tư thay thế:</div>
+                                         <div className="flex flex-wrap gap-2">
+                                           {log.parts.map((p, idx) => (
+                                             <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>
+                                           ))}
+                                         </div>
+                                       </div>
+                                    )}
+
                                     {log.images && log.images.length > 0 && (
                                        <div className="flex gap-3 mb-4 overflow-x-auto pb-2 custom-scrollbar">
                                          {log.images.map((img, idx) => (
@@ -1823,6 +1710,7 @@ export default function App() {
           {view === 'form' && selectedMachine && (
                <MachineLogFormView 
                    user={user} 
+                   inventory={inventory}
                    selectedMachine={selectedMachine} 
                    setView={setView} 
                    showNotification={showNotification} 
