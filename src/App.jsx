@@ -114,13 +114,21 @@ const NativeCameraScanner = ({ onScan }) => {
   }, [isJsQRLoaded, onScan]);
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden flex items-center justify-center rounded-2xl md:rounded-3xl shadow-inner">
+    <div className="absolute inset-0 w-full h-full bg-slate-900 overflow-hidden flex items-center justify-center">
       {error ? (
-        <div className="text-white text-center p-4 z-20"><AlertCircle className="w-12 h-12 mx-auto mb-2 text-red-500" /><p>{error}</p></div>
-      ) : (<><video ref={videoRef} playsInline muted className="absolute w-full h-full object-cover" /><canvas ref={canvasRef} className="hidden" /></>)}
-      <div className="absolute inset-0 border-[40px] md:border-[80px] border-black/50 flex items-center justify-center pointer-events-none z-10">
-        <div className="w-56 h-56 md:w-72 md:h-72 border-4 border-blue-500/80 rounded-3xl relative shadow-[0_0_100px_rgba(59,130,246,0.5)]">
-            <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[scan_2s_infinite]"></div>
+        <div className="text-white text-center p-6 z-20 bg-slate-800 rounded-2xl m-4 shadow-xl"><AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-500" /><p>{error}</p></div>
+      ) : (<><video ref={videoRef} playsInline muted className="absolute inset-0 w-full h-full object-cover" /><canvas ref={canvasRef} className="hidden" /></>)}
+      
+      {/* Khung quét QR dùng mask shadow giúp tránh lỗi border */}
+      <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center pb-24 md:pb-0">
+        <div className="w-56 h-56 sm:w-64 sm:h-64 md:w-80 md:h-80 border-2 border-blue-400 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]">
+            <div className="absolute top-0 left-0 w-full h-1 bg-blue-400 shadow-[0_0_10px_#60a5fa] animate-[scan_2s_infinite]"></div>
+            
+            {/* 4 góc trang trí */}
+            <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -translate-x-1 -translate-y-1"></div>
+            <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-xl translate-x-1 -translate-y-1"></div>
+            <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -translate-x-1 translate-y-1"></div>
+            <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-blue-500 rounded-br-xl translate-x-1 translate-y-1"></div>
         </div>
       </div>
     </div>
@@ -158,7 +166,7 @@ const ImageZoomModal = ({ imageUrl, onClose }) => {
   return (
     <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col items-center justify-center backdrop-blur-md animate-fade-in cursor-zoom-out" onClick={onClose}>
       <div className="absolute top-4 right-4 md:top-8 md:right-8 z-[210]"><button onClick={onClose} className="bg-black/50 text-white p-2.5 md:p-4 rounded-full hover:bg-red-600 transition-colors border border-white/20 shadow-lg"><X className="w-6 h-6 md:w-8 md:h-8" /></button></div>
-      <img src={imageUrl} className="max-w-full max-h-full object-contain p-2 md:p-8 cursor-default rounded-lg" onClick={(e) => e.stopPropagation()} alt="Zoomed preview" />
+      <img src={imageUrl} className="max-w-full max-h-[85vh] object-contain p-2 md:p-8 cursor-default rounded-lg" onClick={(e) => e.stopPropagation()} alt="Zoomed preview" />
     </div>
   );
 };
@@ -427,7 +435,7 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
                     </div>
                  </div>
 
-                 {/* Nút Quét QR to trên Desktop */}
+                 {/* Nút Quét QR */}
                  <button onClick={() => setView('scanner')} className="lg:col-span-2 w-full h-full min-h-[120px] md:min-h-[140px] bg-slate-900 text-white p-5 md:p-8 rounded-3xl flex items-center justify-center gap-4 md:gap-6 shadow-lg hover:shadow-xl hover:bg-slate-800 transition-all active:scale-[0.98]">
                      <div className="bg-white/20 p-3 md:p-5 rounded-2xl md:rounded-3xl"><QrCode className="w-8 h-8 md:w-12 md:h-12" /></div>
                      <span className="font-black text-2xl md:text-4xl tracking-wide">Quét Mã QR Máy</span>
@@ -796,8 +804,8 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
       setEditingId(null);
   };
 
-  const handleExportExcel = async () => { /* Giữ nguyên do code dài, bạn hãy copy logic function này từ phiên bản trước nếu cần */ };
-  const handleImportExcel = async (e) => { /* Giữ nguyên do code dài, bạn hãy copy logic function này từ phiên bản trước nếu cần */ };
+  const handleExportExcel = async () => { /* Giữ nguyên do code dài */ };
+  const handleImportExcel = async (e) => { /* Giữ nguyên do code dài */ };
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -990,9 +998,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                )}
 
                                {task.images && task.images.length > 0 && (
-                                 <div className="flex gap-3 mb-4 overflow-x-auto pb-2 custom-scrollbar">
+                                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">
                                    {task.images.map((img, idx) => (
-                                      <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:shadow-md hover:scale-105 transition-all" alt="BC" />
+                                      <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:shadow-md hover:scale-105 transition-all" alt="BC" />
                                    ))}
                                  </div>
                                )}
@@ -1157,9 +1165,9 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh đính kèm</label>
-                      <div className="flex flex-wrap gap-3 md:gap-4">
-                          {formData.images.map((img, idx) => (<div key={idx} className="relative w-20 h-20 md:w-28 md:h-28"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-4 h-4 md:w-5 md:h-5" /></button></div>))}
-                          <label className="w-20 h-20 md:w-28 md:h-28 flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-xl cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-600 transition-colors shadow-sm"><Camera className="w-6 h-6 md:w-8 md:h-8 mb-2" /><span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
+                      <div className="flex flex-wrap gap-2 md:gap-4">
+                          {formData.images.map((img, idx) => (<div key={idx} className="relative w-16 h-16 md:w-24 md:h-24"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-3 h-3 md:w-4 md:h-4" /></button></div>))}
+                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-xl cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-600 transition-colors shadow-sm"><Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
                       </div>
                   </div>
               </div>
@@ -1183,7 +1191,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-// ... Phần Utilities và Settings cũng được áp max-w tương tự
 const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
     return (
       <div className="flex flex-col h-full bg-slate-50">
@@ -1296,7 +1303,6 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
   );
 };
 
-
 const MeterMenuView = ({ setView, user, setUtilityMode }) => (
   <div className="flex flex-col h-full bg-slate-50 relative">
     <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 flex items-center justify-between z-10 shadow-sm">
@@ -1331,6 +1337,29 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => (
     </div>
   </div>
 );
+
+const ScannerView = ({ setView, handleScanSuccess, machines, user }) => {
+  return (
+    <div className="flex flex-col h-full bg-slate-900 relative">
+      <div className="absolute top-4 md:top-6 left-4 md:left-6 z-30">
+          <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="text-white flex items-center space-x-2 bg-slate-800/80 hover:bg-slate-700 px-4 py-2.5 rounded-full backdrop-blur-md border border-white/10 transition-colors text-sm md:text-base font-bold shadow-lg"><ArrowLeft className="w-5 h-5 md:w-6 md:h-6" /><span>Quay lại</span></button>
+      </div>
+      <div className="flex-1 w-full h-full relative overflow-hidden bg-black">
+          <NativeCameraScanner onScan={handleScanSuccess} />
+      </div>
+      
+      {/* Footer chứa phần chọn thủ công sẽ nằm dưới màn hình camera */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-gradient-to-t from-black via-black/90 to-transparent pt-12 pb-6 px-4 md:px-8">
+          <div className="max-w-4xl mx-auto w-full">
+              <p className="text-white/80 text-sm text-center mb-4 font-medium flex items-center justify-center"><AlertCircle className="w-4 h-4 mr-2" /> Hoặc chọn thủ công bên dưới:</p>
+              <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                  {machines.map(m => (<button key={m.id} onClick={() => handleScanSuccess(m.id)} className="whitespace-nowrap bg-white/10 hover:bg-white/30 text-white px-5 py-3 rounded-xl text-sm md:text-base font-medium backdrop-blur-xl border border-white/20 shadow-md transition-all">{m.name}</button>))}
+              </div>
+          </div>
+      </div>
+    </div>
+  );
+};
 
 const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -1560,9 +1589,9 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                   </div>
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh hóa đơn / đồng hồ</label>
-                      <div className="flex flex-wrap gap-3">
-                          {formData.images.map((img, idx) => (<div key={idx} className="relative w-20 h-20 md:w-24 md:h-24"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-4 h-4 md:w-5 md:h-5" /></button></div>))}
-                          <label className="w-20 h-20 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-slate-400 text-slate-500 transition-colors shadow-sm"><Camera className="w-6 h-6 md:w-8 md:h-8 mb-2" /><span className="text-[10px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
+                      <div className="flex flex-wrap gap-2 md:gap-4">
+                          {formData.images.map((img, idx) => (<div key={idx} className="relative w-16 h-16 md:w-24 md:h-24"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-3 h-3 md:w-4 md:h-4" /></button></div>))}
+                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-300 rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 hover:border-slate-400 text-slate-500 transition-colors shadow-sm"><Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
                       </div>
                   </div>
               </div>
@@ -1694,9 +1723,6 @@ export default function App() {
 
   return (
     // ROOT WRAPPER HYBRID RESPONSIVE
-    // Nền ngoài (bg-slate-200) sẽ full 100% màn hình Desktop siêu rộng.
-    // Box chính (max-w-[1600px]) sẽ nằm giữa, tránh kéo dãn vô tận làm thô giao diện.
-    // Điện thoại (w-full) tự động ăn sát 100% cạnh viền.
     <div className="fixed inset-0 bg-slate-200 flex justify-center overflow-hidden font-sans text-slate-800">
       <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300">
         <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50"></div>
@@ -1751,7 +1777,7 @@ export default function App() {
                                     {log.images && log.images.length > 0 && (
                                        <div className="flex gap-3 mb-4 overflow-x-auto pb-2 custom-scrollbar">
                                          {log.images.map((img, idx) => (
-                                            <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-20 h-20 md:w-24 md:h-24 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform" alt="Báo cáo" />
+                                            <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-24 md:h-24 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform" alt="Báo cáo" />
                                          ))}
                                        </div>
                                      )}
