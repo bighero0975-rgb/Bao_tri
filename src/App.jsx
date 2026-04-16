@@ -144,12 +144,12 @@ const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => 
       <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-sm md:max-w-md shadow-2xl border border-slate-100">
         <div className="flex items-center space-x-4 mb-4 text-red-600">
            <div className="bg-red-100 p-3 rounded-full"><AlertTriangle className="w-6 h-6 md:w-8 md:h-8" /></div>
-           <h3 className="font-bold text-lg md:text-xl text-slate-800">{title || 'Xác nhận xóa'}</h3>
+           <h3 className="font-bold text-lg md:text-xl text-slate-800">{title || 'Xác nhận'}</h3>
         </div>
-        <p className="text-slate-600 text-sm md:text-base mb-8 leading-relaxed">{message || 'Bạn có chắc chắn muốn xóa dữ liệu này? Hành động này không thể hoàn tác.'}</p>
+        <p className="text-slate-600 text-sm md:text-base mb-8 leading-relaxed">{message || 'Bạn có chắc chắn muốn thực hiện hành động này?'}</p>
         <div className="flex gap-3 justify-end">
           <button onClick={onCancel} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-medium transition-colors text-sm md:text-base">Hủy bỏ</button>
-          <button onClick={onConfirm} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/30 text-sm md:text-base">Xác nhận Xóa</button>
+          <button onClick={onConfirm} className="px-5 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/30 text-sm md:text-base">Xác nhận</button>
         </div>
       </div>
     </div>
@@ -661,6 +661,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ id: '', username: '', password: '', name: '', role: 'maintenance' });
   const [isAdding, setIsAdding] = useState(false);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
   const filteredUsers = usersList.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.username.toLowerCase().includes(searchTerm.toLowerCase()));
 
@@ -672,11 +673,21 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
       setEditingId(null); setIsAdding(false);
   };
 
+  const handleConfirmDeleteUser = async () => {
+      if (deleteModal.id) {
+          await handleDeleteUser(deleteModal.id);
+          showNotification('Đã xóa tài khoản!');
+      }
+      setDeleteModal({ isOpen: false, id: null });
+  };
+
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance' }); }
   const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm(u); }
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
+      <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa tài khoản" message="Bạn có chắc chắn muốn xóa tài khoản này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDeleteUser} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
+
       <div className="bg-white p-4 md:p-6 border-b border-slate-200 shrink-0 shadow-sm">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Quản lý Tài Khoản</h2></div>
@@ -727,7 +738,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
                     </div>
                     <div className="flex gap-2 justify-end mt-auto pt-4 border-t border-slate-100">
                        <button onClick={() => startEdit(u)} className="px-4 py-2 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 rounded-xl transition-colors border border-blue-100 text-sm font-bold flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
-                       {u.id !== 'admin' && <button onClick={() => {if(window.confirm('Xóa tài khoản này?')) handleDeleteUser(u.id)}} className="px-4 py-2 text-red-600 hover:text-white bg-red-50 hover:bg-red-500 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>}
+                       {u.id !== 'admin' && <button onClick={() => setDeleteModal({isOpen: true, id: u.id})} className="px-4 py-2 text-red-600 hover:text-white bg-red-50 hover:bg-red-500 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>}
                     </div>
                   </div>
                 ))
@@ -1051,9 +1062,11 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   );
 };
 
-const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData }) => {
+const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList }) => {
   const isEditing = !!editLogData;
   const dateStr = new Date().toISOString().split('T')[0];
+
+  const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
 
   const [formData, setFormData] = useState({
       id: isEditing ? editLogData.id : Date.now(),
@@ -1065,7 +1078,8 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       note: isEditing ? editLogData.note : '',
       status: isEditing ? editLogData.status : 'Hoàn thành',
       images: isEditing ? (editLogData.images || []) : [],
-      parts: isEditing ? (editLogData.parts || []) : []
+      parts: isEditing ? (editLogData.parts || []) : [],
+      coWorkers: isEditing ? (editLogData.coWorkers || []) : []
   });
 
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
@@ -1103,7 +1117,7 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
 
   const submitForm = () => {
       if(!formData.note) return showNotification('Vui lòng nhập nội dung chi tiết!', 'error');
-      handleSaveMachineLog(formData);
+      handleSaveMachineLog(formData, machineStatus);
   };
 
   return (
@@ -1125,6 +1139,30 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo dưỡng định kỳ</option><option>Sửa chữa đột xuất</option><option>Kiểm tra lỗi</option><option>Thay thế linh kiện</option></select></div>
+                  </div>
+
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">KTV làm cùng (Tự động thêm vào Báo cáo ngày)</label>
+                      <div className="flex flex-wrap gap-2">
+                          {usersList?.filter(u => u.username !== user.username && u.role !== 'admin').map(u => {
+                              const isSelected = formData.coWorkers?.some(cw => cw.username === u.username);
+                              return (
+                                  <button
+                                      key={u.username}
+                                      onClick={() => {
+                                          let newCoWorkers = [...(formData.coWorkers || [])];
+                                          if (isSelected) newCoWorkers = newCoWorkers.filter(cw => cw.username !== u.username);
+                                          else newCoWorkers.push({ username: u.username, name: u.name });
+                                          setFormData({...formData, coWorkers: newCoWorkers});
+                                      }}
+                                      className={`px-3 py-1.5 rounded-xl text-sm font-bold border transition-colors ${isSelected ? 'bg-blue-100 border-blue-500 text-blue-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                                  >
+                                      {isSelected && <CheckCircle className="w-4 h-4 inline mr-1.5 -mt-0.5"/>}
+                                      {u.name}
+                                  </button>
+                              );
+                          })}
+                      </div>
                   </div>
 
                   <div>
@@ -1162,6 +1200,23 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                   </div>
               </div>
 
+              {/* Tùy chọn chuyển đổi trạng thái máy móc */}
+              <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl transition-colors ${machineStatus === 'broken' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                          {machineStatus === 'broken' ? <AlertTriangle className="w-5 h-5"/> : <CheckCircle className="w-5 h-5"/>}
+                      </div>
+                      <div>
+                          <p className="font-bold text-slate-800 text-sm md:text-base">Trạng thái thiết bị</p>
+                          <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">{machineStatus === 'broken' ? 'Đã đánh dấu máy lỗi/hỏng' : 'Máy hoạt động bình thường'}</p>
+                      </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={machineStatus === 'broken'} onChange={(e) => setMachineStatus(e.target.checked ? 'broken' : 'operational')} />
+                      <div className="w-12 h-6 md:w-14 md:h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] md:after:top-0.5 md:after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 md:after:h-6 md:after:w-6 after:transition-all peer-checked:bg-red-500 shadow-inner"></div>
+                  </label>
+              </div>
+
               <div className="grid grid-cols-2 gap-4 md:gap-6">
                   <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><CheckCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Hoàn thành</span></button>
                   <button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Cần theo dõi' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><AlertCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Cần theo dõi</span></button>
@@ -1185,11 +1240,20 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const [filterMonthStr, setFilterMonthStr] = useState(taskFilter === 'pending' ? '' : new Date().toISOString().slice(0, 7)); 
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
-  useEffect(() => { if(taskFilter === 'pending') setFilterMonthStr(''); }, [taskFilter]);
+  useEffect(() => { 
+      if(taskFilter === 'pending') {
+          setFilterMonthStr('');
+          setFilterTech('all'); // Ép mọi người xem được tất cả việc tồn đọng
+      } else {
+          setFilterTech(user.role === 'admin' ? 'all' : user.username);
+      }
+  }, [taskFilter, user]);
 
   const filteredTasks = dailyTasks.filter(t => {
       if (taskFilter === 'pending' && t.status !== 'Đang xử lý') return false;
+      // Cho phép tất cả KTV thấy việc tồn đọng của nhau
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
+      if (taskFilter === 'pending') matchTech = true; 
       let matchDate = filterMonthStr === '' ? true : t.date.startsWith(filterMonthStr);
       return matchTech && matchDate;
   });
@@ -1253,10 +1317,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
                                    {task.status === 'Đang xử lý' ? (<button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95"><PlaySquare className="w-5 h-5" /> Tiếp tục CV</button>) : (<div className="flex-1"></div>)}
-                                   <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                      <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
-                                      <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
-                                   </div>
+                                   {/* Quyền Sửa/Xóa chỉ dành cho admin HOẶC chủ nhân của báo cáo đó nếu nó đã hoàn thành */}
+                                   {(user.role === 'admin' || task.username === user.username) && (
+                                       <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
+                                          <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
+                                       </div>
+                                   )}
                                </div>
                            </div>
                        ))
@@ -1273,21 +1340,22 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const dateStr = new Date().toISOString().split('T')[0];
 
   const isEditing = !!editTaskData;
+  const isContinuing = !!initialTaskData;
   const sourceData = editTaskData || initialTaskData;
 
   const [formData, setFormData] = useState({ 
-      id: isEditing ? editTaskData.id : Date.now(),
-      technicianName: sourceData ? sourceData.technicianName : (user?.name || ''), 
-      username: sourceData ? sourceData.username : (user?.username || ''), 
+      id: sourceData ? sourceData.id : Date.now(),
+      technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''), // Người tiếp nhận sẽ đổi tên thành người mới
+      username: isEditing ? editTaskData.username : (user?.username || ''), 
       date: isEditing ? editTaskData.date : dateStr, 
       startTime: isEditing ? editTaskData.startTime : nowStr, 
       endTime: isEditing ? editTaskData.endTime : nowStr,
       taskName: sourceData ? sourceData.taskName : '', 
       type: sourceData ? sourceData.type : 'Sửa chữa chung', 
-      note: isEditing ? editTaskData.note : (initialTaskData ? `[Tiếp tục CV ngày ${initialTaskData.date}] \n` : ''), 
+      note: isEditing ? editTaskData.note : (isContinuing ? `${initialTaskData.note}\n\n--- [${dateStr}] ${user.name} tiếp tục ---\n` : ''), 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
-      parts: isEditing ? (editTaskData.parts || []) : [], 
-      images: isEditing ? (editTaskData.images || []) : [] 
+      parts: sourceData ? (sourceData.parts || []) : [], 
+      images: sourceData ? (sourceData.images || []) : [] 
   });
   
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
@@ -1326,7 +1394,10 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const submitForm = () => {
       if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
       if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
-      handleSaveDailyTask(formData, isEditing);
+      
+      // Nếu là tiếp tục công việc (isContinuing) thì ta cũng coi như đang Update (ghi đè Record cũ vì chung ID)
+      handleSaveDailyTask(formData, isEditing || isContinuing);
+      
       setInitialTaskData(null); 
       setEditTaskData(null);
   };
@@ -1336,7 +1407,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (initialTaskData ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
+          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
@@ -1514,6 +1585,7 @@ export default function App() {
   const [machineFilter, setMachineFilter] = useState('all'); 
   const [taskFilter, setTaskFilter] = useState('all'); 
   const [initialTaskData, setInitialTaskData] = useState(null); 
+  const [logDeleteModal, setLogDeleteModal] = useState({ isOpen: false, id: null });
 
   const [usersList, setUsersList] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_users'); return saved ? JSON.parse(saved) : INITIAL_USERS; });
   const [dailyTasks, setDailyTasks] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_daily'); return saved ? JSON.parse(saved) : []; });
@@ -1595,11 +1667,27 @@ export default function App() {
 
   const pushToGoogleSheet = async (logData) => { /* Code kết nối App Script */ };
   
-  const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { const entryId = isEditingRecord && editTaskData ? editTaskData.id : Date.now(); const entry = { ...newLog, id: entryId, formType: 'daily_task' }; await saveDailyTaskData(entry); if (!isEditingRecord) { for (const usedPart of entry.parts) { const foundPart = inventory.find(i => i.name === usedPart.name); if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); } if(googleSheetUrl) pushToGoogleSheet(entry); } showNotification(isEditingRecord ? 'Đã cập nhật công việc!' : 'Đã lưu báo cáo hằng ngày!'); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
+  const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
+      const entryId = isEditingRecord && editTaskData ? editTaskData.id : (initialTaskData ? initialTaskData.id : Date.now()); // Dùng lại ID cũ nếu đang Edit hoặc Kế thừa
+      const entry = { ...newLog, id: entryId, formType: 'daily_task' }; 
+      await saveDailyTaskData(entry); 
+      
+      // Trừ kho vật tư (Chỉ áp dụng khi tạo mới hoàn toàn, hoặc bạn có thể nâng cấp thêm logic trừ kho khi Sửa nếu cần)
+      if (!isEditingRecord && !initialTaskData) { 
+          for (const usedPart of entry.parts) { 
+              const foundPart = inventory.find(i => i.name === usedPart.name); 
+              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+          } 
+          if(googleSheetUrl) pushToGoogleSheet(entry); 
+      } 
+      
+      showNotification(isEditingRecord ? 'Đã lưu cập nhật công việc!' : 'Đã lưu báo cáo hằng ngày!'); 
+      setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
+  };
   
   const handleSaveUtilityLog = async (data) => { const entry = { formType: 'utility_log', ...data }; await saveUtilityLogData(entry); if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); showNotification('Đã lưu dữ liệu!'); setView(user.role === 'admin' ? 'utility_history' : 'home'); };
 
-  const handleSaveMachineLog = async (logData) => {
+  const handleSaveMachineLog = async (logData, newMachineStatus) => {
       await saveLogData(logData);
       
       if (!editLogData) {
@@ -1607,10 +1695,55 @@ export default function App() {
              const foundPart = inventory.find(i => i.name === usedPart.name); 
              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           }
+          
+          // Tự động tạo Báo cáo ngày cho người đăng và các KTV làm cùng
+          const allWorkers = [
+              { username: logData.username, name: logData.technicianName },
+              ...(logData.coWorkers || [])
+          ];
+          const nowStr = new Date().toTimeString().slice(0, 5);
+          const machineObj = machines.find(m => m.id === logData.machineId);
+          const machineNameStr = machineObj ? machineObj.name : logData.machineId;
+
+          for (const worker of allWorkers) {
+              const dtId = `DT-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+              const taskEntry = {
+                  id: dtId,
+                  formType: 'daily_task',
+                  technicianName: worker.name,
+                  username: worker.username,
+                  date: logData.date,
+                  startTime: nowStr,
+                  endTime: nowStr,
+                  taskName: `[${machineNameStr}] ${logData.type}`,
+                  type: 'Bảo trì cơ sở vật chất',
+                  note: logData.note,
+                  status: logData.status,
+                  parts: logData.parts || [],
+                  images: logData.images || []
+              };
+              await saveDailyTaskData(taskEntry);
+          }
+      }
+
+      if (newMachineStatus) {
+          const machineToUpdate = machines.find(m => m.id === logData.machineId);
+          if (machineToUpdate && machineToUpdate.status !== newMachineStatus) {
+              await saveMachineData({ ...machineToUpdate, status: newMachineStatus });
+              setSelectedMachine(prev => ({...prev, status: newMachineStatus}));
+          }
       }
 
       showNotification('Đã lưu báo cáo cho thiết bị này!');
       setView('details');
+  };
+
+  const handleConfirmDeleteLog = async () => {
+      if (logDeleteModal.id) {
+          await handleDeleteLogApp(logDeleteModal.id);
+          showNotification('Đã xóa báo cáo!');
+      }
+      setLogDeleteModal({ isOpen: false, id: null });
   };
 
   const showNotification = (msg, type = 'success') => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 3000); };
@@ -1700,6 +1833,11 @@ export default function App() {
                                          ))}
                                        </div>
                                      )}
+                                     
+                                     <div className="pt-4 border-t border-slate-100 flex items-center justify-end mt-auto opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                         <button onClick={() => { setEditLogData(log); setView('form'); }} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
+                                         <button onClick={() => setLogDeleteModal({ isOpen: true, id: log.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center ml-2"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
+                                     </div>
                                  </div>
                                ))}
                           </div>
@@ -1717,12 +1855,15 @@ export default function App() {
                    handleSaveMachineLog={handleSaveMachineLog} 
                    editLogData={editLogData} 
                    setEditLogData={setEditLogData} 
+                   usersList={usersList}
                />
           )}
         </div>
         
         {/* COMPONENT MODAL XEM ẢNH ZOOM */}
         <ImageZoomModal imageUrl={zoomedImage} onClose={() => setZoomedImage(null)} />
+
+        <CustomConfirmModal isOpen={logDeleteModal.isOpen} title="Xóa báo cáo thiết bị" message="Bạn có chắc chắn muốn xóa báo cáo này? Hành động này sẽ không thể hoàn tác." onConfirm={handleConfirmDeleteLog} onCancel={() => setLogDeleteModal({ isOpen: false, id: null })} />
 
         {notification && (
             <div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>
