@@ -38,7 +38,8 @@ const INITIAL_INVENTORY = [
 
 const INITIAL_USERS = [
   { id: 'admin', username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
-  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance' }
+  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance' },
+  { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance' }
 ];
 
 const loadXLSX = async () => {
@@ -122,8 +123,6 @@ const NativeCameraScanner = ({ onScan }) => {
       <div className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center pb-24 md:pb-0">
         <div className="w-56 h-56 sm:w-64 sm:h-64 md:w-80 md:h-80 border-2 border-blue-400 rounded-3xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.65)]">
             <div className="absolute top-0 left-0 w-full h-1 bg-blue-400 shadow-[0_0_10px_#60a5fa] animate-[scan_2s_infinite]"></div>
-            
-            {/* 4 góc trang trí */}
             <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-blue-500 rounded-tl-xl -translate-x-1 -translate-y-1"></div>
             <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-blue-500 rounded-tr-xl translate-x-1 -translate-y-1"></div>
             <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-blue-500 rounded-bl-xl -translate-x-1 translate-y-1"></div>
@@ -225,6 +224,58 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
                             <div className="p-8 text-center text-sm md:text-base text-slate-400">Không tìm thấy <b>"{search}"</b></div>
                         )}
                     </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CoWorkerSelect = ({ usersList, currentUser, selectedCoWorkers, setSelectedCoWorkers }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => { if (wrapperRef.current && !wrapperRef.current.contains(event.target)) setIsOpen(false); };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const availableUsers = usersList?.filter(u => u.username !== currentUser.username && u.role !== 'admin') || [];
+
+    const toggleUser = (u) => {
+        const isSelected = selectedCoWorkers?.some(cw => cw.username === u.username);
+        let newCoWorkers = [...(selectedCoWorkers || [])];
+        if (isSelected) newCoWorkers = newCoWorkers.filter(cw => cw.username !== u.username);
+        else newCoWorkers.push({ username: u.username, name: u.name });
+        setSelectedCoWorkers(newCoWorkers);
+    };
+
+    return (
+        <div className="relative" ref={wrapperRef}>
+            <div className={`w-full p-3.5 md:p-4 border rounded-2xl text-sm md:text-base bg-white flex justify-between items-center cursor-pointer transition-all ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : 'border-slate-300 hover:bg-slate-50'}`} onClick={() => setIsOpen(!isOpen)}>
+                <span className={`block truncate ${selectedCoWorkers?.length ? 'text-blue-700 font-bold' : 'text-slate-500'}`}>
+                    {selectedCoWorkers?.length ? `Đã chọn (${selectedCoWorkers.length}): ${selectedCoWorkers.map(cw => cw.name).join(', ')}` : '-- Chọn KTV làm cùng --'}
+                </span>
+                <ChevronDown className={`w-5 h-5 md:w-6 md:h-6 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </div>
+
+            {isOpen && (
+                <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                    {availableUsers.length === 0 ? (
+                        <div className="p-4 text-center text-slate-500">Không có KTV khác</div>
+                    ) : (
+                        availableUsers.map(u => {
+                            const isSelected = selectedCoWorkers?.some(cw => cw.username === u.username);
+                            return (
+                                <div key={u.username} className="p-3 md:p-4 text-sm md:text-base cursor-pointer hover:bg-slate-50 border-b border-slate-100 flex items-center transition-colors" onClick={() => toggleUser(u)}>
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center mr-3 transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300 bg-white'}`}>
+                                        {isSelected && <CheckCircle className="w-4 h-4 text-white" />}
+                                    </div>
+                                    <span className={`font-medium ${isSelected ? 'text-blue-700 font-bold' : 'text-slate-700'}`}>{u.name}</span>
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
             )}
         </div>
@@ -656,6 +707,88 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   );
 };
 
+const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
+  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  
+  const filteredLogs = utilityLogs.filter(t => {
+      let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
+      let matchDate = t.date.startsWith(filterMonth);
+      return matchTech && matchDate;
+  });
+
+  const handleEdit = (log, mode) => { setEditData(log); setUtilityMode(mode); setView('utility_form'); };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 relative">
+        <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                   <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
+                   <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">Lịch Sử Điện Nước</h2>
+                </div>
+                <div className="flex gap-3 md:w-1/2 lg:w-1/3">
+                   {user.role === 'admin' && (
+                      <div className="flex-1 relative">
+                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                      </div>
+                   )}
+                   <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
+                </div>
+            </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 custom-scrollbar">
+            <div className="max-w-7xl mx-auto space-y-4">
+                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({filteredLogs.length} bản ghi)</span></div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+                    {filteredLogs.length === 0 ? (
+                         <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có bản ghi nào.</div>
+                    ) : (
+                         filteredLogs.map((log) => {
+                             const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
+                             const p2 = Number(log.elec2?.bt||0) + Number(log.elec2?.cd||0) + Number(log.elec2?.td||0);
+                             const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
+                             
+                             return (
+                             <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
+                                 <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
+                                     <h4 className="font-black text-slate-800 text-lg md:text-xl leading-tight flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200"><CalendarClock className="w-5 h-5 mr-2 text-slate-500"/>Ngày {log.date}</h4>
+                                     <div className="flex flex-col gap-2 items-end"><span className="bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 flex items-center"><User className="w-4 h-4 mr-1.5" /> {log.technicianName}</span></div>
+                                 </div>
+                                 
+                                 <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4">
+                                     <div className="bg-yellow-50 p-3 md:p-4 rounded-xl border border-yellow-200 flex flex-col justify-center shadow-sm">
+                                         <p className="text-[10px] md:text-xs text-yellow-700 font-bold uppercase mb-1.5 flex items-center"><Zap className="w-4 h-4 mr-1.5"/> Điện T.Thụ</p>
+                                         <p className="font-black text-yellow-800 text-xl md:text-2xl">{(p1+p2).toFixed(1)} <span className="text-[10px] md:text-xs font-medium text-yellow-600 block mt-0.5">Kw (T1+T2)</span></p>
+                                     </div>
+                                     <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-200 flex flex-col justify-center shadow-sm">
+                                         <p className="text-[10px] md:text-xs text-blue-700 font-bold uppercase mb-1.5 flex items-center"><Droplets className="w-4 h-4 mr-1.5"/> Nước T.Thụ</p>
+                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterTotal} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">Tổng m³</span></p>
+                                     </div>
+                                 </div>
+                                 
+                                 <div className="flex-1">
+                                     {log.note && <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 mb-4">{log.note}</p>}
+                                     {log.images && log.images.length > 0 && (<div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 custom-scrollbar">{log.images.map((img, idx) => (<img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-sm" alt="Log" />))}</div>)}
+                                 </div>
+
+                                 <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
+                                     <button onClick={() => handleEdit(log, 'elec')} className="flex-1 bg-yellow-50 text-yellow-700 py-2.5 rounded-xl text-sm font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center justify-center shadow-sm transition-colors"><Edit className="w-4 h-4 mr-2" /> Sửa Điện</button>
+                                     <button onClick={() => handleEdit(log, 'water')} className="flex-1 bg-blue-50 text-blue-700 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-100 border border-blue-200 flex items-center justify-center shadow-sm transition-colors"><Edit className="w-4 h-4 mr-2" /> Sửa Nước</button>
+                                 </div>
+                             </div>
+                         )})
+                    )}
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+};
+
 const UserManagementView = ({ usersList, setView, showNotification, saveUserData, handleDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -1062,177 +1195,19 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   );
 };
 
-const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList }) => {
-  const isEditing = !!editLogData;
-  const dateStr = new Date().toISOString().split('T')[0];
-
-  const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
-
-  const [formData, setFormData] = useState({
-      id: isEditing ? editLogData.id : Date.now(),
-      machineId: selectedMachine.id,
-      technicianName: user?.name || '',
-      username: user?.username || '',
-      date: isEditing ? editLogData.date : dateStr,
-      type: isEditing ? editLogData.type : 'Bảo dưỡng định kỳ',
-      note: isEditing ? editLogData.note : '',
-      status: isEditing ? editLogData.status : 'Hoàn thành',
-      images: isEditing ? (editLogData.images || []) : [],
-      parts: isEditing ? (editLogData.parts || []) : [],
-      coWorkers: isEditing ? (editLogData.coWorkers || []) : []
-  });
-
-  const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
-  const [isCustomPart, setIsCustomPart] = useState(false);
-
-  const addPart = () => { 
-      if(tempPart.name && tempPart.quantity) { 
-          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
-          setTempPart({ name: '', unit: '', quantity: '' }); 
-          setIsCustomPart(false);
-      } else showNotification('Chọn/nhập vật tư và số lượng!', 'error');
-  };
-
-  const handleImageUpload = (e) => {
-      const file = e.target.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          const img = new Image();
-          img.onload = () => {
-              const canvas = document.createElement('canvas'); const scaleSize = 800 / img.width;
-              canvas.width = 800; canvas.height = img.height * scaleSize;
-              const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              setFormData(prev => ({...prev, images: [...prev.images, canvas.toDataURL('image/jpeg', 0.6)]}));
-          };
-          img.src = event.target.result;
-      };
-      reader.readAsDataURL(file);
-  };
-
-  const removeImage = (index) => {
-      const newImages = [...formData.images];
-      newImages.splice(index, 1);
-      setFormData({...formData, images: newImages});
-  };
-
-  const submitForm = () => {
-      if(!formData.note) return showNotification('Vui lòng nhập nội dung chi tiết!', 'error');
-      handleSaveMachineLog(formData, machineStatus);
-  };
-
-  return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
-      <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4">
-              <button onClick={() => { setView('details'); setEditLogData(null); }} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
-              <div>
-                  <h2 className="font-bold text-slate-800 text-lg md:text-2xl">{isEditing ? 'Sửa Báo Cáo Thiết Bị' : 'Báo Cáo Công Việc'}</h2>
-                  <p className="text-sm md:text-base text-blue-600 font-bold mt-1">{selectedMachine.name} ({selectedMachine.id})</p>
-              </div>
+const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
+    return (
+      <div className="flex flex-col h-full bg-slate-50">
+        <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
+        <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
+          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
+              <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
+              <button onClick={() => { setGoogleSheetUrl(googleSheetUrl); localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình Google Sheet!'); setView('dashboard'); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
           </div>
+        </div>
       </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
-          <div className="max-w-3xl mx-auto space-y-6">
-              
-              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo dưỡng định kỳ</option><option>Sửa chữa đột xuất</option><option>Kiểm tra lỗi</option><option>Thay thế linh kiện</option></select></div>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">KTV làm cùng (Tự động thêm vào Báo cáo ngày)</label>
-                      <div className="flex flex-wrap gap-2">
-                          {usersList?.filter(u => u.username !== user.username && u.role !== 'admin').map(u => {
-                              const isSelected = formData.coWorkers?.some(cw => cw.username === u.username);
-                              return (
-                                  <button
-                                      key={u.username}
-                                      onClick={() => {
-                                          let newCoWorkers = [...(formData.coWorkers || [])];
-                                          if (isSelected) newCoWorkers = newCoWorkers.filter(cw => cw.username !== u.username);
-                                          else newCoWorkers.push({ username: u.username, name: u.name });
-                                          setFormData({...formData, coWorkers: newCoWorkers});
-                                      }}
-                                      className={`px-3 py-1.5 rounded-xl text-sm font-bold border transition-colors ${isSelected ? 'bg-blue-100 border-blue-500 text-blue-700 shadow-sm' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
-                                  >
-                                      {isSelected && <CheckCircle className="w-4 h-4 inline mr-1.5 -mt-0.5"/>}
-                                      {u.name}
-                                  </button>
-                              );
-                          })}
-                      </div>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label>
-                      <textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết tình trạng máy, các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Vật tư thay thế / sử dụng</label>
-                      <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200">
-                          <SearchablePartSelect inventory={inventory} isCustomPart={isCustomPart} setIsCustomPart={setIsCustomPart} tempPart={tempPart} setTempPart={setTempPart} theme="blue" />
-                          {isCustomPart && (<input placeholder="Nhập tên vật tư mới..." className="w-full p-3 border border-blue-300 rounded-xl text-base bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />)}
-                          <div className="flex flex-col md:flex-row gap-3">
-                              <input placeholder="Đơn vị" disabled={!isCustomPart} className={`flex-1 p-3 border border-slate-300 rounded-xl text-base font-medium ${!isCustomPart ? 'bg-slate-100 text-slate-500' : 'bg-white outline-none focus:ring-2 focus:ring-blue-500'}`} value={tempPart.unit} onChange={e => setTempPart({...tempPart, unit: e.target.value})} />
-                              <input placeholder="Số lượng dùng" type="number" className="flex-1 p-3 border border-slate-300 rounded-xl text-base font-bold text-center bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
-                              <button onClick={addPart} className="md:w-1/4 bg-blue-600 text-white p-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><Plus className="w-5 h-5" /> <span className="md:hidden">Thêm</span></button>
-                          </div>
-                      </div>
-                      <div className="space-y-3">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between text-sm md:text-base items-center shadow-sm"><span className="font-bold text-slate-800">{p.name}</span><span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg font-black border border-blue-200">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
-                  </div>
-
-                  <div>
-                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh đính kèm (Máy móc, Lỗi...)</label>
-                      <div className="flex flex-wrap gap-2 md:gap-4">
-                          {formData.images.map((img, idx) => (
-                              <div key={idx} className="relative w-16 h-16 md:w-24 md:h-24">
-                                  <img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" />
-                                  <button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-3 h-3 md:w-4 md:h-4" /></button>
-                              </div>
-                          ))}
-                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors shadow-sm">
-                              <Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" />
-                          </label>
-                      </div>
-                  </div>
-              </div>
-
-              {/* Tùy chọn chuyển đổi trạng thái máy móc */}
-              <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                      <div className={`p-2.5 rounded-xl transition-colors ${machineStatus === 'broken' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
-                          {machineStatus === 'broken' ? <AlertTriangle className="w-5 h-5"/> : <CheckCircle className="w-5 h-5"/>}
-                      </div>
-                      <div>
-                          <p className="font-bold text-slate-800 text-sm md:text-base">Trạng thái thiết bị</p>
-                          <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">{machineStatus === 'broken' ? 'Đã đánh dấu máy lỗi/hỏng' : 'Máy hoạt động bình thường'}</p>
-                      </div>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={machineStatus === 'broken'} onChange={(e) => setMachineStatus(e.target.checked ? 'broken' : 'operational')} />
-                      <div className="w-12 h-6 md:w-14 md:h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] md:after:top-0.5 md:after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 md:after:h-6 md:after:w-6 after:transition-all peer-checked:bg-red-500 shadow-inner"></div>
-                  </label>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 md:gap-6">
-                  <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><CheckCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Hoàn thành</span></button>
-                  <button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Cần theo dõi' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><AlertCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Cần theo dõi</span></button>
-              </div>
-          </div>
-      </div>
-
-      <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
-          <div className="max-w-3xl mx-auto w-full">
-            <button onClick={submitForm} className="w-full bg-blue-600 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg shadow-blue-500/40 flex items-center justify-center gap-3 hover:bg-blue-700 transition-all hover:shadow-xl active:scale-[0.98]">
-                <Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Báo Cáo' : 'Lưu Báo Cáo Thiết Bị'}
-            </button>
-          </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage }) => {
@@ -1447,7 +1422,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh đính kèm</label>
                       <div className="flex flex-wrap gap-2 md:gap-4">
                           {formData.images.map((img, idx) => (<div key={idx} className="relative w-16 h-16 md:w-24 md:h-24"><img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" /><button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-3 h-3 md:w-4 md:h-4" /></button></div>))}
-                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-xl cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-600 transition-colors shadow-sm"><Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Chụp ảnh</span><input type="file" accept="image/*" capture="environment" onChange={handleImageUpload} className="hidden" /></label>
+                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-purple-300 rounded-xl cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-600 transition-colors shadow-sm"><Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Thêm ảnh</span><input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" /></label>
                       </div>
                   </div>
               </div>
@@ -1470,103 +1445,174 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
-    return (
-      <div className="flex flex-col h-full bg-slate-50">
-        <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
-        <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
-              <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
-              <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
-              <button onClick={() => { setGoogleSheetUrl(googleSheetUrl); localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình Google Sheet!'); setView('dashboard'); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
-          </div>
-        </div>
-      </div>
-    );
-};
+const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList }) => {
+  const isEditing = !!editLogData;
+  const dateStr = new Date().toISOString().split('T')[0];
 
-const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
-  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
-  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
-  
-  const filteredLogs = utilityLogs.filter(t => {
-      let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
-      let matchDate = t.date.startsWith(filterMonth);
-      return matchTech && matchDate;
+  const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
+
+  const [formData, setFormData] = useState({
+      id: isEditing ? editLogData.id : Date.now(),
+      machineId: selectedMachine.id,
+      technicianName: user?.name || '',
+      username: user?.username || '',
+      date: isEditing ? editLogData.date : dateStr,
+      type: isEditing ? editLogData.type : 'Bảo dưỡng định kỳ',
+      note: isEditing ? editLogData.note : '',
+      status: isEditing ? editLogData.status : 'Hoàn thành',
+      images: isEditing ? (editLogData.images || []) : [],
+      parts: isEditing ? (editLogData.parts || []) : [],
+      coWorkers: isEditing ? (editLogData.coWorkers || []) : []
   });
 
-  const handleEdit = (log, mode) => { setEditData(log); setUtilityMode(mode); setView('utility_form'); };
+  const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
+  const [isCustomPart, setIsCustomPart] = useState(false);
+
+  const addPart = () => { 
+      if(tempPart.name && tempPart.quantity) { 
+          setFormData({...formData, parts: [...formData.parts, tempPart]}); 
+          setTempPart({ name: '', unit: '', quantity: '' }); 
+          setIsCustomPart(false);
+      } else showNotification('Chọn/nhập vật tư và số lượng!', 'error');
+  };
+
+  const handleImageUpload = (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas'); const scaleSize = 800 / img.width;
+              canvas.width = 800; canvas.height = img.height * scaleSize;
+              const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+              setFormData(prev => ({...prev, images: [...prev.images, canvas.toDataURL('image/jpeg', 0.6)]}));
+          };
+          img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+  };
+
+  const removeImage = (index) => {
+      const newImages = [...formData.images];
+      newImages.splice(index, 1);
+      setFormData({...formData, images: newImages});
+  };
+
+  const submitForm = () => {
+      if(!formData.note) return showNotification('Vui lòng nhập nội dung chi tiết!', 'error');
+      handleSaveMachineLog(formData, machineStatus);
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative">
-        <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-            <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center space-x-3">
-                   <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'meter_menu')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
-                   <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">Lịch Sử Điện Nước</h2>
-                </div>
-                <div className="flex gap-3 md:w-1/2 lg:w-1/3">
-                   {user.role === 'admin' && (
-                      <div className="flex-1 relative">
-                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+      <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
+          <div className="max-w-3xl mx-auto flex items-center space-x-4">
+              <button onClick={() => { setView('details'); setEditLogData(null); }} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
+              <div>
+                  <h2 className="font-bold text-slate-800 text-lg md:text-2xl">{isEditing ? 'Sửa Báo Cáo Thiết Bị' : 'Báo Cáo Công Việc'}</h2>
+                  <p className="text-sm md:text-base text-blue-600 font-bold mt-1">{selectedMachine.name} ({selectedMachine.id})</p>
+              </div>
+          </div>
+      </div>
+      
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
+          <div className="max-w-3xl mx-auto space-y-6">
+              
+              <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo dưỡng định kỳ</option><option>Sửa chữa đột xuất</option><option>Kiểm tra lỗi</option><option>Thay thế linh kiện</option></select></div>
+                  </div>
+
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">KTV làm cùng (Tự động thêm vào Báo cáo ngày)</label>
+                      <CoWorkerSelect 
+                          usersList={usersList} 
+                          currentUser={user} 
+                          selectedCoWorkers={formData.coWorkers} 
+                          setSelectedCoWorkers={(cw) => setFormData({...formData, coWorkers: cw})} 
+                      />
+                      {formData.coWorkers && formData.coWorkers.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                              {formData.coWorkers.map(cw => (
+                                  <span key={cw.username} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold flex items-center shadow-sm">
+                                      {cw.name}
+                                      <button onClick={() => setFormData({...formData, coWorkers: formData.coWorkers.filter(c => c.username !== cw.username)})} className="ml-2 text-blue-400 hover:text-red-500 transition-colors"><X className="w-3 h-3 md:w-4 md:h-4"/></button>
+                                  </span>
+                              ))}
+                          </div>
+                      )}
+                  </div>
+
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Ghi chú / Nội dung chi tiết <span className="text-red-500">*</span></label>
+                      <textarea rows="5" className="w-full p-4 rounded-2xl border border-slate-300 text-base md:text-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none leading-relaxed bg-slate-50 focus:bg-white transition-all" placeholder="Mô tả chi tiết tình trạng máy, các bước đã làm..." value={formData.note} onChange={e => setFormData({...formData, note: e.target.value})}></textarea>
+                  </div>
+
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Vật tư thay thế / sử dụng</label>
+                      <div className="flex flex-col gap-3 mb-4 bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-200">
+                          <SearchablePartSelect inventory={inventory} isCustomPart={isCustomPart} setIsCustomPart={setIsCustomPart} tempPart={tempPart} setTempPart={setTempPart} theme="blue" />
+                          {isCustomPart && (<input placeholder="Nhập tên vật tư mới..." className="w-full p-3 border border-blue-300 rounded-xl text-base bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.name} onChange={e => setTempPart({...tempPart, name: e.target.value})} />)}
+                          <div className="flex flex-col md:flex-row gap-3">
+                              <input placeholder="Đơn vị" disabled={!isCustomPart} className={`flex-1 p-3 border border-slate-300 rounded-xl text-base font-medium ${!isCustomPart ? 'bg-slate-100 text-slate-500' : 'bg-white outline-none focus:ring-2 focus:ring-blue-500'}`} value={tempPart.unit} onChange={e => setTempPart({...tempPart, unit: e.target.value})} />
+                              <input placeholder="Số lượng dùng" type="number" className="flex-1 p-3 border border-slate-300 rounded-xl text-base font-bold text-center bg-white outline-none focus:ring-2 focus:ring-blue-500" value={tempPart.quantity} onChange={e => setTempPart({...tempPart, quantity: e.target.value})} />
+                              <button onClick={addPart} className="md:w-1/4 bg-blue-600 text-white p-3 rounded-xl text-base font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"><Plus className="w-5 h-5" /> <span className="md:hidden">Thêm</span></button>
+                          </div>
                       </div>
-                   )}
-                   <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
-                </div>
-            </div>
-        </div>
+                      <div className="space-y-3">{formData.parts.map((p, i) => (<div key={i} className="bg-white border border-slate-200 p-4 rounded-xl flex justify-between text-sm md:text-base items-center shadow-sm"><span className="font-bold text-slate-800">{p.name}</span><span className="text-blue-700 bg-blue-50 px-3 py-1 rounded-lg font-black border border-blue-200">Dùng: {p.quantity} {p.unit}</span></div>))}</div>
+                  </div>
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 custom-scrollbar">
-            <div className="max-w-7xl mx-auto space-y-4">
-                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({filteredLogs.length} bản ghi)</span></div>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                    {filteredLogs.length === 0 ? (
-                         <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có bản ghi nào.</div>
-                    ) : (
-                         filteredLogs.map((log) => {
-                             const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
-                             const p2 = Number(log.elec2?.bt||0) + Number(log.elec2?.cd||0) + Number(log.elec2?.td||0);
-                             const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
-                             
-                             return (
-                             <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
-                                 <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
-                                     <h4 className="font-black text-slate-800 text-lg md:text-xl leading-tight flex items-center bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200"><CalendarClock className="w-5 h-5 mr-2 text-slate-500"/>Ngày {log.date}</h4>
-                                     <div className="flex flex-col gap-2 items-end"><span className="bg-slate-100 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 flex items-center"><User className="w-4 h-4 mr-1.5" /> {log.technicianName}</span></div>
-                                 </div>
-                                 
-                                 <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4">
-                                     <div className="bg-yellow-50 p-3 md:p-4 rounded-xl border border-yellow-200 flex flex-col justify-center shadow-sm">
-                                         <p className="text-[10px] md:text-xs text-yellow-700 font-bold uppercase mb-1.5 flex items-center"><Zap className="w-4 h-4 mr-1.5"/> Điện T.Thụ</p>
-                                         <p className="font-black text-yellow-800 text-xl md:text-2xl">{(p1+p2).toFixed(1)} <span className="text-[10px] md:text-xs font-medium text-yellow-600 block mt-0.5">Kw (T1+T2)</span></p>
-                                     </div>
-                                     <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-200 flex flex-col justify-center shadow-sm">
-                                         <p className="text-[10px] md:text-xs text-blue-700 font-bold uppercase mb-1.5 flex items-center"><Droplets className="w-4 h-4 mr-1.5"/> Nước T.Thụ</p>
-                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterTotal} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">Tổng m³</span></p>
-                                     </div>
-                                 </div>
-                                 
-                                 <div className="flex-1">
-                                     {log.note && <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 mb-4">{log.note}</p>}
-                                     {log.images && log.images.length > 0 && (<div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 custom-scrollbar">{log.images.map((img, idx) => (<img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:scale-105 transition-transform shadow-sm" alt="Log" />))}</div>)}
-                                 </div>
+                  <div>
+                      <label className="block text-sm md:text-base font-bold text-slate-700 mb-3">Hình ảnh đính kèm (Máy móc, Lỗi...)</label>
+                      <div className="flex flex-wrap gap-2 md:gap-4">
+                          {formData.images.map((img, idx) => (
+                              <div key={idx} className="relative w-16 h-16 md:w-24 md:h-24">
+                                  <img src={img} className="w-full h-full object-cover rounded-xl border border-slate-200 shadow-sm" alt="Preview" />
+                                  <button onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-lg hover:bg-red-600 transition-transform hover:scale-110"><X className="w-3 h-3 md:w-4 md:h-4" /></button>
+                              </div>
+                          ))}
+                          <label className="w-16 h-16 md:w-24 md:h-24 flex flex-col items-center justify-center border-2 border-dashed border-blue-300 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors shadow-sm">
+                              <Camera className="w-5 h-5 md:w-8 md:h-8 mb-1 md:mb-2" /><span className="text-[9px] md:text-xs font-bold uppercase tracking-wider">Thêm ảnh</span><input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                          </label>
+                      </div>
+                  </div>
+              </div>
 
-                                 <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
-                                     <button onClick={() => handleEdit(log, 'elec')} className="flex-1 bg-yellow-50 text-yellow-700 py-2.5 rounded-xl text-sm font-bold hover:bg-yellow-100 border border-yellow-200 flex items-center justify-center shadow-sm transition-colors"><Edit className="w-4 h-4 mr-2" /> Sửa Điện</button>
-                                     <button onClick={() => handleEdit(log, 'water')} className="flex-1 bg-blue-50 text-blue-700 py-2.5 rounded-xl text-sm font-bold hover:bg-blue-100 border border-blue-200 flex items-center justify-center shadow-sm transition-colors"><Edit className="w-4 h-4 mr-2" /> Sửa Nước</button>
-                                 </div>
-                             </div>
-                         )})
-                    )}
-                </div>
-            </div>
-        </div>
+              {/* Tùy chọn chuyển đổi trạng thái máy móc */}
+              <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl transition-colors ${machineStatus === 'broken' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                          {machineStatus === 'broken' ? <AlertTriangle className="w-5 h-5"/> : <CheckCircle className="w-5 h-5"/>}
+                      </div>
+                      <div>
+                          <p className="font-bold text-slate-800 text-sm md:text-base">Trạng thái thiết bị</p>
+                          <p className="text-[10px] md:text-xs text-slate-500 mt-0.5">{machineStatus === 'broken' ? 'Đã đánh dấu máy lỗi/hỏng' : 'Máy hoạt động bình thường'}</p>
+                      </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={machineStatus === 'broken'} onChange={(e) => setMachineStatus(e.target.checked ? 'broken' : 'operational')} />
+                      <div className="w-12 h-6 md:w-14 md:h-7 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[4px] md:after:top-0.5 md:after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 md:after:h-6 md:after:w-6 after:transition-all peer-checked:bg-red-500 shadow-inner"></div>
+                  </label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 md:gap-6">
+                  <button onClick={() => setFormData({...formData, status: 'Hoàn thành'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Hoàn thành' ? 'border-green-500 text-green-700 bg-green-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><CheckCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Hoàn thành</span></button>
+                  <button onClick={() => setFormData({...formData, status: 'Cần theo dõi'})} className={`p-4 md:p-6 rounded-3xl border-2 flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3 bg-white transition-all shadow-sm ${formData.status === 'Cần theo dõi' ? 'border-yellow-500 text-yellow-700 bg-yellow-50 shadow-md transform scale-[1.02]' : 'border-slate-200 text-slate-400 hover:bg-slate-50 hover:border-slate-300'}`}><AlertCircle className="w-6 h-6 md:w-8 md:h-8" /> <span className="font-bold md:text-lg">Cần theo dõi</span></button>
+              </div>
+          </div>
+      </div>
+
+      <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
+          <div className="max-w-3xl mx-auto w-full">
+            <button onClick={submitForm} className="w-full bg-blue-600 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg shadow-blue-500/40 flex items-center justify-center gap-3 hover:bg-blue-700 transition-all hover:shadow-xl active:scale-[0.98]">
+                <Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Báo Cáo' : 'Lưu Báo Cáo Thiết Bị'}
+            </button>
+          </div>
+      </div>
     </div>
   );
 };
-
 
 // ============================================================================
 // ROOT APP (HYBRID RESPONSIVE WRAPPER)
@@ -1730,7 +1776,7 @@ export default function App() {
           const machineToUpdate = machines.find(m => m.id === logData.machineId);
           if (machineToUpdate && machineToUpdate.status !== newMachineStatus) {
               await saveMachineData({ ...machineToUpdate, status: newMachineStatus });
-              setSelectedMachine(prev => ({...prev, status: newMachineStatus}));
+              setSelectedMachine(prev => prev ? {...prev, status: newMachineStatus} : prev);
           }
       }
 
