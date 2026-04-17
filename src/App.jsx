@@ -240,7 +240,7 @@ const CoWorkerSelect = ({ usersList, currentUser, selectedCoWorkers, setSelected
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const availableUsers = usersList?.filter(u => u.username !== currentUser.username && u.role !== 'admin') || [];
+    const availableUsers = usersList?.filter(u => u.username !== currentUser?.username && u.role !== 'admin') || [];
 
     const toggleUser = (u) => {
         const isSelected = selectedCoWorkers?.some(cw => cw.username === u.username);
@@ -329,9 +329,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
 const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db, setMachineFilter, setTaskFilter }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
-  const pendingDailyTasks = dailyTasks.filter(t => t.status === 'Đang xử lý').length;
-  const pendingMachineLogs = (logs || []).filter(l => l.status === 'Cần theo dõi').length;
-  const totalPending = pendingDailyTasks + pendingMachineLogs;
+  const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
@@ -420,10 +418,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
 const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, setMachineFilter, setTaskFilter, setInitialTaskData, setEditTaskData }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
-  
-  const pendingDaily = dailyTasks.filter(t => t.status === 'Đang xử lý').length;
-  const pendingLogs = logs.filter(l => l.status === 'Cần theo dõi').length;
-  const totalPending = pendingDaily + pendingLogs;
+  const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
 
   return (
     <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50">
@@ -1218,14 +1213,14 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   useEffect(() => { 
       if(taskFilter === 'pending') {
           setFilterMonthStr('');
-          setFilterTech('all'); // Ép mọi người xem được tất cả việc tồn đọng
+          setFilterTech('all'); 
       } else {
           setFilterTech(user.role === 'admin' ? 'all' : user.username);
       }
   }, [taskFilter, user]);
 
   const filteredTasks = dailyTasks.filter(t => {
-      if (taskFilter === 'pending' && t.status !== 'Đang xử lý') return false;
+      if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
       // Cho phép tất cả KTV thấy việc tồn đọng của nhau
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
@@ -1291,7 +1286,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                )}
 
                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
-                                   {task.status === 'Đang xử lý' ? (<button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95"><PlaySquare className="w-5 h-5" /> Tiếp tục CV</button>) : (<div className="flex-1"></div>)}
+                                   {task.status !== 'Hoàn thành' ? (<button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95"><PlaySquare className="w-5 h-5" /> Tiếp tục CV</button>) : (<div className="flex-1"></div>)}
                                    {/* Quyền Sửa/Xóa chỉ dành cho admin HOẶC chủ nhân của báo cáo đó nếu nó đã hoàn thành */}
                                    {(user.role === 'admin' || task.username === user.username) && (
                                        <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
@@ -1320,13 +1315,13 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 
   const [formData, setFormData] = useState({ 
       id: sourceData ? sourceData.id : Date.now(),
-      technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''), // Người tiếp nhận sẽ đổi tên thành người mới
+      technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''),
       username: isEditing ? editTaskData.username : (user?.username || ''), 
       date: isEditing ? editTaskData.date : dateStr, 
       startTime: isEditing ? editTaskData.startTime : nowStr, 
       endTime: isEditing ? editTaskData.endTime : nowStr,
       taskName: sourceData ? sourceData.taskName : '', 
-      type: sourceData ? sourceData.type : 'Sửa chữa chung', 
+      type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
       note: isEditing ? editTaskData.note : (isContinuing ? `${initialTaskData.note}\n\n--- [${dateStr}] ${user.name} tiếp tục ---\n` : ''), 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
       parts: sourceData ? (sourceData.parts || []) : [], 
@@ -1370,9 +1365,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
       if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
       
-      // Nếu là tiếp tục công việc (isContinuing) thì ta cũng coi như đang Update (ghi đè Record cũ vì chung ID)
       handleSaveDailyTask(formData, isEditing || isContinuing);
-      
       setInitialTaskData(null); 
       setEditTaskData(null);
   };
@@ -1393,7 +1386,19 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                   <div><label className="block text-sm md:text-base font-bold text-slate-700 mb-2">Tên Công việc / Thiết bị <span className="text-red-500">*</span></label><input type="text" autoFocus className="w-full p-4 rounded-2xl border border-slate-300 bg-slate-50 text-lg focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none font-bold placeholder:font-normal transition-all" placeholder="VD: Thay bóng đèn xưởng A, Đi dây mạng..." value={formData.taskName} onChange={e => setFormData({...formData, taskName: e.target.value})} /></div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Sửa chữa chung</option><option>Bảo trì cơ sở vật chất</option><option>Hỗ trợ sản xuất</option><option>Khác</option></select></div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label>
+                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                                <option>Bảo dưỡng định kỳ</option>
+                                <option>Sửa chữa đột xuất</option>
+                                <option>Sửa chữa chung</option>
+                                <option>Bảo trì cơ sở vật chất</option>
+                                <option>Hỗ trợ sản xuất</option>
+                                <option>Kiểm tra lỗi</option>
+                                <option>Thay thế linh kiện</option>
+                                <option>Khác</option>
+                          </select>
+                      </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4 md:gap-6 bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100">
                       <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
@@ -1521,7 +1526,19 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label><select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}><option>Bảo dưỡng định kỳ</option><option>Sửa chữa đột xuất</option><option>Kiểm tra lỗi</option><option>Thay thế linh kiện</option></select></div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label>
+                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                                <option>Bảo dưỡng định kỳ</option>
+                                <option>Sửa chữa đột xuất</option>
+                                <option>Sửa chữa chung</option>
+                                <option>Bảo trì cơ sở vật chất</option>
+                                <option>Hỗ trợ sản xuất</option>
+                                <option>Kiểm tra lỗi</option>
+                                <option>Thay thế linh kiện</option>
+                                <option>Khác</option>
+                          </select>
+                      </div>
                   </div>
 
                   <div>
@@ -1762,7 +1779,7 @@ export default function App() {
                   startTime: nowStr,
                   endTime: nowStr,
                   taskName: `[${machineNameStr}] ${logData.type}`,
-                  type: 'Bảo trì cơ sở vật chất',
+                  type: logData.type,
                   note: logData.note,
                   status: logData.status,
                   parts: logData.parts || [],
@@ -1818,17 +1835,11 @@ export default function App() {
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
-          
-          {/* DAILY TASKS */}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData}/>}
           {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} />}
-          
-          {/* METER / UTILITY */}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
-          
-          {/* MACHINE SPECIFIC */}
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
           {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
           {view === 'details' && selectedMachine && (
