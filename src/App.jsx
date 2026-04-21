@@ -6,6 +6,25 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
+// Injected Styles for custom animations and scrollbars
+const injectStyles = () => {
+  if (document.getElementById('custom-app-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'custom-app-styles';
+  style.innerHTML = `
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+    @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+    .animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    @keyframes scan { 0% { transform: translateY(0); } 50% { transform: translateY(1000%); } 100% { transform: translateY(0); } }
+  `;
+  document.head.appendChild(style);
+};
+
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
   authDomain: "techmaintain-app.firebaseapp.com",
@@ -305,14 +324,14 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
               <label className="block text-sm font-medium text-slate-300 mb-2">Tên đăng nhập</label>
               <div className="relative">
                  <User className="absolute left-4 top-4 w-5 h-5 text-slate-500" />
-                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập tài khoản..." />
+                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập tài khoản (VD: admin)..." />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Mật khẩu</label>
               <div className="relative">
                  <Lock className="absolute left-4 top-4 w-5 h-5 text-slate-500" />
-                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="***" />
+                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập mật khẩu (VD: 123)..." />
               </div>
             </div>
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
@@ -332,7 +351,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
   const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden animate-fade-in">
       <div className="bg-white p-4 md:px-8 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
         <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
             <div><h1 className="font-black text-xl md:text-3xl text-slate-800 tracking-tight">Dashboard Quản Trị</h1><p className="text-xs md:text-sm text-slate-500 mt-1 font-medium">Đang đăng nhập: {user.name}</p></div>
@@ -421,7 +440,7 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
   const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
 
   return (
-    <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50 animate-fade-in">
       <div className="bg-blue-600 px-5 md:px-8 pt-8 md:pt-6 pb-12 md:pb-6 rounded-b-[2.5rem] md:rounded-none shrink-0 relative shadow-md z-0">
          <div className="max-w-7xl mx-auto flex justify-between items-center">
             <div className="flex items-center gap-3 md:gap-4">
@@ -496,7 +515,7 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
 
 const ScannerView = ({ user, setView, handleScanSuccess, machines }) => {
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white relative">
+    <div className="flex flex-col h-full bg-slate-900 text-white relative animate-fade-in">
       <div className="absolute top-4 left-4 z-50">
         <button onClick={() => setView('home')} className="p-3 bg-white/20 rounded-full hover:bg-white/40 backdrop-blur-md transition-all"><ArrowLeft className="w-6 h-6" /></button>
       </div>
@@ -516,7 +535,7 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
    filtered = filtered.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase()));
 
    return (
-     <div className="flex flex-col h-full bg-slate-50">
+     <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
         <div className="p-4 md:p-6 bg-white shadow-sm flex items-center gap-3 shrink-0">
            <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-xl flex-1 text-slate-800">Chọn Thiết Bị Thủ Công</h2>
@@ -550,7 +569,7 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
 
 const MeterMenuView = ({ setView, user, setUtilityMode }) => {
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
        <div className="p-4 md:p-6 bg-white shadow-sm flex items-center gap-3 shrink-0">
            <button onClick={() => setView('home')} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-xl flex-1 text-slate-800">Menu Ghi Điện / Nước</h2>
@@ -631,7 +650,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   const handleSave = () => { handleSaveUtilityLog(formData); setEditData(null); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
        <div className="p-4 md:p-6 bg-white shadow-sm flex items-center gap-3 shrink-0 z-10 border-b border-slate-200">
            <button onClick={() => {setEditData(null); setView(user.role === 'admin' ? 'utility_history' : 'meter_menu');}} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-2xl flex-1 flex items-center text-slate-800">{isElec ? <Zap className="w-6 h-6 mr-2 text-yellow-500"/> : <Droplets className="w-6 h-6 mr-2 text-blue-500"/>} Ghi Chỉ Số {isElec ? 'Điện' : 'Nước'}</h2>
@@ -715,7 +734,7 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
   const handleEdit = (log, mode) => { setEditData(log); setUtilityMode(mode); setView('utility_form'); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3">
@@ -813,7 +832,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm(u); }
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
       <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa tài khoản" message="Bạn có chắc chắn muốn xóa tài khoản này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDeleteUser} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
       <div className="bg-white p-4 md:p-6 border-b border-slate-200 shrink-0 shadow-sm">
@@ -958,7 +977,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
       <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa thiết bị" message="Bạn có chắc chắn muốn xóa thiết bị này khỏi danh sách? Hành động này sẽ không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
       <div className="bg-white p-4 md:p-6 border-b border-slate-200 shrink-0 shadow-sm">
@@ -1101,7 +1120,7 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   const handleImportExcel = async (e) => { /* Logic import */ };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
       <div className="bg-white p-4 md:p-6 border-b border-slate-200 shrink-0 shadow-sm">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
@@ -1192,7 +1211,7 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 
 const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
     return (
-      <div className="flex flex-col h-full bg-slate-50">
+      <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
         <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
@@ -1234,7 +1253,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const handleConfirmDelete = async () => { if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); } setDeleteModal({ isOpen: false, id: null }); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
         <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa công việc" message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
@@ -1373,7 +1392,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const handleBack = () => { setInitialTaskData(null); setEditTaskData(null); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
           <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
       </div>
@@ -1509,7 +1528,7 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
           <div className="max-w-3xl mx-auto flex items-center space-x-4">
               <button onClick={() => { setView('details'); setEditLogData(null); }} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
@@ -1660,6 +1679,11 @@ export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
 
+  // Inject styles cho ứng dụng 
+  useEffect(() => {
+    injectStyles();
+  }, []);
+
   const setView = (newView, replace = false) => {
     if (newView === view) return;
     if (replace) window.history.replaceState({ view: newView }, '', ''); else window.history.pushState({ view: newView }, '', '');
@@ -1728,19 +1752,36 @@ export default function App() {
   const handleLogout = () => { setUser(null); setView('login', true); setSelectedMachine(null); };
   const handleScanSuccess = (id) => { if (!id) return; const machine = machines.find(m => m.id === id); if (machine) { setSelectedMachine(machine); setView('details'); showNotification(`Quét thành công`); } else if (typeof id === 'string' && id.length > 2) if (!notification) showNotification(`Mã không hợp lệ`, 'error'); };
 
-  const pushToGoogleSheet = async (logData) => { /* Code kết nối App Script */ };
+  // ĐÃ SỬA: Thêm logic POST dữ liệu lên Google Apps Script
+  const pushToGoogleSheet = async (logData) => { 
+      if (!googleSheetUrl) return;
+      try {
+          // Bắn POST request qua dạng JSON
+          await fetch(googleSheetUrl, {
+              method: 'POST',
+              mode: 'no-cors', // Sử dụng mode no-cors để tránh lỗi CORS trên trình duyệt
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(logData)
+          });
+          console.log(`Đã đẩy dữ liệu ${logData.formType} lên Google Sheet.`);
+      } catch (error) {
+          console.error("Lỗi khi đẩy lên Google Sheet:", error);
+      }
+  };
   
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
-      const entryId = isEditingRecord && editTaskData ? editTaskData.id : (initialTaskData ? initialTaskData.id : Date.now()); // Dùng lại ID cũ nếu đang Edit hoặc Kế thừa
+      const entryId = isEditingRecord && editTaskData ? editTaskData.id : (initialTaskData ? initialTaskData.id : Date.now()); 
       const entry = { ...newLog, id: entryId, formType: 'daily_task' }; 
       await saveDailyTaskData(entry); 
       
-      // Trừ kho vật tư (Chỉ áp dụng khi tạo mới hoàn toàn, hoặc bạn có thể nâng cấp thêm logic trừ kho khi Sửa nếu cần)
       if (!isEditingRecord && !initialTaskData) { 
           for (const usedPart of entry.parts) { 
               const foundPart = inventory.find(i => i.name === usedPart.name); 
               if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           } 
+          // ĐÃ SỬA: Gọi hàm đẩy dữ liệu (Cập nhật logic)
           if(googleSheetUrl) pushToGoogleSheet(entry); 
       } 
       
@@ -1748,25 +1789,36 @@ export default function App() {
       setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
-  const handleSaveUtilityLog = async (data) => { const entry = { formType: 'utility_log', ...data }; await saveUtilityLogData(entry); if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); showNotification('Đã lưu dữ liệu!'); setView(user.role === 'admin' ? 'utility_history' : 'home'); };
+  const handleSaveUtilityLog = async (data) => { 
+      const entry = { formType: 'utility_log', ...data }; 
+      await saveUtilityLogData(entry); 
+      // ĐÃ SỬA: Gọi hàm đẩy dữ liệu 
+      if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); 
+      showNotification('Đã lưu dữ liệu!'); 
+      setView(user.role === 'admin' ? 'utility_history' : 'home'); 
+  };
 
   const handleSaveMachineLog = async (logData, newMachineStatus) => {
-      await saveLogData(logData);
+      // ĐÃ SỬA: Bổ sung logic đẩy lên Sheet khi lưu BC Thiết bị
+      const entry = { formType: 'machine_log', ...logData };
+      await saveLogData(entry);
       
       if (!editLogData) {
-          for (const usedPart of logData.parts || []) {
+          for (const usedPart of entry.parts || []) {
              const foundPart = inventory.find(i => i.name === usedPart.name); 
              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           }
+
+          // ĐÃ SỬA: Đẩy báo cáo thiết bị lên Sheet
+          if (googleSheetUrl) pushToGoogleSheet(entry);
           
-          // Tự động tạo Báo cáo ngày cho người đăng và các KTV làm cùng
           const allWorkers = [
-              { username: logData.username, name: logData.technicianName },
-              ...(logData.coWorkers || [])
+              { username: entry.username, name: entry.technicianName },
+              ...(entry.coWorkers || [])
           ];
           const nowStr = new Date().toTimeString().slice(0, 5);
-          const machineObj = machines.find(m => m.id === logData.machineId);
-          const machineNameStr = machineObj ? machineObj.name : logData.machineId;
+          const machineObj = machines.find(m => m.id === entry.machineId);
+          const machineNameStr = machineObj ? machineObj.name : entry.machineId;
 
           for (const worker of allWorkers) {
               const dtId = `DT-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -1775,22 +1827,22 @@ export default function App() {
                   formType: 'daily_task',
                   technicianName: worker.name,
                   username: worker.username,
-                  date: logData.date,
+                  date: entry.date,
                   startTime: nowStr,
                   endTime: nowStr,
-                  taskName: `[${machineNameStr}] ${logData.type}`,
-                  type: logData.type,
-                  note: logData.note,
-                  status: logData.status,
-                  parts: logData.parts || [],
-                  images: logData.images || []
+                  taskName: `[${machineNameStr}] ${entry.type}`,
+                  type: entry.type,
+                  note: entry.note,
+                  status: entry.status,
+                  parts: entry.parts || [],
+                  images: entry.images || []
               };
               await saveDailyTaskData(taskEntry);
           }
       }
 
       if (newMachineStatus) {
-          const machineToUpdate = machines.find(m => m.id === logData.machineId);
+          const machineToUpdate = machines.find(m => m.id === entry.machineId);
           if (machineToUpdate && machineToUpdate.status !== newMachineStatus) {
               await saveMachineData({ ...machineToUpdate, status: newMachineStatus });
               setSelectedMachine(prev => prev ? {...prev, status: newMachineStatus} : prev);
@@ -1843,7 +1895,7 @@ export default function App() {
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
           {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
           {view === 'details' && selectedMachine && (
-               <div className="flex flex-col h-full bg-slate-50 relative">
+               <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
                    <div className="bg-white shadow-sm p-4 md:p-6 shrink-0 z-10 border-b border-slate-200">
                       <div className="max-w-7xl mx-auto w-full">
                           <button onClick={() => setView('home')} className="p-2 md:p-3 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full mb-3"><ArrowLeft className="w-6 h-6" /></button>
