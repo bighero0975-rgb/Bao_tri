@@ -324,14 +324,14 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
               <label className="block text-sm font-medium text-slate-300 mb-2">Tên đăng nhập</label>
               <div className="relative">
                  <User className="absolute left-4 top-4 w-5 h-5 text-slate-500" />
-                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập tài khoản (VD: admin)..." />
+                 <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập tài khoản..." />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Mật khẩu</label>
               <div className="relative">
                  <Lock className="absolute left-4 top-4 w-5 h-5 text-slate-500" />
-                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="Nhập mật khẩu (VD: 123)..." />
+                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="***" />
               </div>
             </div>
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
@@ -351,7 +351,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
   const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 overflow-hidden animate-fade-in">
+    <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
       <div className="bg-white p-4 md:px-8 border-b border-slate-200 flex justify-between items-center shadow-sm z-10 shrink-0">
         <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
             <div><h1 className="font-black text-xl md:text-3xl text-slate-800 tracking-tight">Dashboard Quản Trị</h1><p className="text-xs md:text-sm text-slate-500 mt-1 font-medium">Đang đăng nhập: {user.name}</p></div>
@@ -607,6 +607,11 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
      water: editData?.water || { tong: '', bvChinh: '', bvPhu: '', cantinVPC: '', cantinXuong: '', vpChinh: '', tuoiCay: '' }
   });
 
+  // Lấy bản ghi của ngày gần nhất trước ngày đang chọn (để tính hiệu số nước)
+  const sortedUtilityLogs = [...utilityLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const previousLog = sortedUtilityLogs.find(log => log.date < formData.date);
+  const prevWaterData = previousLog ? (previousLog.water || {}) : {};
+
   const handleElecChange = (tram, field, value) => {
      const newData = { ...formData[tram], [field]: value };
      if (['bt', 'cd', 'td', 'vc'].includes(field)) {
@@ -647,10 +652,44 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
      );
   };
 
+  const renderWaterField = (fieldKey, labelStr, isFullWidth = false) => {
+      const currentVal = formData.water[fieldKey];
+      const prevVal = prevWaterData[fieldKey];
+      let diffDisplay = null;
+
+      // Tính khối lượng tiêu thụ cho tất cả các đồng hồ
+      if (currentVal !== '' && prevVal !== undefined && prevVal !== '') {
+          const diff = parseFloat(currentVal) - parseFloat(prevVal);
+          if (!isNaN(diff)) {
+              const isPositive = diff >= 0;
+              diffDisplay = (
+                  <span className={`text-[10px] md:text-xs font-black ml-2 px-2 py-0.5 rounded-md ${isPositive ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-600'}`} title={`Chỉ số kỳ trước: ${prevVal}`}>
+                      {isPositive ? '+' : ''}{diff} m³ tiêu thụ
+                  </span>
+              );
+          }
+      }
+
+      return (
+          <div className={isFullWidth ? "sm:col-span-2" : ""}>
+              <label className="text-sm font-bold text-blue-800 mb-1.5 flex items-center">
+                  {labelStr} {diffDisplay}
+              </label>
+              <input 
+                  placeholder="Khối (m³)" 
+                  type="number" 
+                  value={formData.water[fieldKey]} 
+                  onChange={e=>setFormData({...formData, water: {...formData.water, [fieldKey]: e.target.value}})} 
+                  className={`w-full p-3.5 border rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold ${isFullWidth ? 'border-blue-400 bg-white shadow-sm' : 'border-blue-300 bg-slate-50 focus:bg-white'}`} 
+              />
+          </div>
+      );
+  };
+
   const handleSave = () => { handleSaveUtilityLog(formData, mode); setEditData(null); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
+    <div className="flex flex-col h-full bg-slate-50 relative">
        <div className="p-4 md:p-6 bg-white shadow-sm flex items-center gap-3 shrink-0 z-10 border-b border-slate-200">
            <button onClick={() => {setEditData(null); setView(user.role === 'admin' ? 'utility_history' : 'meter_menu');}} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-2xl flex-1 flex items-center text-slate-800">{isElec ? <Zap className="w-6 h-6 mr-2 text-yellow-500"/> : <Droplets className="w-6 h-6 mr-2 text-blue-500"/>} Ghi Chỉ Số {isElec ? 'Điện' : 'Nước'}</h2>
@@ -689,15 +728,18 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
                     </div>
                  ) : (
                     <div className="bg-blue-50 p-4 md:p-6 rounded-2xl border border-blue-200">
-                        <h4 className="font-black text-blue-800 text-lg mb-4 flex items-center"><Droplets className="w-5 h-5 mr-1.5"/> Nước Tiêu Thụ</h4>
+                        <div className="flex items-center justify-between mb-4">
+                            <h4 className="font-black text-blue-800 text-lg flex items-center"><Droplets className="w-5 h-5 mr-1.5"/> Nước Tiêu Thụ</h4>
+                            {previousLog && <span className="text-[10px] md:text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-md">So với: {previousLog.date}</span>}
+                        </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                           <div className="sm:col-span-2"><label className="text-sm font-bold text-blue-800 mb-1.5 block">Đồng hồ tổng</label><input placeholder="Khối (m³)" type="number" value={formData.water.tong} onChange={e=>setFormData({...formData, water: {...formData.water, tong: e.target.value}})} className="w-full p-3.5 border border-blue-400 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold shadow-sm" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Bảo vệ cổng chính</label><input placeholder="Khối (m³)" type="number" value={formData.water.bvChinh} onChange={e=>setFormData({...formData, water: {...formData.water, bvChinh: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Bảo vệ cổng phụ</label><input placeholder="Khối (m³)" type="number" value={formData.water.bvPhu} onChange={e=>setFormData({...formData, water: {...formData.water, bvPhu: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Căn tin VPC</label><input placeholder="Khối (m³)" type="number" value={formData.water.cantinVPC} onChange={e=>setFormData({...formData, water: {...formData.water, cantinVPC: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Căn tin xưởng</label><input placeholder="Khối (m³)" type="number" value={formData.water.cantinXuong} onChange={e=>setFormData({...formData, water: {...formData.water, cantinXuong: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Văn phòng chính</label><input placeholder="Khối (m³)" type="number" value={formData.water.vpChinh} onChange={e=>setFormData({...formData, water: {...formData.water, vpChinh: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
-                           <div><label className="text-sm font-bold text-blue-800 mb-1.5 block">Tưới cây</label><input placeholder="Khối (m³)" type="number" value={formData.water.tuoiCay} onChange={e=>setFormData({...formData, water: {...formData.water, tuoiCay: e.target.value}})} className="w-full p-3.5 border border-blue-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                           {renderWaterField('tong', 'Đồng hồ tổng', true)}
+                           {renderWaterField('bvChinh', 'Bảo vệ cổng chính')}
+                           {renderWaterField('bvPhu', 'Bảo vệ cổng phụ')}
+                           {renderWaterField('cantinVPC', 'Căn tin VPC')}
+                           {renderWaterField('cantinXuong', 'Căn tin xưởng')}
+                           {renderWaterField('vpChinh', 'Văn phòng chính')}
+                           {renderWaterField('tuoiCay', 'Tưới cây')}
                         </div>
                     </div>
                  )}
@@ -762,9 +804,18 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                          <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có bản ghi nào.</div>
                     ) : (
                          filteredLogs.map((log) => {
-                             const p1 = Number(log.elec1?.bt||0) + Number(log.elec1?.cd||0) + Number(log.elec1?.td||0);
-                             const p2 = Number(log.elec2?.bt||0) + Number(log.elec2?.cd||0) + Number(log.elec2?.td||0);
-                             const waterTotal = Object.values(log.water||{}).reduce((a,b)=>a+Number(b||0), 0);
+                             // Lấy log của ngày gần nhất trước đó để tính khối nước tiêu thụ (chỉ tính đồng hồ tổng)
+                             const logsBefore = utilityLogs.filter(l => l.date < log.date).sort((a, b) => new Date(b.date) - new Date(a.date));
+                             const previousLog = logsBefore.length > 0 ? logsBefore[0] : null;
+                             
+                             let waterConsumedStr = "--";
+                             if (previousLog && log.water?.tong !== undefined && previousLog.water?.tong !== undefined && log.water?.tong !== '' && previousLog.water?.tong !== '') {
+                                 const diff = parseFloat(log.water.tong) - parseFloat(previousLog.water.tong);
+                                 waterConsumedStr = isNaN(diff) ? "--" : diff.toString();
+                             }
+
+                             const cos1 = log.elec1?.cosphi || '--';
+                             const cos2 = log.elec2?.cosphi || '--';
                              
                              return (
                              <div key={log.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-cyan-300 transition-all flex flex-col">
@@ -776,11 +827,15 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                                  <div className="grid grid-cols-2 gap-3 md:gap-4 mb-4">
                                      <div className="bg-yellow-50 p-3 md:p-4 rounded-xl border border-yellow-200 flex flex-col justify-center shadow-sm">
                                          <p className="text-[10px] md:text-xs text-yellow-700 font-bold uppercase mb-1.5 flex items-center"><Zap className="w-4 h-4 mr-1.5"/> Điện T.Thụ</p>
-                                         <p className="font-black text-yellow-800 text-xl md:text-2xl">{(p1+p2).toFixed(1)} <span className="text-[10px] md:text-xs font-medium text-yellow-600 block mt-0.5">Kw (T1+T2)</span></p>
+                                         <div className="flex justify-between items-center w-full">
+                                            <p className="font-black text-yellow-800 text-sm md:text-base">T1: {cos1}</p>
+                                            <p className="font-black text-yellow-800 text-sm md:text-base">T2: {cos2}</p>
+                                         </div>
+                                         <span className="text-[10px] md:text-xs font-medium text-yellow-600 block mt-1">Cos Phi (Hệ số CS)</span>
                                      </div>
                                      <div className="bg-blue-50 p-3 md:p-4 rounded-xl border border-blue-200 flex flex-col justify-center shadow-sm">
                                          <p className="text-[10px] md:text-xs text-blue-700 font-bold uppercase mb-1.5 flex items-center"><Droplets className="w-4 h-4 mr-1.5"/> Nước T.Thụ</p>
-                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterTotal} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">Tổng m³</span></p>
+                                         <p className="font-black text-blue-800 text-xl md:text-2xl">{waterConsumedStr} <span className="text-[10px] md:text-xs font-medium text-blue-600 block mt-0.5">m³ (Đ.hồ tổng)</span></p>
                                      </div>
                                  </div>
                                  
@@ -1410,11 +1465,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Sửa chữa đột xuất</option>
-                                <option>Sửa chữa chung</option>
-                                <option>Bảo trì cơ sở vật chất</option>
                                 <option>Hỗ trợ sản xuất</option>
-                                <option>Kiểm tra lỗi</option>
-                                <option>Thay thế linh kiện</option>
                                 <option>Khác</option>
                           </select>
                       </div>
@@ -1553,11 +1604,7 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Sửa chữa đột xuất</option>
-                                <option>Sửa chữa chung</option>
-                                <option>Bảo trì cơ sở vật chất</option>
                                 <option>Hỗ trợ sản xuất</option>
-                                <option>Kiểm tra lỗi</option>
-                                <option>Thay thế linh kiện</option>
                                 <option>Khác</option>
                           </select>
                       </div>
@@ -1687,11 +1734,6 @@ export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
 
-  // Inject styles cho ứng dụng 
-  useEffect(() => {
-    injectStyles();
-  }, []);
-
   const setView = (newView, replace = false) => {
     if (newView === view) return;
     if (replace) window.history.replaceState({ view: newView }, '', ''); else window.history.pushState({ view: newView }, '', '');
@@ -1749,7 +1791,7 @@ export default function App() {
   const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
   const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = utilityLogs.find(l=>l.id===logObj.id) ? utilityLogs.map(l=>l.id===logObj.id?logObj:l) : [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const handleLogin = (username, password) => {
     const foundUser = usersList.find(u => u.username === username && u.password === password);
@@ -1760,14 +1802,12 @@ export default function App() {
   const handleLogout = () => { setUser(null); setView('login', true); setSelectedMachine(null); };
   const handleScanSuccess = (id) => { if (!id) return; const machine = machines.find(m => m.id === id); if (machine) { setSelectedMachine(machine); setView('details'); showNotification(`Quét thành công`); } else if (typeof id === 'string' && id.length > 2) if (!notification) showNotification(`Mã không hợp lệ`, 'error'); };
 
-  // ĐÃ SỬA: Thêm logic POST dữ liệu lên Google Apps Script
   const pushToGoogleSheet = async (logData) => { 
       if (!googleSheetUrl) return;
       try {
-          // Bắn POST request qua dạng JSON
           await fetch(googleSheetUrl, {
               method: 'POST',
-              mode: 'no-cors', // Sử dụng mode no-cors để tránh lỗi CORS trên trình duyệt
+              mode: 'no-cors',
               headers: {
                   'Content-Type': 'application/json',
               },
@@ -1789,7 +1829,6 @@ export default function App() {
               const foundPart = inventory.find(i => i.name === usedPart.name); 
               if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           } 
-          // ĐÃ SỬA: Gọi hàm đẩy dữ liệu (Cập nhật logic)
           if(googleSheetUrl) pushToGoogleSheet(entry); 
       } 
       
@@ -1801,11 +1840,9 @@ export default function App() {
       const existingLog = utilityLogs.find(l => l.date === data.date);
       let entry = { formType: 'utility_log', ...data };
 
-      // Nếu đã có bản ghi trong cùng ngày, tiến hành gộp dữ liệu
       if (existingLog && (!utilityEditItem || existingLog.id !== utilityEditItem.id)) {
           entry.id = existingLog.id;
           
-          // Gộp các chỉ số hiện có
           if (mode === 'elec') {
               entry.water = existingLog.water || entry.water;
           } else if (mode === 'water') {
@@ -1813,19 +1850,16 @@ export default function App() {
               entry.elec2 = existingLog.elec2 || entry.elec2;
           }
           
-          // Gộp Ghi chú (Note)
           if (existingLog.note && data.note && existingLog.note !== data.note) {
               entry.note = existingLog.note + '\n' + data.note;
           } else if (!data.note && existingLog.note) {
               entry.note = existingLog.note;
           }
           
-          // Gộp Hình ảnh
           if (existingLog.images && existingLog.images.length > 0) {
               entry.images = [...existingLog.images, ...(data.images || [])];
           }
 
-          // Nếu đổi ngày của 1 bản ghi cũ sang ngày đã tồn tại, xóa bản ghi cũ để tránh trùng lặp
           if (utilityEditItem) {
                if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
                else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
@@ -1839,7 +1873,6 @@ export default function App() {
   };
 
   const handleSaveMachineLog = async (logData, newMachineStatus) => {
-      // ĐÃ SỬA: Bổ sung logic đẩy lên Sheet khi lưu BC Thiết bị
       const entry = { formType: 'machine_log', ...logData };
       await saveLogData(entry);
       
@@ -1849,7 +1882,6 @@ export default function App() {
              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           }
 
-          // ĐÃ SỬA: Đẩy báo cáo thiết bị lên Sheet
           if (googleSheetUrl) pushToGoogleSheet(entry);
           
           const allWorkers = [
