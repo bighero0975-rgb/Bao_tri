@@ -647,7 +647,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
      );
   };
 
-  const handleSave = () => { handleSaveUtilityLog(formData); setEditData(null); };
+  const handleSave = () => { handleSaveUtilityLog(formData, mode); setEditData(null); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
@@ -1472,6 +1472,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList }) => {
   const isEditing = !!editLogData;
   const dateStr = new Date().toISOString().split('T')[0];
+  const nowStr = new Date().toTimeString().slice(0, 5);
 
   const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
 
@@ -1481,6 +1482,8 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       technicianName: user?.name || '',
       username: user?.username || '',
       date: isEditing ? editLogData.date : dateStr,
+      startTime: isEditing ? (editLogData.startTime || nowStr) : nowStr,
+      endTime: isEditing ? (editLogData.endTime || nowStr) : nowStr,
       type: isEditing ? editLogData.type : 'Bảo dưỡng định kỳ',
       note: isEditing ? editLogData.note : '',
       status: isEditing ? editLogData.status : 'Hoàn thành',
@@ -1558,6 +1561,11 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                                 <option>Khác</option>
                           </select>
                       </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 md:gap-6 bg-blue-50 p-4 md:p-6 rounded-3xl border border-blue-100">
+                      <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
+                      <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
                   </div>
 
                   <div>
@@ -1741,7 +1749,7 @@ export default function App() {
   const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
   const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = utilityLogs.find(l=>l.id===logObj.id) ? utilityLogs.map(l=>l.id===logObj.id?logObj:l) : [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const handleLogin = (username, password) => {
     const foundUser = usersList.find(u => u.username === username && u.password === password);
@@ -1789,12 +1797,44 @@ export default function App() {
       setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
-  const handleSaveUtilityLog = async (data) => { 
-      const entry = { formType: 'utility_log', ...data }; 
+  const handleSaveUtilityLog = async (data, mode) => { 
+      const existingLog = utilityLogs.find(l => l.date === data.date);
+      let entry = { formType: 'utility_log', ...data };
+
+      // Nếu đã có bản ghi trong cùng ngày, tiến hành gộp dữ liệu
+      if (existingLog && (!utilityEditItem || existingLog.id !== utilityEditItem.id)) {
+          entry.id = existingLog.id;
+          
+          // Gộp các chỉ số hiện có
+          if (mode === 'elec') {
+              entry.water = existingLog.water || entry.water;
+          } else if (mode === 'water') {
+              entry.elec1 = existingLog.elec1 || entry.elec1;
+              entry.elec2 = existingLog.elec2 || entry.elec2;
+          }
+          
+          // Gộp Ghi chú (Note)
+          if (existingLog.note && data.note && existingLog.note !== data.note) {
+              entry.note = existingLog.note + '\n' + data.note;
+          } else if (!data.note && existingLog.note) {
+              entry.note = existingLog.note;
+          }
+          
+          // Gộp Hình ảnh
+          if (existingLog.images && existingLog.images.length > 0) {
+              entry.images = [...existingLog.images, ...(data.images || [])];
+          }
+
+          // Nếu đổi ngày của 1 bản ghi cũ sang ngày đã tồn tại, xóa bản ghi cũ để tránh trùng lặp
+          if (utilityEditItem) {
+               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
+               else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
+          }
+      }
+
       await saveUtilityLogData(entry); 
-      // ĐÃ SỬA: Gọi hàm đẩy dữ liệu 
       if (googleSheetUrl && !utilityEditItem) pushToGoogleSheet(entry); 
-      showNotification('Đã lưu dữ liệu!'); 
+      showNotification('Đã lưu và gộp dữ liệu thành công!'); 
       setView(user.role === 'admin' ? 'utility_history' : 'home'); 
   };
 
@@ -1828,8 +1868,8 @@ export default function App() {
                   technicianName: worker.name,
                   username: worker.username,
                   date: entry.date,
-                  startTime: nowStr,
-                  endTime: nowStr,
+                  startTime: entry.startTime || nowStr,
+                  endTime: entry.endTime || nowStr,
                   taskName: `[${machineNameStr}] ${entry.type}`,
                   type: entry.type,
                   note: entry.note,
