@@ -1281,12 +1281,17 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleShee
 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
-  const [filterMonthStr, setFilterMonthStr] = useState(taskFilter === 'pending' ? '' : new Date().toISOString().slice(0, 7)); 
+  const [startDate, setStartDate] = useState(() => {
+      const d = new Date();
+      d.setDate(1);
+      return d.toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => { 
       if(taskFilter === 'pending') {
-          setFilterMonthStr('');
           setFilterTech('all'); 
       } else {
           setFilterTech(user.role === 'admin' ? 'all' : user.username);
@@ -1298,7 +1303,12 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       // Cho phép tất cả KTV thấy việc tồn đọng của nhau
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
-      let matchDate = filterMonthStr === '' ? true : t.date.startsWith(filterMonthStr);
+      
+      let matchDate = true;
+      if (taskFilter !== 'pending') {
+          if (startDate && t.date < startDate) matchDate = false;
+          if (endDate && t.date > endDate) matchDate = false;
+      }
       return matchTech && matchDate;
   });
 
@@ -1307,28 +1317,57 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const startEdit = (task) => { setEditTaskData(task); setInitialTaskData(null); setView('daily_task_form'); };
   const handleConfirmDelete = async () => { if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); } setDeleteModal({ isOpen: false, id: null }); };
 
+  const handleExportExcel = async () => {
+      try {
+        setIsExporting(true); 
+        const XLSX = await loadXLSX();
+        const headers = ['Ngày', 'Bắt đầu', 'Kết thúc', 'KTV Chính', 'KTV làm cùng', 'Công việc / Thiết bị', 'Phân loại', 'Trạng thái', 'Ghi chú', 'Vật tư sử dụng'];
+        const rows = filteredTasks.map(t => {
+            const partsStr = t.parts && t.parts.length > 0 ? t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+            const coWorkersStr = t.coWorkers && t.coWorkers.length > 0 ? t.coWorkers.map(cw => cw.name).join(', ') : '';
+            return [t.date, t.startTime, t.endTime, t.technicianName, coWorkersStr, t.taskName, t.type, t.status, t.note, partsStr];
+        });
+        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); 
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Bao_Cao_Cong_Viec"); 
+        XLSX.writeFile(workbook, `Bao_Cao_Cong_Viec_${startDate}_den_${endDate}.xlsx`);
+        showNotification('Đã xuất file Excel thành công!');
+      } catch (err) { 
+        showNotification('Lỗi khi xuất file Excel', 'error'); 
+      } finally { 
+        setIsExporting(false); 
+      }
+  };
+
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
         <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa công việc" message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
-            <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center space-x-3"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2></div>
-                <div className="flex gap-3 md:w-1/2 lg:w-1/3">
+            <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3 shrink-0"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2></div>
+                <div className="flex-1 overflow-x-auto flex items-center gap-2 md:gap-3 xl:justify-end pb-2 xl:pb-0 custom-scrollbar">
                    {user.role === 'admin' && (
-                      <div className="flex-1 relative">
+                      <div className="relative shrink-0">
                           <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-32 md:w-40 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
-                   <div className="flex-1 relative"><input type="month" value={filterMonthStr} onChange={e => setFilterMonthStr(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" /></div>
+                   {taskFilter !== 'pending' && (
+                       <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                           <span className="text-slate-400">-</span>
+                           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                       </div>
+                   )}
+                   <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất Excel</span></button>
                 </div>
             </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4">
-                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{filterMonthStr ? `Tháng ${filterMonthStr}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span></div>
+                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{taskFilter !== 'pending' ? `Từ ${startDate} đến ${endDate}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span></div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                   {filteredTasks.length === 0 ? (
