@@ -48,7 +48,7 @@ const db = app ? getFirestore(app) : null;
 
 // --- MOCK DATA MẶC ĐỊNH ---
 const INITIAL_MACHINES = [
-  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A', department: 'Cơ Khí', status: 'operational' },
+  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A', department: 'Cơ Khí', category: 'Cắt CNC', status: 'operational' },
 ];
 
 const INITIAL_INVENTORY = [
@@ -959,8 +959,9 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', status: 'operational' });
+  const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+  const [collapsedGroups, setCollapsedGroups] = useState({});
 
   let baseMachines = machines;
   if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
@@ -969,8 +970,25 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   const filteredMachines = baseMachines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
   const filterTitle = machineFilter === 'operational' ? '(Máy Đang Tốt)' : machineFilter === 'issue' ? '(Lỗi / Bảo Trì)' : '';
 
-  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', status: 'operational' }); };
-  const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', status: m.status || 'operational' }); };
+  // Logic gom nhóm thiết bị theo chủng loại (category)
+  const groupedMachines = {};
+  filteredMachines.forEach(m => {
+      const cat = m.category || 'Chưa phân loại';
+      if (!groupedMachines[cat]) groupedMachines[cat] = [];
+      groupedMachines[cat].push(m);
+  });
+  const sortedGroups = Object.keys(groupedMachines).sort((a, b) => {
+      if (a === 'Chưa phân loại') return 1;
+      if (b === 'Chưa phân loại') return -1;
+      return a.localeCompare(b);
+  });
+
+  const toggleGroup = (groupName) => {
+      setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+  };
+
+  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' }); };
+  const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', category: m.category || '', status: m.status || 'operational' }); };
 
   const handleSaveEdit = async () => {
       if (!editForm.name) { showNotification('Vui lòng nhập tên thiết bị!', 'error'); return; }
@@ -992,8 +1010,8 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   const handleExportExcel = async () => {
       try {
         setIsLoading(true); const XLSX = await loadXLSX();
-        const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Đơn Vị', 'Trạng Thái'];
-        const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.status || 'operational']);
+        const headers = ['Mã Thiết Bị', 'Tên Thiết Bị', 'Model', 'Vị Trí', 'Phòng Ban', 'Chủng Loại', 'Trạng Thái'];
+        const rows = machines.map(m => [m.id, m.name, m.model || '', m.location || '', m.department || '', m.category || '', m.status || 'operational']);
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Danh_Sach_May"); XLSX.writeFile(workbook, `Danh_Sach_Thiet_Bi_${new Date().toISOString().split('T')[0]}.xlsx`);
         showNotification('Đã xuất file Excel thành công!');
@@ -1015,7 +1033,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
             for (let i = 1; i < rows.length; i++) {
               const cols = rows[i]; if (!cols || cols.length === 0) continue;
               const id = cols[0] ? String(cols[0]).trim() : '';
-              if (id) newMachinesList.push({ id: id, name: cols[1] ? String(cols[1]).trim() : '', model: cols[2] ? String(cols[2]).trim() : '', location: cols[3] ? String(cols[3]).trim() : '', department: cols[4] ? String(cols[4]).trim() : '', status: cols[5] ? String(cols[5]).trim() : 'operational' });
+              if (id) newMachinesList.push({ id: id, name: cols[1] ? String(cols[1]).trim() : '', model: cols[2] ? String(cols[2]).trim() : '', location: cols[3] ? String(cols[3]).trim() : '', department: cols[4] ? String(cols[4]).trim() : '', category: cols[5] ? String(cols[5]).trim() : '', status: cols[6] ? String(cols[6]).trim() : 'operational' });
             }
             let addedCount = 0; let updatedCount = 0;
             const promises = newMachinesList.map(newM => {
@@ -1068,8 +1086,27 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mã máy (Để trống tự tạo)</label><input value={editForm.id} onChange={e => setEditForm({...editForm, id: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: M-102" /></div>
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Tên máy <span className="text-red-500">*</span></label><input autoFocus value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white font-bold" placeholder="Tên thiết bị..." /></div>
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Vị trí (Xưởng)</label><input value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Xưởng A" /></div>
-                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Phòng ban (Bộ phận)</label><input value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Cơ Khí" /></div>
-                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Trạng thái hiện tại</label>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Phòng ban (Bộ phận)</label><input value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Cơ khí, Điện..." /></div>
+                        
+                        <div>
+                            <label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Chủng loại thiết bị</label>
+                            <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
+                                <option value="">-- Chọn chủng loại --</option>
+                                <option value="Cầu trục">Cầu trục</option>
+                                <option value="Cắt CNC">Cắt CNC</option>
+                                <option value="Kho">Kho</option>
+                                <option value="Sơn">Sơn</option>
+                                <option value="Quạt">Quạt</option>
+                                <option value="Băng tải">Băng tải</option>
+                                <option value="P.Máy nén khí">P.Máy nén khí</option>
+                                <option value="Cơ khí">Cơ khí</option>
+                                <option value="Vách ướt">Vách ướt</option>
+                                <option value="STT">STT</option>
+                                <option value="Khác">Khác</option>
+                            </select>
+                        </div>
+                        
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Trạng thái hiện tại</label>
                             <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base bg-white outline-none focus:ring-2 focus:ring-blue-500 font-medium">
                                 <option value="operational">Hoạt động tốt</option>
                                 <option value="maintenance">Đang bảo trì</option>
@@ -1086,50 +1123,83 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
 
             <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>Danh sách thiết bị {filterTitle} ({filteredMachines.length})</span></div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="space-y-6">
               {filteredMachines.length > 0 ? (
-                filteredMachines.map((m) => (
-                  <div key={m.id} className="bg-white rounded-3xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
-                     {editingId === m.id ? (
-                         <div className="flex flex-col gap-3 p-5 md:p-6 bg-blue-50/50 border-b border-blue-200 flex-1">
-                            <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
-                            <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
-                            <div className="flex gap-2">
-                                <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
-                                <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
-                            </div>
-                            <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium">
-                                <option value="operational">Hoạt động tốt</option><option value="maintenance">Đang bảo trì</option><option value="broken">Bị hỏng</option>
-                            </select>
-                            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-blue-100">
-                                <button onClick={() => setEditingId(null)} className="px-5 py-2.5 text-sm md:text-base bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
-                                <button onClick={handleSaveEdit} className="px-5 py-2.5 text-sm md:text-base bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
-                            </div>
-                         </div>
-                     ) : (
-                         <div className="p-5 md:p-6 flex flex-col h-full group">
-                            <div className="flex justify-between items-start mb-4">
-                               <div className="overflow-hidden">
-                                 <h4 className="font-bold text-slate-800 text-base md:text-lg mb-2 truncate" title={m.name}>{m.name}</h4>
-                                 <span className="bg-slate-100 px-2.5 py-1 rounded-lg text-xs md:text-sm font-mono font-bold text-slate-600 inline-block">{m.id}</span>
-                               </div>
-                               <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 ${m.status === 'operational' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' : m.status === 'maintenance' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.4)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]'}`}></div>
-                            </div>
-                            
-                            <div className="text-xs md:text-sm text-slate-500 space-y-2 mb-6 flex-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                {m.department && <p className="flex items-center"><User className="w-4 h-4 mr-2 text-slate-400"/> <span className="truncate">{m.department}</span></p>}
-                                {m.location && <p className="flex items-center"><MapPin className="w-4 h-4 mr-2 text-slate-400"/> <span className="truncate">{m.location}</span></p>}
-                            </div>
+                sortedGroups.map((groupName) => {
+                  const isCollapsed = collapsedGroups[groupName];
+                  return (
+                  <div key={groupName} className="space-y-3">
+                     <div onClick={() => toggleGroup(groupName)} className="flex items-center justify-between border-b border-slate-300 pb-2 mb-3 mt-4 cursor-pointer hover:bg-slate-100 rounded-xl p-2 transition-colors">
+                         <h3 className="font-black text-slate-700 text-lg uppercase tracking-wide flex items-center"><Database className="w-5 h-5 mr-2 text-slate-500" /> Nhóm: {groupName} <span className="text-sm font-bold text-slate-400 normal-case ml-2">({groupedMachines[groupName].length} máy)</span></h3>
+                         <button className="text-slate-500 bg-white p-1.5 rounded-full shadow-sm border border-slate-200 hover:text-blue-600 hover:border-blue-300 transition-colors focus:outline-none">
+                             {isCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                         </button>
+                     </div>
+                     {!isCollapsed && (
+                     <div className="flex flex-col gap-3 animate-fade-in">
+                        {groupedMachines[groupName].map((m) => (
+                          <div key={m.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
+                             {editingId === m.id ? (
+                                 <div className="flex flex-col gap-3 p-5 md:p-6 bg-blue-50/50 border-b border-blue-200 flex-1">
+                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
+                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
+                                    <div className="flex gap-2">
+                                        <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
+                                        <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <select className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
+                                            <option value="">-- Chủng loại --</option>
+                                            <option value="Cầu trục">Cầu trục</option>
+                                            <option value="Cắt CNC">Cắt CNC</option>
+                                            <option value="Kho">Kho</option>
+                                            <option value="Sơn">Sơn</option>
+                                            <option value="Quạt">Quạt</option>
+                                            <option value="Băng tải">Băng tải</option>
+                                            <option value="P.Máy nén khí">P.Máy nén khí</option>
+                                            <option value="Cơ khí">Cơ khí</option>
+                                            <option value="Vách ướt">Vách ướt</option>
+                                            <option value="STT">STT</option>
+                                            <option value="Khác">Khác</option>
+                                        </select>
+                                        <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium">
+                                            <option value="operational">Hoạt động tốt</option><option value="maintenance">Đang bảo trì</option><option value="broken">Bị hỏng</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-blue-100">
+                                        <button onClick={() => setEditingId(null)} className="px-5 py-2.5 text-sm md:text-base bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Hủy</button>
+                                        <button onClick={handleSaveEdit} className="px-5 py-2.5 text-sm md:text-base bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm">Lưu</button>
+                                    </div>
+                                 </div>
+                             ) : (
+                                 <div className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 group">
+                                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                                        <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 ${m.status === 'operational' ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.4)]' : m.status === 'maintenance' ? 'bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.4)]' : 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]'}`}></div>
+                                        <div className="flex flex-col flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                <h4 className="font-bold text-slate-800 text-base md:text-lg truncate" title={m.name}>{m.name}</h4>
+                                                <span className="bg-slate-100 px-2 py-0.5 rounded-md text-xs font-mono font-bold text-slate-600 shrink-0">{m.id}</span>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs md:text-sm text-slate-500">
+                                                {m.location && <span className="flex items-center"><MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Vị trí: {m.location}</span>}
+                                                {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
 
-                            <div className="flex gap-2 justify-end pt-4 border-t border-slate-100 mt-auto opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => startEdit(m)} className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-blue-100 text-sm font-bold flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
-                                <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>
-                            </div>
-                         </div>
+                                    <div className="flex gap-2 justify-end shrink-0 border-t border-slate-100 md:border-t-0 pt-3 md:pt-0 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => startEdit(m)} className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-blue-100 text-sm font-bold flex items-center"><Edit className="w-4 h-4 mr-1.5" /> Sửa</button>
+                                        <button onClick={() => setDeleteModal({ isOpen: true, id: m.id })} className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-red-100 text-sm font-bold flex items-center"><Trash2 className="w-4 h-4 mr-1.5" /> Xóa</button>
+                                    </div>
+                                 </div>
+                             )}
+                          </div>
+                        ))}
+                     </div>
                      )}
                   </div>
-                ))
-              ) : (<div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>)}
+                )})
+              ) : (<div className="p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>)}
             </div>
         </div>
       </div>
