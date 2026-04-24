@@ -61,6 +61,8 @@ const INITIAL_USERS = [
   { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance' }
 ];
 
+const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
+
 const loadXLSX = async () => {
   if (window.XLSX) return window.XLSX;
   return new Promise((resolve, reject) => {
@@ -158,7 +160,7 @@ const NativeCameraScanner = ({ onScan }) => {
 const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm animate-fade-in">
       <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-sm md:max-w-md shadow-2xl border border-slate-100">
         <div className="flex items-center space-x-4 mb-4 text-red-600">
            <div className="bg-red-100 p-3 rounded-full"><AlertTriangle className="w-6 h-6 md:w-8 md:h-8" /></div>
@@ -689,7 +691,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
   const handleSave = () => { handleSaveUtilityLog(formData, mode); setEditData(null); };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 relative">
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
        <div className="p-4 md:p-6 bg-white shadow-sm flex items-center gap-3 shrink-0 z-10 border-b border-slate-200">
            <button onClick={() => {setEditData(null); setView(user.role === 'admin' ? 'utility_history' : 'meter_menu');}} className="p-2 -ml-2 rounded-full hover:bg-slate-100 transition-colors"><ArrowLeft className="w-6 h-6 text-slate-600" /></button>
            <h2 className="font-bold text-lg md:text-2xl flex-1 flex items-center text-slate-800">{isElec ? <Zap className="w-6 h-6 mr-2 text-yellow-500"/> : <Droplets className="w-6 h-6 mr-2 text-blue-500"/>} Ghi Chỉ Số {isElec ? 'Điện' : 'Nước'}</h2>
@@ -952,7 +954,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   );
 };
 
-const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user }) => {
+const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user, categoryList, saveCategoryListData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
@@ -962,6 +964,10 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [collapsedGroups, setCollapsedGroups] = useState({});
+  
+  const [isCatModalOpen, setIsCatModalOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [deleteCatModal, setDeleteCatModal] = useState({ isOpen: false, cat: null });
 
   let baseMachines = machines;
   if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
@@ -989,6 +995,31 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
 
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' }); };
   const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', category: m.category || '', status: m.status || 'operational' }); };
+
+  // Lấy tổng hợp danh sách chủng loại
+  const allCategories = Array.from(new Set([...(categoryList || []), ...machines.map(m => m.category).filter(Boolean)]));
+
+  const handleAddCategory = () => {
+      const trimmed = newCatName.trim();
+      if (trimmed && !allCategories.includes(trimmed)) {
+          if (saveCategoryListData) saveCategoryListData([...(categoryList||[]), trimmed]);
+          setNewCatName('');
+          showNotification('Đã thêm chủng loại mới!');
+      } else if (allCategories.includes(trimmed)) {
+          showNotification('Chủng loại này đã tồn tại!', 'error');
+      }
+  };
+
+  const handleConfirmDeleteCat = async () => {
+      const cat = deleteCatModal.cat;
+      if (cat) {
+          if (saveCategoryListData) saveCategoryListData((categoryList||[]).filter(c => c !== cat));
+          const updates = machines.filter(m => m.category === cat).map(m => saveMachineData({ ...m, category: '' }));
+          await Promise.all(updates);
+          showNotification(`Đã xóa chủng loại ${cat}`);
+      }
+      setDeleteCatModal({ isOpen: false, cat: null });
+  };
 
   const handleSaveEdit = async () => {
       if (!editForm.name) { showNotification('Vui lòng nhập tên thiết bị!', 'error'); return; }
@@ -1053,6 +1084,33 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
       <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa thiết bị" message="Bạn có chắc chắn muốn xóa thiết bị này khỏi danh sách? Hành động này sẽ không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
+      {isCatModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[150] p-4 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="font-bold text-xl text-slate-800">Quản lý Chủng loại</h3>
+                      <button onClick={() => setIsCatModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X className="w-6 h-6"/></button>
+                  </div>
+                  
+                  <div className="flex gap-2 mb-6">
+                      <input value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="Tên chủng loại mới..." className="flex-1 p-3 border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-medium"/>
+                      <button onClick={handleAddCategory} className="bg-blue-600 text-white px-5 py-3 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-sm">Thêm</button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+                      {allCategories.map(cat => (
+                          <div key={cat} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-blue-200 transition-colors group">
+                              <span className="font-bold text-slate-700">{cat}</span>
+                              <button onClick={() => setDeleteCatModal({isOpen: true, cat})} className="text-slate-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
+                          </div>
+                      ))}
+                      {allCategories.length === 0 && <div className="text-center text-slate-400 py-4 font-medium">Chưa có dữ liệu</div>}
+                  </div>
+              </div>
+          </div>
+      )}
+      <CustomConfirmModal isOpen={deleteCatModal.isOpen} title="Xóa Chủng Loại" message={`Bạn có chắc chắn muốn xóa chủng loại "${deleteCatModal.cat}"? Các thiết bị đang thuộc nhóm này sẽ bị gỡ phân loại.`} onConfirm={handleConfirmDeleteCat} onCancel={() => setDeleteCatModal({ isOpen: false, cat: null })} />
+
       <div className="bg-white p-4 md:p-6 border-b border-slate-200 shrink-0 shadow-sm">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
@@ -1090,20 +1148,13 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                         
                         <div>
                             <label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Chủng loại thiết bị</label>
-                            <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
-                                <option value="">-- Chọn chủng loại --</option>
-                                <option value="Cầu trục">Cầu trục</option>
-                                <option value="Cắt CNC">Cắt CNC</option>
-                                <option value="Kho">Kho</option>
-                                <option value="Sơn">Sơn</option>
-                                <option value="Quạt">Quạt</option>
-                                <option value="Băng tải">Băng tải</option>
-                                <option value="P.Máy nén khí">P.Máy nén khí</option>
-                                <option value="Cơ khí">Cơ khí</option>
-                                <option value="Vách ướt">Vách ướt</option>
-                                <option value="STT">STT</option>
-                                <option value="Khác">Khác</option>
-                            </select>
+                            <div className="flex gap-2">
+                                <select value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})} className="flex-1 p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium">
+                                    <option value="">-- Chọn chủng loại --</option>
+                                    {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                                <button onClick={() => setIsCatModalOpen(true)} className="p-3 md:p-4 bg-slate-50 text-slate-600 rounded-xl border border-slate-200 hover:bg-blue-100 hover:text-blue-700 transition-colors shadow-sm" title="Quản lý danh mục"><Settings className="w-5 h-5"/></button>
+                            </div>
                         </div>
                         
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Trạng thái hiện tại</label>
@@ -1148,20 +1199,13 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                                         <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.department} onChange={e => setEditForm({...editForm, department: e.target.value})} placeholder="Phòng ban" />
                                     </div>
                                     <div className="flex gap-2">
-                                        <select className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
-                                            <option value="">-- Chủng loại --</option>
-                                            <option value="Cầu trục">Cầu trục</option>
-                                            <option value="Cắt CNC">Cắt CNC</option>
-                                            <option value="Kho">Kho</option>
-                                            <option value="Sơn">Sơn</option>
-                                            <option value="Quạt">Quạt</option>
-                                            <option value="Băng tải">Băng tải</option>
-                                            <option value="P.Máy nén khí">P.Máy nén khí</option>
-                                            <option value="Cơ khí">Cơ khí</option>
-                                            <option value="Vách ướt">Vách ướt</option>
-                                            <option value="STT">STT</option>
-                                            <option value="Khác">Khác</option>
-                                        </select>
+                                        <div className="flex w-1/2 gap-1">
+                                            <select className="flex-1 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium" value={editForm.category} onChange={e => setEditForm({...editForm, category: e.target.value})}>
+                                                <option value="">-- Chủng loại --</option>
+                                                {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                            <button onClick={() => setIsCatModalOpen(true)} className="p-3 shrink-0 bg-slate-50 text-slate-600 rounded-xl border border-slate-300 hover:bg-blue-100 hover:text-blue-700 transition-colors shadow-sm" title="Quản lý danh mục"><Settings className="w-4 h-4"/></button>
+                                        </div>
                                         <select value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium">
                                             <option value="operational">Hoạt động tốt</option><option value="maintenance">Đang bảo trì</option><option value="broken">Bị hỏng</option>
                                         </select>
@@ -1574,7 +1618,11 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Sửa chữa đột xuất</option>
+                                <option>Sửa chữa chung</option>
+                                <option>Bảo trì cơ sở vật chất</option>
                                 <option>Hỗ trợ sản xuất</option>
+                                <option>Kiểm tra lỗi</option>
+                                <option>Thay thế linh kiện</option>
                                 <option>Khác</option>
                           </select>
                       </div>
@@ -1713,7 +1761,11 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Sửa chữa đột xuất</option>
+                                <option>Sửa chữa chung</option>
+                                <option>Bảo trì cơ sở vật chất</option>
                                 <option>Hỗ trợ sản xuất</option>
+                                <option>Kiểm tra lỗi</option>
+                                <option>Thay thế linh kiện</option>
                                 <option>Khác</option>
                           </select>
                       </div>
@@ -1833,13 +1885,20 @@ export default function App() {
   const [initialTaskData, setInitialTaskData] = useState(null); 
   const [logDeleteModal, setLogDeleteModal] = useState({ isOpen: false, id: null });
 
-  const [usersList, setUsersList] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_users'); return saved ? JSON.parse(saved) : INITIAL_USERS; });
-  const [dailyTasks, setDailyTasks] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_daily'); return saved ? JSON.parse(saved) : []; });
-  const [machines, setMachines] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_machines'); return saved ? JSON.parse(saved) : INITIAL_MACHINES; });
-  const [logs, setLogs] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_logs'); return saved ? JSON.parse(saved) : []; });
-  const [inventory, setInventory] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_inventory'); return saved ? JSON.parse(saved) : INITIAL_INVENTORY; });
-  const [utilityLogs, setUtilityLogs] = useState(() => { if (db) return []; const saved = localStorage.getItem('techmaintain_utility'); return saved ? JSON.parse(saved) : []; });
-  const [googleSheetUrl, setGoogleSheetUrl] = useState(() => localStorage.getItem('gs_url') || '');
+  const [usersList, setUsersList] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_users') : null; return saved ? JSON.parse(saved) : INITIAL_USERS; });
+  const [dailyTasks, setDailyTasks] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_daily') : null; return saved ? JSON.parse(saved) : []; });
+  const [machines, setMachines] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_machines') : null; return saved ? JSON.parse(saved) : INITIAL_MACHINES; });
+  const [logs, setLogs] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_logs') : null; return saved ? JSON.parse(saved) : []; });
+  const [inventory, setInventory] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_inventory') : null; return saved ? JSON.parse(saved) : INITIAL_INVENTORY; });
+  const [utilityLogs, setUtilityLogs] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_utility') : null; return saved ? JSON.parse(saved) : []; });
+  const [googleSheetUrl, setGoogleSheetUrl] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('gs_url') || '' : '');
+  
+  const [categoryList, setCategoryList] = useState(() => { 
+      if (typeof window !== 'undefined' && db) return []; 
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_categories') : null; 
+      return saved ? JSON.parse(saved) : INITIAL_CATEGORIES; 
+  });
+
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
 
@@ -1888,7 +1947,16 @@ export default function App() {
     const unsubUtility = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
     const unsubSettings = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
 
-    return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); };
+    const unsubCategories = onSnapshot(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
+        if (docSnap.exists()) {
+            setCategoryList(docSnap.data().list || []);
+        } else {
+            setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
+            setCategoryList(INITIAL_CATEGORIES);
+        }
+    }, handleSnapError);
+
+    return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); unsubCategories(); };
   }, [fbUser, db]);
 
   const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
@@ -1901,6 +1969,11 @@ export default function App() {
   const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+
+  const saveCategoryListData = async (newList) => { 
+      if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
+      else { setCategoryList(newList); localStorage.setItem('techmaintain_categories', JSON.stringify(newList)); } 
+  };
 
   const handleLogin = (username, password) => {
     const foundUser = usersList.find(u => u.username === username && u.password === password);
@@ -2064,7 +2137,7 @@ export default function App() {
         <div className="flex-1 overflow-hidden relative flex flex-col">
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
-          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user}/>}
+          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
