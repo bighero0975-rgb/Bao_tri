@@ -1911,8 +1911,11 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
 // ROOT APP (HYBRID RESPONSIVE WRAPPER)
 // ============================================================================
 export default function App() {
-  const [user, setUser] = useState(null); 
-  const [view, setViewInternal] = useState('login'); 
+  const savedSession = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_active_session') : null;
+  const initialUser = savedSession ? JSON.parse(savedSession) : null;
+
+  const [user, setUser] = useState(initialUser); 
+  const [view, setViewInternal] = useState(initialUser ? (initialUser.role === 'admin' ? 'dashboard' : 'home') : 'login'); 
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
   
@@ -1950,7 +1953,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    window.history.replaceState({ view: 'login' }, '', '');
+    if (!initialUser) {
+        window.history.replaceState({ view: 'login' }, '', '');
+    }
     const handlePopState = (event) => {
         if (event.state && event.state.view) {
             let nextView = event.state.view;
@@ -1960,7 +1965,7 @@ export default function App() {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user]);
+  }, [user, initialUser]);
 
   useEffect(() => {
     if (!auth) { setIsCloudSyncing(false); return; }
@@ -2018,11 +2023,22 @@ export default function App() {
 
   const handleLogin = (username, password) => {
     const foundUser = usersList.find(u => u.username === username && u.password === password);
-    if (foundUser) { setUser(foundUser); setView(foundUser.role === 'admin' ? 'dashboard' : 'home', true); showNotification(`Xin chào, ${foundUser.name}`); } 
+    if (foundUser) { 
+        localStorage.setItem('techmaintain_active_session', JSON.stringify(foundUser));
+        setUser(foundUser); 
+        showNotification(`Đăng nhập thành công!`);
+        setView(foundUser.role === 'admin' ? 'dashboard' : 'home', true);
+    } 
     else showNotification('Tài khoản hoặc mật khẩu không đúng!', 'error');
   };
 
-  const handleLogout = () => { setUser(null); setView('login', true); setSelectedMachine(null); };
+  const handleLogout = () => { 
+      localStorage.removeItem('techmaintain_active_session');
+      setUser(null); 
+      setView('login', true); 
+      setSelectedMachine(null); 
+  };
+  
   const handleScanSuccess = (id) => { if (!id) return; const machine = machines.find(m => m.id === id); if (machine) { setSelectedMachine(machine); setView('details'); showNotification(`Quét thành công`); } else if (typeof id === 'string' && id.length > 2) if (!notification) showNotification(`Mã không hợp lệ`, 'error'); };
 
   const pushToGoogleSheet = async (logData) => { 
