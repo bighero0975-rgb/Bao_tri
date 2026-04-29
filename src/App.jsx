@@ -533,7 +533,7 @@ const ScannerView = ({ user, setView, handleScanSuccess, machines }) => {
   );
 };
 
-const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
+const ManualSelectView = ({ machines, logs, setView, handleScanSuccess, machineFilter }) => {
    const [search, setSearch] = useState('');
    const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -598,6 +598,14 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
                                         {m.location && <span className="text-xs md:text-sm text-slate-500 flex items-center"><MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> {m.location}</span>}
                                         {m.department && <span className="text-xs md:text-sm text-slate-500 flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> {m.department}</span>}
                                      </div>
+                                     {m.status !== 'operational' && (
+                                         <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-2.5 rounded-xl border border-red-100 flex items-start w-full text-left">
+                                             <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
+                                             <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
+                                                 <b>Ghi chú lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
+                                             </span>
+                                         </div>
+                                     )}
                                    </div>
                                    <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 shadow-sm ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
                                 </button>
@@ -1019,7 +1027,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   );
 };
 
-const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user, categoryList, saveCategoryListData }) => {
+const MachineManagementView = ({ machines, logs, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user, categoryList, saveCategoryListData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
@@ -1293,6 +1301,14 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
                                                 {m.location && <span className="flex items-center"><MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Vị trí: {m.location}</span>}
                                                 {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
                                             </div>
+                                            {m.status !== 'operational' && (
+                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 flex items-start">
+                                                    <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
+                                                    <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
+                                                        <b>Nội dung lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -2218,7 +2234,7 @@ export default function App() {
         <div className="flex-1 overflow-hidden relative flex flex-col">
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
-          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
+          {view === 'machines' && <MachineManagementView machines={machines} logs={logs} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
@@ -2228,7 +2244,7 @@ export default function App() {
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
-          {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
+          {view === 'manual_select' && <ManualSelectView machines={machines} logs={logs} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
           {view === 'details' && selectedMachine && (
                <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
                    <div className="bg-white shadow-sm p-4 md:p-6 shrink-0 z-10 border-b border-slate-200">
