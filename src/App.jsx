@@ -8,6 +8,7 @@ import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'fi
 
 // Injected Styles for custom animations and scrollbars
 const injectStyles = () => {
+  if (typeof document === 'undefined') return;
   if (document.getElementById('custom-app-styles')) return;
   const style = document.createElement('style');
   style.id = 'custom-app-styles';
@@ -24,6 +25,9 @@ const injectStyles = () => {
   `;
   document.head.appendChild(style);
 };
+
+// Gọi hàm injectStyles để áp dụng CSS
+injectStyles();
 
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
@@ -531,7 +535,7 @@ const ScannerView = ({ user, setView, handleScanSuccess, machines }) => {
 
 const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
    const [search, setSearch] = useState('');
-   const [collapsedGroups, setCollapsedGroups] = useState({});
+   const [expandedGroups, setExpandedGroups] = useState({});
 
    let filtered = machines;
    if (machineFilter === 'operational') filtered = machines.filter(m => m.status === 'operational');
@@ -553,7 +557,7 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
    });
 
    const toggleGroup = (groupName) => {
-       setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+       setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
    };
 
    return (
@@ -574,16 +578,16 @@ const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter 
                   <div className="p-12 text-center text-slate-500 bg-white rounded-3xl border border-dashed border-slate-300">Không tìm thấy thiết bị phù hợp.</div>
                ) : (
                   sortedGroups.map((groupName) => {
-                    const isCollapsed = collapsedGroups[groupName];
+                    const isExpanded = expandedGroups[groupName];
                     return (
                       <div key={groupName} className="space-y-3">
                          <div onClick={() => toggleGroup(groupName)} className="flex items-center justify-between border-b border-slate-300 pb-2 mb-3 mt-2 cursor-pointer hover:bg-slate-100 rounded-xl p-2 transition-colors">
                              <h3 className="font-black text-slate-700 text-base md:text-lg uppercase tracking-wide flex items-center"><Database className="w-5 h-5 mr-2 text-slate-500" /> Nhóm: {groupName} <span className="text-sm font-bold text-slate-400 normal-case ml-2">({groupedMachines[groupName].length} máy)</span></h3>
                              <button className="text-slate-500 bg-white p-1.5 rounded-full shadow-sm border border-slate-200 hover:text-blue-600 hover:border-blue-300 transition-colors focus:outline-none">
-                                 {isCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                                 {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                              </button>
                          </div>
-                         {!isCollapsed && (
+                         {isExpanded && (
                            <div className="flex flex-col gap-3 animate-fade-in">
                               {groupedMachines[groupName].map(m => (
                                 <button key={m.id} onClick={() => handleScanSuccess(m.id)} className="w-full bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 text-left hover:border-blue-400 hover:shadow-md transition-all active:scale-[0.98] flex items-center justify-between group">
@@ -1004,7 +1008,7 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' });
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
-  const [collapsedGroups, setCollapsedGroups] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState({});
   
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [newCatName, setNewCatName] = useState('');
@@ -1024,15 +1028,15 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
       if (!groupedMachines[cat]) groupedMachines[cat] = [];
       groupedMachines[cat].push(m);
   });
-  const sortedGroups = Object.keys(groupedMachines).sort((a, b) => {
-      if (a === 'Chưa phân loại') return 1;
-      if (b === 'Chưa phân loại') return -1;
-      return a.localeCompare(b);
-  });
+   const sortedGroups = Object.keys(groupedMachines).sort((a, b) => {
+       if (a === 'Chưa phân loại') return 1;
+       if (b === 'Chưa phân loại') return -1;
+       return a.localeCompare(b);
+   });
 
-  const toggleGroup = (groupName) => {
-      setCollapsedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
-  };
+   const toggleGroup = (groupName) => {
+       setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+   };
 
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' }); };
   const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', category: m.category || '', status: m.status || 'operational' }); };
@@ -1218,16 +1222,16 @@ const MachineManagementView = ({ machines, setView, showNotification, saveMachin
             <div className="space-y-6">
               {filteredMachines.length > 0 ? (
                 sortedGroups.map((groupName) => {
-                  const isCollapsed = collapsedGroups[groupName];
+                  const isExpanded = expandedGroups[groupName];
                   return (
                   <div key={groupName} className="space-y-3">
                      <div onClick={() => toggleGroup(groupName)} className="flex items-center justify-between border-b border-slate-300 pb-2 mb-3 mt-4 cursor-pointer hover:bg-slate-100 rounded-xl p-2 transition-colors">
                          <h3 className="font-black text-slate-700 text-lg uppercase tracking-wide flex items-center"><Database className="w-5 h-5 mr-2 text-slate-500" /> Nhóm: {groupName} <span className="text-sm font-bold text-slate-400 normal-case ml-2">({groupedMachines[groupName].length} máy)</span></h3>
                          <button className="text-slate-500 bg-white p-1.5 rounded-full shadow-sm border border-slate-200 hover:text-blue-600 hover:border-blue-300 transition-colors focus:outline-none">
-                             {isCollapsed ? <ChevronDown className="w-5 h-5" /> : <ChevronUp className="w-5 h-5" />}
+                             {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                          </button>
                      </div>
-                     {!isCollapsed && (
+                     {isExpanded && (
                      <div className="flex flex-col gap-3 animate-fade-in">
                         {groupedMachines[groupName].map((m) => (
                           <div key={m.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
