@@ -819,7 +819,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 };
 
 const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
-  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
+  const [filterTech, setFilterTech] = useState('all');
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   
   const filteredLogs = utilityLogs.filter(t => {
@@ -842,12 +842,10 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                    <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">Lịch Sử Điện Nước</h2>
                 </div>
                 <div className="flex gap-3 md:w-1/2 lg:w-1/3">
-                   {user.role === 'admin' && (
-                      <div className="flex-1 relative">
-                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
-                      </div>
-                   )}
+                   <div className="flex-1 relative">
+                       <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                       <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                   </div>
                    <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
                 </div>
             </div>
@@ -1302,7 +1300,7 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                                                 {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
                                             </div>
                                             {m.status !== 'operational' && (
-                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 flex items-start">
+                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-2.5 rounded-xl border border-red-100 flex items-start w-full text-left">
                                                     <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
                                                     <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
                                                         <b>Nội dung lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
