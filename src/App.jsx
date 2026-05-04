@@ -1098,6 +1098,15 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
       if (isAdding) {
           if (!finalId) finalId = `M-${Date.now()}`;
           if (machines.find(m => m.id === finalId)) { showNotification('Mã thiết bị này đã tồn tại!', 'error'); return; }
+      } else {
+          // Kiểm tra xem ID mới có trùng với ID của máy khác không
+          if (finalId !== editingId && machines.find(m => m.id === finalId)) {
+              showNotification('Mã thiết bị này đã tồn tại!', 'error'); return;
+          }
+          // Nếu đổi mã máy (ID), ta cần xóa bản ghi cũ trước khi tạo bản mới
+          if (finalId !== editingId) {
+              await handleDeleteMachineApp(editingId);
+          }
       }
       await saveMachineData({ ...editForm, id: finalId });
       setEditingId(null); setIsAdding(false);
@@ -1263,7 +1272,7 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                           <div key={m.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                              {editingId === m.id ? (
                                  <div className="flex flex-col gap-3 p-5 md:p-6 bg-blue-50/50 border-b border-blue-200 flex-1">
-                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
+                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800" value={editForm.id} onChange={e => setEditForm({...editForm, id: e.target.value})} placeholder="Mã thiết bị" />
                                     <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
                                     <div className="flex gap-2">
                                         <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
