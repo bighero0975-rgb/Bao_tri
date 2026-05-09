@@ -29,7 +29,6 @@ const injectStyles = () => {
 // Gọi hàm injectStyles để áp dụng CSS
 injectStyles();
 
-// Cấu hình dự án Firebase cá nhân của bạn (Fallback khi chạy Local)
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
   authDomain: "techmaintain-app.firebaseapp.com",
@@ -39,12 +38,13 @@ const myFirebaseConfig = {
   appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
-// Ưu tiên sử dụng Database của hệ thống Canvas để không bị lỗi Permission. 
-// Chỉ sử dụng Firebase cá nhân nếu như ứng dụng đang chạy ở môi trường ngoài (Local).
-const isCanvasEnv = typeof __firebase_config !== 'undefined';
-const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : myFirebaseConfig;
+const isCustomConfigured = myFirebaseConfig.apiKey && myFirebaseConfig.apiKey !== "";
+const firebaseConfig = isCustomConfigured 
+    ? myFirebaseConfig 
+    : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
+const safeAppId = rawAppId.replace(/[\/\.]/g, '_');
 
 const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
@@ -343,20 +343,8 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
         </div>
         
-        <div className="flex flex-col items-center justify-center gap-2 mt-8 text-sm font-medium">
-           {isCloudSyncing ? (
-               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></div>
-           ) : db ? (
-               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></div>
-           ) : (
-               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></div>
-           )}
-           
-           {!isCanvasEnv && db && (
-               <div className="mt-4 p-4 bg-yellow-900/40 border border-yellow-700 rounded-xl text-yellow-400 text-xs text-center max-w-sm">
-                   Đang dùng Firebase cá nhân. Đảm bảo bạn đã mở <b>Anonymous Sign-in</b> và cấu hình <b>Firestore Security Rules</b> cho phép đọc/ghi.
-               </div>
-           )}
+        <div className="flex justify-center items-center gap-2 mt-8 text-sm font-medium">
+           {isCloudSyncing ? (<><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></>) : db ? (<><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></>) : (<><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></>)}
         </div>
       </div>
     </div>
@@ -545,7 +533,7 @@ const ScannerView = ({ user, setView, handleScanSuccess, machines }) => {
   );
 };
 
-const ManualSelectView = ({ machines, logs, setView, handleScanSuccess, machineFilter }) => {
+const ManualSelectView = ({ machines, setView, handleScanSuccess, machineFilter }) => {
    const [search, setSearch] = useState('');
    const [expandedGroups, setExpandedGroups] = useState({});
 
@@ -610,14 +598,6 @@ const ManualSelectView = ({ machines, logs, setView, handleScanSuccess, machineF
                                         {m.location && <span className="text-xs md:text-sm text-slate-500 flex items-center"><MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> {m.location}</span>}
                                         {m.department && <span className="text-xs md:text-sm text-slate-500 flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> {m.department}</span>}
                                      </div>
-                                     {m.status !== 'operational' && (
-                                         <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-2.5 rounded-xl border border-red-100 flex items-start w-full text-left">
-                                             <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
-                                             <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
-                                                 <b>Ghi chú lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
-                                             </span>
-                                         </div>
-                                     )}
                                    </div>
                                    <div className={`w-3 h-3 md:w-4 md:h-4 rounded-full shrink-0 shadow-sm ${m.status === 'operational' ? 'bg-green-500' : m.status === 'maintenance' ? 'bg-yellow-500' : 'bg-red-500'}`}></div>
                                 </button>
@@ -831,7 +811,7 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 };
 
 const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
-  const [filterTech, setFilterTech] = useState('all');
+  const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   
   const filteredLogs = utilityLogs.filter(t => {
@@ -854,10 +834,12 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                    <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">Lịch Sử Điện Nước</h2>
                 </div>
                 <div className="flex gap-3 md:w-1/2 lg:w-1/3">
-                   <div className="flex-1 relative">
-                       <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                       <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
-                   </div>
+                   {user.role === 'admin' && (
+                      <div className="flex-1 relative">
+                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                      </div>
+                   )}
                    <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
                 </div>
             </div>
@@ -1037,7 +1019,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   );
 };
 
-const MachineManagementView = ({ machines, logs, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user, categoryList, saveCategoryListData }) => {
+const MachineManagementView = ({ machines, setView, showNotification, saveMachineData, machineFilter, handleDeleteMachineApp, user, categoryList, saveCategoryListData }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef(null);
@@ -1110,15 +1092,6 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
       if (isAdding) {
           if (!finalId) finalId = `M-${Date.now()}`;
           if (machines.find(m => m.id === finalId)) { showNotification('Mã thiết bị này đã tồn tại!', 'error'); return; }
-      } else {
-          // Kiểm tra xem ID mới có trùng với ID của máy khác không
-          if (finalId !== editingId && machines.find(m => m.id === finalId)) {
-              showNotification('Mã thiết bị này đã tồn tại!', 'error'); return;
-          }
-          // Nếu đổi mã máy (ID), ta cần xóa bản ghi cũ trước khi tạo bản mới
-          if (finalId !== editingId) {
-              await handleDeleteMachineApp(editingId);
-          }
       }
       await saveMachineData({ ...editForm, id: finalId });
       setEditingId(null); setIsAdding(false);
@@ -1284,7 +1257,7 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                           <div key={m.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden flex flex-col">
                              {editingId === m.id ? (
                                  <div className="flex flex-col gap-3 p-5 md:p-6 bg-blue-50/50 border-b border-blue-200 flex-1">
-                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-800" value={editForm.id} onChange={e => setEditForm({...editForm, id: e.target.value})} placeholder="Mã thiết bị" />
+                                    <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-slate-100 text-slate-500 outline-none" value={editForm.id} disabled title="Mã không thể sửa" />
                                     <input className="w-full p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none font-bold" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Tên thiết bị" />
                                     <div className="flex gap-2">
                                         <input className="w-1/2 p-3 border border-slate-300 rounded-xl text-sm md:text-base bg-white focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.location} onChange={e => setEditForm({...editForm, location: e.target.value})} placeholder="Vị trí" />
@@ -1320,14 +1293,6 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                                                 {m.location && <span className="flex items-center"><MapPin className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Vị trí: {m.location}</span>}
                                                 {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
                                             </div>
-                                            {m.status !== 'operational' && (
-                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 flex items-start">
-                                                    <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
-                                                    <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
-                                                        <b>Nội dung lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
-                                                    </span>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
 
@@ -2030,11 +1995,9 @@ export default function App() {
     if (!auth) { setIsCloudSyncing(false); return; }
     const initAuth = async () => {
       try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-           await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-           await signInAnonymously(auth);
-        }
+        if (isCustomConfigured) await signInAnonymously(auth);
+        else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
+        else await signInAnonymously(auth);
       } catch (error) { console.error("Lỗi xác thực Firebase:", error); }
     };
     initAuth();
@@ -2046,19 +2009,19 @@ export default function App() {
     if (!fbUser || !db) return;
     const handleSnapError = (error) => { console.error("Firebase Sync Error:", error); setIsCloudSyncing(false); };
 
-    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
-    const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
+    const unsubMachines = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubInventory = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubLogs = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
+    const unsubDaily = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubUtility = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubSettings = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
 
-    const unsubCategories = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
+    const unsubCategories = onSnapshot(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
         if (docSnap.exists()) {
             setCategoryList(docSnap.data().list || []);
         } else {
-            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
+            setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
             setCategoryList(INITIAL_CATEGORIES);
         }
     }, handleSnapError);
@@ -2066,19 +2029,19 @@ export default function App() {
     return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); unsubCategories(); };
   }, [fbUser, db]);
 
-  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
-  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
-  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
-  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
+  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
+  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
+  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const saveCategoryListData = async (newList) => { 
-      if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
+      if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
       else { setCategoryList(newList); localStorage.setItem('techmaintain_categories', JSON.stringify(newList)); } 
   };
 
@@ -2161,7 +2124,7 @@ export default function App() {
           }
 
           if (utilityEditItem) {
-               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
+               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
                else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
           }
       }
@@ -2255,7 +2218,7 @@ export default function App() {
         <div className="flex-1 overflow-hidden relative flex flex-col">
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
-          {view === 'machines' && <MachineManagementView machines={machines} logs={logs} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
+          {view === 'machines' && <MachineManagementView machines={machines} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
@@ -2265,7 +2228,7 @@ export default function App() {
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
           {view === 'scanner' && <ScannerView user={user} setView={setView} handleScanSuccess={handleScanSuccess} machines={machines} />}
-          {view === 'manual_select' && <ManualSelectView machines={machines} logs={logs} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
+          {view === 'manual_select' && <ManualSelectView machines={machines} setView={setView} handleScanSuccess={handleScanSuccess} machineFilter={machineFilter} />}
           {view === 'details' && selectedMachine && (
                <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
                    <div className="bg-white shadow-sm p-4 md:p-6 shrink-0 z-10 border-b border-slate-200">
