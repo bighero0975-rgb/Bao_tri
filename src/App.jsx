@@ -29,22 +29,8 @@ const injectStyles = () => {
 // Gọi hàm injectStyles để áp dụng CSS
 injectStyles();
 
-const myFirebaseConfig = {
-  apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
-  authDomain: "techmaintain-app.firebaseapp.com",
-  projectId: "techmaintain-app",
-  storageBucket: "techmaintain-app.firebasestorage.app",
-  messagingSenderId: "202386593017",
-  appId: "1:202386593017:web:3e47d12a813446e770be28"
-};
-
-const isCustomConfigured = myFirebaseConfig.apiKey && myFirebaseConfig.apiKey !== "";
-const firebaseConfig = isCustomConfigured 
-    ? myFirebaseConfig 
-    : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
-
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
-const safeAppId = rawAppId.replace(/[\/\.]/g, '_');
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
 const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
@@ -1309,7 +1295,7 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                                                 {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
                                             </div>
                                             {m.status !== 'operational' && (
-                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-2.5 rounded-xl border border-red-100 flex items-start w-full text-left">
+                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 flex items-start">
                                                     <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
                                                     <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
                                                         <b>Nội dung lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
@@ -2018,9 +2004,11 @@ export default function App() {
     if (!auth) { setIsCloudSyncing(false); return; }
     const initAuth = async () => {
       try {
-        if (isCustomConfigured) await signInAnonymously(auth);
-        else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-        else await signInAnonymously(auth);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+           await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+           await signInAnonymously(auth);
+        }
       } catch (error) { console.error("Lỗi xác thực Firebase:", error); }
     };
     initAuth();
@@ -2032,19 +2020,19 @@ export default function App() {
     if (!fbUser || !db) return;
     const handleSnapError = (error) => { console.error("Firebase Sync Error:", error); setIsCloudSyncing(false); };
 
-    const unsubMachines = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
-    const unsubDaily = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubUtility = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
+    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
+    const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
 
-    const unsubCategories = onSnapshot(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
+    const unsubCategories = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
         if (docSnap.exists()) {
             setCategoryList(docSnap.data().list || []);
         } else {
-            setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
             setCategoryList(INITIAL_CATEGORIES);
         }
     }, handleSnapError);
@@ -2052,19 +2040,19 @@ export default function App() {
     return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); unsubCategories(); };
   }, [fbUser, db]);
 
-  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
-  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
-  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
-  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
+  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
+  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
+  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const saveCategoryListData = async (newList) => { 
-      if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
+      if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
       else { setCategoryList(newList); localStorage.setItem('techmaintain_categories', JSON.stringify(newList)); } 
   };
 
@@ -2147,7 +2135,7 @@ export default function App() {
           }
 
           if (utilityEditItem) {
-               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
+               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
                else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
           }
       }
