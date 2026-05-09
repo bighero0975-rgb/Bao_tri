@@ -29,8 +29,22 @@ const injectStyles = () => {
 // Gọi hàm injectStyles để áp dụng CSS
 injectStyles();
 
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+// Cấu hình dự án Firebase cá nhân của bạn (Fallback khi chạy Local)
+const myFirebaseConfig = {
+  apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
+  authDomain: "techmaintain-app.firebaseapp.com",
+  projectId: "techmaintain-app",
+  storageBucket: "techmaintain-app.firebasestorage.app",
+  messagingSenderId: "202386593017",
+  appId: "1:202386593017:web:3e47d12a813446e770be28"
+};
+
+// Ưu tiên sử dụng Database của hệ thống Canvas để không bị lỗi Permission. 
+// Chỉ sử dụng Firebase cá nhân nếu như ứng dụng đang chạy ở môi trường ngoài (Local).
+const isCanvasEnv = typeof __firebase_config !== 'undefined';
+const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : myFirebaseConfig;
+
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
 
 const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
@@ -329,8 +343,20 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
         </div>
         
-        <div className="flex justify-center items-center gap-2 mt-8 text-sm font-medium">
-           {isCloudSyncing ? (<><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></>) : db ? (<><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></>) : (<><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></>)}
+        <div className="flex flex-col items-center justify-center gap-2 mt-8 text-sm font-medium">
+           {isCloudSyncing ? (
+               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></div>
+           ) : db ? (
+               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></div>
+           ) : (
+               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></div>
+           )}
+           
+           {!isCanvasEnv && db && (
+               <div className="mt-4 p-4 bg-yellow-900/40 border border-yellow-700 rounded-xl text-yellow-400 text-xs text-center max-w-sm">
+                   Đang dùng Firebase cá nhân. Đảm bảo bạn đã mở <b>Anonymous Sign-in</b> và cấu hình <b>Firestore Security Rules</b> cho phép đọc/ghi.
+               </div>
+           )}
         </div>
       </div>
     </div>
