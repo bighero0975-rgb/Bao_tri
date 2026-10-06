@@ -29,6 +29,7 @@ const injectStyles = () => {
 // Gọi hàm injectStyles để áp dụng CSS
 injectStyles();
 
+// Cấu hình dự án Firebase cá nhân của bạn (Fallback khi chạy Local)
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
   authDomain: "techmaintain-app.firebaseapp.com",
@@ -38,13 +39,12 @@ const myFirebaseConfig = {
   appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
-const isCustomConfigured = myFirebaseConfig.apiKey && myFirebaseConfig.apiKey !== "";
-const firebaseConfig = isCustomConfigured 
-    ? myFirebaseConfig 
-    : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
+// Ưu tiên sử dụng Database của hệ thống Canvas để không bị lỗi Permission. 
+// Chỉ sử dụng Firebase cá nhân nếu như ứng dụng đang chạy ở môi trường ngoài (Local).
+const isCanvasEnv = typeof __firebase_config !== 'undefined';
+const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : myFirebaseConfig;
 
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
-const safeAppId = rawAppId.replace(/[\/\.]/g, '_');
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
 
 const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
@@ -311,7 +311,7 @@ const CoWorkerSelect = ({ usersList, currentUser, selectedCoWorkers, setSelected
 // VIEWS CHÍNH CỦA HỆ THỐNG
 // ============================================================================
 
-const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
+const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
@@ -343,8 +343,27 @@ const LoginView = ({ handleLogin, isCloudSyncing, db }) => {
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
         </div>
         
-        <div className="flex justify-center items-center gap-2 mt-8 text-sm font-medium">
-           {isCloudSyncing ? (<><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></>) : db ? (<><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></>) : (<><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></>)}
+        <div className="flex flex-col items-center justify-center gap-2 mt-8 text-sm font-medium">
+           {isCloudSyncing ? (
+               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></div>
+           ) : db && !permissionError ? (
+               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></div>
+           ) : (
+               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></div>
+           )}
+           
+           {permissionError && (
+               <div className="mt-4 p-4 bg-red-900/40 border border-red-700 rounded-xl text-red-400 text-xs text-center max-w-sm">
+                   <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-red-500 animate-pulse" />
+                   Bị từ chối quyền truy cập Đám mây! Vui lòng truy cập Firebase Console kiểm tra lại ngày hết hạn trong <b>Firestore Security Rules</b>.
+               </div>
+           )}
+
+           {!isCanvasEnv && db && !permissionError && (
+               <div className="mt-4 p-4 bg-yellow-900/40 border border-yellow-700 rounded-xl text-yellow-400 text-xs text-center max-w-sm">
+                   Đang dùng Firebase cá nhân. Đảm bảo bạn đã mở <b>Anonymous Sign-in</b>.
+               </div>
+           )}
         </div>
       </div>
     </div>
@@ -416,7 +435,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
                   <div className="bg-orange-100 p-4 md:p-5 rounded-2xl text-orange-600 mr-4 md:mr-5 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8" /></div>
                   <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Kho Vật Tư</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý tồn kho</p></div>
                </button>
-               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
+               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
                   <div className="bg-pink-100 p-4 md:p-5 rounded-2xl text-pink-600 mr-4 md:mr-5 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
                   <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử BC hằng ngày</p></div>
                </button>
@@ -1309,7 +1328,7 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
                                                 {m.department && <span className="flex items-center"><User className="w-3.5 h-3.5 mr-1 text-slate-400 shrink-0"/> Phòng ban: {m.department}</span>}
                                             </div>
                                             {m.status !== 'operational' && (
-                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-2.5 rounded-xl border border-red-100 flex items-start w-full text-left">
+                                                <div className="mt-2.5 text-xs md:text-sm text-red-700 bg-red-50 p-2 md:p-3 rounded-xl border border-red-100 flex items-start">
                                                     <AlertTriangle className="w-4 h-4 mr-1.5 shrink-0 mt-0.5 text-red-500" />
                                                     <span className="line-clamp-2" title={logs?.find(l => l.machineId === m.id)?.note || 'Không có ghi chú'}>
                                                         <b>Nội dung lỗi: </b>{logs?.find(l => l.machineId === m.id)?.note || 'Chưa cập nhật thông tin lỗi.'}
@@ -1514,6 +1533,14 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       return matchTech && matchDate;
   });
 
+  // Sắp xếp giảm dần theo ngày, sau đó theo giờ bắt đầu
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+      if (a.date !== b.date) {
+          return new Date(b.date) - new Date(a.date);
+      }
+      return (b.startTime || '').localeCompare(a.startTime || '');
+  });
+
   const viewTitle = taskFilter === 'pending' ? 'Công Việc Đang Dở' : 'Sổ Ghi Công Việc';
 
   const startEdit = (task) => { setEditTaskData(task); setInitialTaskData(null); setView('daily_task_form'); };
@@ -1523,11 +1550,12 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       try {
         setIsExporting(true); 
         const XLSX = await loadXLSX();
-        const headers = ['Ngày', 'Bắt đầu', 'Kết thúc', 'KTV Chính', 'KTV làm cùng', 'Công việc / Thiết bị', 'Phân loại', 'Trạng thái', 'Ghi chú', 'Vật tư sử dụng'];
-        const rows = filteredTasks.map(t => {
+        const headers = ['Ngày', 'Bắt đầu', 'Kết thúc', 'KTV Chính', 'KTV làm cùng', 'Công việc / Thiết bị', 'Phân loại', 'Trạng thái', 'Ghi chú', 'Vật tư sử dụng', 'Thời gian thực làm'];
+        const rows = sortedTasks.map(t => {
             const partsStr = t.parts && t.parts.length > 0 ? t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
             const coWorkersStr = t.coWorkers && t.coWorkers.length > 0 ? t.coWorkers.map(cw => cw.name).join(', ') : '';
-            return [t.date, t.startTime, t.endTime, t.technicianName, coWorkersStr, t.taskName, t.type, t.status, t.note, partsStr];
+            const realTime = calculateWorkTime(t.startTime, t.endTime);
+            return [t.date, t.startTime, t.endTime, t.technicianName, coWorkersStr, t.taskName, t.type, t.status, t.note, partsStr, realTime];
         });
         const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); 
         const workbook = XLSX.utils.book_new();
@@ -1539,6 +1567,41 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       } finally { 
         setIsExporting(false); 
       }
+  };
+
+  // Hàm tính toán thời gian làm việc (Trừ đi 1.5h nghỉ trưa từ 11:30 - 13:00)
+  const calculateWorkTime = (start, end) => {
+      if (!start || !end) return '--';
+      const parseTime = (timeStr) => {
+          const [h, m] = timeStr.split(':').map(Number);
+          return h * 60 + m; // Quy đổi ra số phút tính từ 00:00
+      };
+      
+      const sMins = parseTime(start);
+      const eMins = parseTime(end);
+      
+      if (eMins <= sMins) return '0h';
+
+      let totalMins = eMins - sMins;
+
+      // Khoảng thời gian nghỉ trưa (11:30 = 690 phút, 13:00 = 780 phút)
+      const lunchStart = 690;
+      const lunchEnd = 780;
+
+      // Tìm thời gian giao nhau giữa [Giờ làm việc] và [Giờ nghỉ trưa]
+      const overlapStart = Math.max(sMins, lunchStart);
+      const overlapEnd = Math.min(eMins, lunchEnd);
+      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
+
+      // Trừ đi thời gian trùng với giờ nghỉ trưa
+      const actualMins = totalMins - lunchOverlap;
+
+      const hours = Math.floor(actualMins / 60);
+      const mins = actualMins % 60;
+      
+      if (hours === 0) return `${mins}p`;
+      if (mins === 0) return `${hours}h`;
+      return `${hours}h ${mins}p`;
   };
 
   return (
@@ -1569,50 +1632,113 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4">
-                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{taskFilter !== 'pending' ? `Từ ${startDate} đến ${endDate}` : 'Tất cả'} ({filteredTasks.length} bản ghi)</span></div>
+                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{taskFilter !== 'pending' ? `Từ ${startDate} đến ${endDate}` : 'Tất cả'} ({sortedTasks.length} bản ghi)</span></div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-                  {filteredTasks.length === 0 ? (
-                       <div className="col-span-full p-12 text-center text-slate-400 text-base md:text-lg bg-white rounded-3xl border border-dashed border-slate-300">Không có báo cáo nào phù hợp.</div>
-                  ) : (
-                       filteredTasks.map((task) => (
-                           <div key={task.id} className="bg-white p-5 md:p-6 rounded-3xl shadow-sm border border-slate-200 hover:shadow-md hover:border-purple-300 transition-all flex flex-col group">
-                               <div className="flex justify-between items-start mb-4">
-                                   <div className="pr-4"><h4 className="font-bold text-slate-800 text-base md:text-lg leading-tight mb-2">{task.taskName}</h4><span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2.5 py-1 rounded-md uppercase tracking-wider">{task.type}</span></div>
-                                   <div className="flex flex-col items-end gap-2 shrink-0"><span className={`text-[10px] md:text-xs px-2.5 py-1 rounded-md font-bold shadow-sm ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'}`}>{task.status}</span></div>
-                               </div>
-                               
-                               <div className="flex flex-col gap-2 mb-4">
-                                   <div className="flex items-center text-xs md:text-sm font-mono font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit"><Clock className="w-4 h-4 mr-2 text-slate-400" /> {task.date} ({task.startTime} - {task.endTime})</div>
-                                   <div className="flex items-center text-xs md:text-sm font-medium text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100 w-fit"><User className="w-4 h-4 mr-2 text-slate-400" /> {task.technicianName}</div>
-                               </div>
-                               
-                               <p className="text-slate-700 text-sm md:text-base whitespace-pre-wrap flex-1 mb-4 bg-white p-3 md:p-4 border border-slate-100 rounded-xl leading-relaxed">{task.note}</p>
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-sm text-left text-slate-600">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 whitespace-nowrap">
+                                <tr>
+                                    <th className="px-4 py-4 font-bold">Thời gian</th>
+                                    <th className="px-4 py-4 font-bold">Nhân sự</th>
+                                    <th className="px-4 py-4 font-bold min-w-[250px]">Nội dung Công việc</th>
+                                    <th className="px-4 py-4 font-bold min-w-[200px]">Ghi chú / Vật tư</th>
+                                    <th className="px-4 py-4 font-bold text-center">Trạng thái</th>
+                                    <th className="px-4 py-4 font-bold text-center">Hình ảnh</th>
+                                    <th className="px-4 py-4 font-bold text-center">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {sortedTasks.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" className="p-12 text-center text-slate-400 text-base md:text-lg border-dashed border-slate-300">Không có báo cáo nào phù hợp.</td>
+                                    </tr>
+                                ) : (
+                                    sortedTasks.map((task) => (
+                                        <tr key={task.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                                                <div className="font-bold text-slate-800 flex items-center bg-slate-100 px-2.5 py-1.5 rounded-lg w-fit mb-1.5"><CalendarClock className="w-4 h-4 mr-1.5 text-slate-500"/> {task.date}</div>
+                                                <div className="text-xs font-mono text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-md w-fit flex items-center mb-1.5">
+                                                    <Clock className="w-3 h-3 mr-1 text-slate-400" /> {task.startTime} - {task.endTime}
+                                                </div>
+                                                <div className="text-xs font-bold text-purple-700 bg-purple-50 px-2 py-1 rounded-md border border-purple-100 w-fit">
+                                                    T.Gian: {calculateWorkTime(task.startTime, task.endTime)}
+                                                </div>
+                                            </td>
+                                            
+                                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                                                <div className="font-bold text-slate-700 flex items-center mb-1"><User className="w-4 h-4 mr-1.5 text-slate-400" /> {task.technicianName}</div>
+                                                {task.coWorkers && task.coWorkers.length > 0 && (
+                                                    <div className="text-xs text-slate-500 flex flex-col gap-1 mt-1 pl-5">
+                                                        {task.coWorkers.map(cw => (
+                                                            <span key={cw.username} className="flex items-center text-[11px]"><Plus className="w-3 h-3 mr-1"/> {cw.name}</span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
 
-                               {task.parts && task.parts.length > 0 && (
-                                 <div className="mb-4">
-                                   <div className="text-[10px] md:text-xs text-slate-400 mb-2 flex items-center uppercase font-bold"><Package className="w-4 h-4 mr-1.5"/> Vật tư thay thế:</div>
-                                   <div className="flex flex-wrap gap-2">{task.parts.map((p, idx) => (<span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold shadow-sm">{p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span></span>))}</div>
-                                 </div>
-                               )}
+                                            <td className="px-4 py-4 align-top">
+                                                <h4 className="font-bold text-slate-800 text-base leading-tight mb-2 break-words">{task.taskName}</h4>
+                                                <span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-md uppercase tracking-wider inline-block">
+                                                    {task.type}
+                                                </span>
+                                            </td>
 
-                               {task.images && task.images.length > 0 && (
-                                 <div className="flex gap-2 mb-4 overflow-x-auto pb-2 custom-scrollbar">{task.images.map((img, idx) => (<img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-16 h-16 md:w-20 md:h-20 object-cover rounded-xl border border-slate-200 shrink-0 cursor-pointer hover:shadow-md hover:scale-105 transition-all" alt="BC" />))}</div>
-                               )}
+                                            <td className="px-4 py-4 align-top">
+                                                <p className="text-slate-600 text-sm whitespace-pre-wrap leading-relaxed bg-white p-2.5 border border-slate-100 rounded-xl line-clamp-3 hover:line-clamp-none transition-all cursor-pointer mb-2" title={task.note}>
+                                                    {task.note}
+                                                </p>
+                                                {task.parts && task.parts.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {task.parts.map((p, idx) => (
+                                                            <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-md text-[11px] font-bold shadow-sm whitespace-nowrap">
+                                                                <Package className="w-3 h-3 inline mr-1 -mt-0.5"/>
+                                                                {p.name} <span className="opacity-60 font-normal">({p.quantity} {p.unit})</span>
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </td>
 
-                               <div className="pt-4 border-t border-slate-100 flex items-center justify-between mt-auto">
-                                   {task.status !== 'Hoàn thành' ? (<button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="flex-1 mr-4 bg-purple-600 text-white py-3 rounded-xl text-sm md:text-base font-bold flex justify-center items-center gap-2 hover:bg-purple-700 transition-colors shadow-md active:scale-95"><PlaySquare className="w-5 h-5" /> Tiếp tục CV</button>) : (<div className="flex-1"></div>)}
-                                   {/* Quyền Sửa/Xóa chỉ dành cho admin HOẶC chủ nhân của báo cáo đó nếu nó đã hoàn thành */}
-                                   {(user.role === 'admin' || task.username === user.username) && (
-                                       <div className="flex gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => startEdit(task)} className="px-3 py-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border border-slate-200 hover:border-blue-200 font-medium flex items-center"><Edit className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Sửa</span></button>
-                                          <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors border border-slate-200 hover:border-red-200 font-medium flex items-center"><Trash2 className="w-4 h-4" /><span className="hidden md:inline ml-1.5 text-sm font-bold">Xóa</span></button>
-                                       </div>
-                                   )}
-                               </div>
-                           </div>
-                       ))
-                  )}
+                                            <td className="px-4 py-4 align-top text-center">
+                                                <span className={`text-[11px] px-2.5 py-1 rounded-md font-bold shadow-sm whitespace-nowrap inline-block ${task.status === 'Hoàn thành' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'}`}>
+                                                    {task.status}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-4 align-top text-center">
+                                                <div className="flex gap-1.5 justify-center flex-wrap max-w-[120px] mx-auto">
+                                                    {task.images && task.images.length > 0 ? task.images.map((img, idx) => (
+                                                        <img key={idx} src={img} onClick={() => setZoomedImage(img)} className="w-10 h-10 object-cover rounded-lg border border-slate-200 cursor-pointer hover:scale-110 transition-transform shadow-sm" alt="BC" />
+                                                    )) : <span className="text-slate-300">-</span>}
+                                                </div>
+                                            </td>
+
+                                            <td className="px-4 py-4 align-top whitespace-nowrap">
+                                                <div className="flex flex-col gap-2 items-center">
+                                                    {task.status !== 'Hoàn thành' && (
+                                                        <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-purple-700 transition-colors shadow-sm w-full">
+                                                            <PlaySquare className="w-3.5 h-3.5" /> Tiếp
+                                                        </button>
+                                                    )}
+                                                    {(user.role === 'admin' || task.username === user.username) && (
+                                                        <div className="flex gap-1 w-full justify-center">
+                                                            <button onClick={() => startEdit(task)} className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-200" title="Sửa">
+                                                                <Edit className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-transparent hover:border-red-200" title="Xóa">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1705,13 +1831,8 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                           <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label>
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
+                                <option>Chế tạo máy</option>
                                 <option>Sửa chữa đột xuất</option>
-                                <option>Sửa chữa chung</option>
-                                <option>Bảo trì cơ sở vật chất</option>
-                                <option>Hỗ trợ sản xuất</option>
-                                <option>Kiểm tra lỗi</option>
-                                <option>Thay thế linh kiện</option>
-                                <option>Khác</option>
                           </select>
                       </div>
                   </div>
@@ -1848,13 +1969,8 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                           <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại công việc</label>
                           <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 focus:bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
+                                <option>Chế tạo máy</option>
                                 <option>Sửa chữa đột xuất</option>
-                                <option>Sửa chữa chung</option>
-                                <option>Bảo trì cơ sở vật chất</option>
-                                <option>Hỗ trợ sản xuất</option>
-                                <option>Kiểm tra lỗi</option>
-                                <option>Thay thế linh kiện</option>
-                                <option>Khác</option>
                           </select>
                       </div>
                   </div>
@@ -1976,22 +2092,22 @@ export default function App() {
   const [initialTaskData, setInitialTaskData] = useState(null); 
   const [logDeleteModal, setLogDeleteModal] = useState({ isOpen: false, id: null });
 
-  const [usersList, setUsersList] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_users') : null; return saved ? JSON.parse(saved) : INITIAL_USERS; });
-  const [dailyTasks, setDailyTasks] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_daily') : null; return saved ? JSON.parse(saved) : []; });
-  const [machines, setMachines] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_machines') : null; return saved ? JSON.parse(saved) : INITIAL_MACHINES; });
-  const [logs, setLogs] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_logs') : null; return saved ? JSON.parse(saved) : []; });
-  const [inventory, setInventory] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_inventory') : null; return saved ? JSON.parse(saved) : INITIAL_INVENTORY; });
-  const [utilityLogs, setUtilityLogs] = useState(() => { if (typeof window !== 'undefined' && db) return []; const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_utility') : null; return saved ? JSON.parse(saved) : []; });
+  const [usersList, setUsersList] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_users') : null; return saved ? JSON.parse(saved) : INITIAL_USERS; });
+  const [dailyTasks, setDailyTasks] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_daily') : null; return saved ? JSON.parse(saved) : []; });
+  const [machines, setMachines] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_machines') : null; return saved ? JSON.parse(saved) : INITIAL_MACHINES; });
+  const [logs, setLogs] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_logs') : null; return saved ? JSON.parse(saved) : []; });
+  const [inventory, setInventory] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_inventory') : null; return saved ? JSON.parse(saved) : INITIAL_INVENTORY; });
+  const [utilityLogs, setUtilityLogs] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_utility') : null; return saved ? JSON.parse(saved) : []; });
   const [googleSheetUrl, setGoogleSheetUrl] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('gs_url') || '' : '');
   
   const [categoryList, setCategoryList] = useState(() => { 
-      if (typeof window !== 'undefined' && db) return []; 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_categories') : null; 
       return saved ? JSON.parse(saved) : INITIAL_CATEGORIES; 
   });
 
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
+  const [permissionError, setPermissionError] = useState(false);
 
   const setView = (newView, replace = false) => {
     if (newView === view) return;
@@ -2018,9 +2134,11 @@ export default function App() {
     if (!auth) { setIsCloudSyncing(false); return; }
     const initAuth = async () => {
       try {
-        if (isCustomConfigured) await signInAnonymously(auth);
-        else if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
-        else await signInAnonymously(auth);
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+           await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+           await signInAnonymously(auth);
+        }
       } catch (error) { console.error("Lỗi xác thực Firebase:", error); }
     };
     initAuth();
@@ -2030,21 +2148,27 @@ export default function App() {
 
   useEffect(() => {
     if (!fbUser || !db) return;
-    const handleSnapError = (error) => { console.error("Firebase Sync Error:", error); setIsCloudSyncing(false); };
+    const handleSnapError = (error) => { 
+        console.error("Firebase Sync Error:", error); 
+        setIsCloudSyncing(false); 
+        if (error.code === 'permission-denied' || (error.message && error.message.includes('permission'))) {
+            setPermissionError(true);
+        }
+    };
 
-    const unsubMachines = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
-    const unsubDaily = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubUtility = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', safeAppId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
+    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
+    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
+    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
+    const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
 
-    const unsubCategories = onSnapshot(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
+    const unsubCategories = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
         if (docSnap.exists()) {
             setCategoryList(docSnap.data().list || []);
         } else {
-            setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
             setCategoryList(INITIAL_CATEGORIES);
         }
     }, handleSnapError);
@@ -2052,19 +2176,19 @@ export default function App() {
     return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); unsubCategories(); };
   }, [fbUser, db]);
 
-  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
-  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
-  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
-  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
+  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
+  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
+  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
+  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
+  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const saveCategoryListData = async (newList) => { 
-      if (db && fbUser) await setDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
+      if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
       else { setCategoryList(newList); localStorage.setItem('techmaintain_categories', JSON.stringify(newList)); } 
   };
 
@@ -2147,7 +2271,7 @@ export default function App() {
           }
 
           if (utilityEditItem) {
-               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', safeAppId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
+               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
                else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
           }
       }
@@ -2223,7 +2347,7 @@ export default function App() {
 
   if (!user) return (
       <div className="fixed inset-0 bg-slate-900 flex justify-center overflow-hidden font-sans">
-         <div className="w-full max-w-md md:max-w-none h-full relative overflow-hidden"><LoginView handleLogin={handleLogin} isCloudSyncing={isCloudSyncing} db={db} /></div>
+         <div className="w-full max-w-md md:max-w-none h-full relative overflow-hidden"><LoginView handleLogin={handleLogin} isCloudSyncing={isCloudSyncing} db={db} permissionError={permissionError} /></div>
          {notification && (
             <div className={`absolute top-4 left-4 right-4 md:max-w-md md:mx-auto p-4 md:p-5 rounded-2xl shadow-2xl flex items-center space-x-3 z-50 animate-bounce-in ${notification.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-800 text-white'}`}>
                {notification.type === 'error' ? <AlertCircle className="w-6 h-6 shrink-0"/> : <CheckCircle className="w-6 h-6 shrink-0"/>}
