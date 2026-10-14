@@ -1858,7 +1858,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const sourceData = editTaskData || initialTaskData;
 
   const [formData, setFormData] = useState({ 
-      id: sourceData ? sourceData.id : Date.now(),
+      id: isEditing ? editTaskData.id : Date.now(),
       technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''),
       username: isEditing ? editTaskData.username : (user?.username || ''), 
       date: isEditing ? editTaskData.date : dateStr, 
@@ -1868,10 +1868,10 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
       errorLevel: sourceData && sourceData.errorLevel ? sourceData.errorLevel : '1',
       approvedTime: sourceData && sourceData.approvedTime ? sourceData.approvedTime : (sysSettings?.error_times?.level3 || 24),
-      note: isEditing ? editTaskData.note : (isContinuing ? `${initialTaskData.note}\n\n--- [${dateStr}] ${user.name} tiếp tục ---\n` : ''), 
+      note: isEditing ? editTaskData.note : '', 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
-      parts: sourceData ? (sourceData.parts || []) : [], 
-      images: sourceData ? (sourceData.images || []) : [] 
+      parts: isEditing ? (editTaskData.parts || []) : [], 
+      images: isEditing ? (editTaskData.images || []) : [] 
   });
   
   const [tempPart, setTempPart] = useState({ name: '', unit: '', quantity: '' });
@@ -1946,7 +1946,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
           delete finalData.kpiStatus;
       }
       
-      handleSaveDailyTask(finalData, isEditing || isContinuing);
+      handleSaveDailyTask(finalData, isEditing);
       setInitialTaskData(null); 
       setEditTaskData(null);
   };
@@ -2511,11 +2511,16 @@ export default function App() {
   };
   
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
-      const entryId = isEditingRecord && editTaskData ? editTaskData.id : (initialTaskData ? initialTaskData.id : Date.now()); 
+      const entryId = isEditingRecord && editTaskData ? editTaskData.id : newLog.id; 
       const entry = { ...newLog, id: entryId, formType: 'daily_task' }; 
       await saveDailyTaskData(entry); 
       
-      if (!isEditingRecord && !initialTaskData) { 
+      if (!isEditingRecord) { 
+          // Tự động Đóng (Hoàn thành) phiếu cũ nếu đây là phiếu được "Tiếp tục" để tránh dồn ứ Việc tồn đọng
+          if (initialTaskData && initialTaskData.status !== 'Hoàn thành') {
+             await saveDailyTaskData({ ...initialTaskData, status: 'Hoàn thành' });
+          }
+
           for (const usedPart of entry.parts) { 
               const foundPart = inventory.find(i => i.name === usedPart.name); 
               if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
@@ -2523,7 +2528,7 @@ export default function App() {
           if(googleSheetUrl) pushToGoogleSheet(entry); 
       } 
       
-      showNotification(isEditingRecord ? 'Đã lưu cập nhật công việc!' : 'Đã lưu báo cáo hằng ngày!'); 
+      showNotification(isEditingRecord ? 'Đã lưu cập nhật công việc!' : 'Đã tạo báo cáo mới thành công!'); 
       setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
