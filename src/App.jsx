@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff, CalendarClock, Clock, Filter, Zap, Droplets, ChevronDown, ChevronUp, AlertTriangle, Calculator, PlaySquare } from 'lucide-react';
 
-// --- FIREBASE CLOUD DATABASE SETUP ---
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
-// Injected Styles for custom animations and scrollbars
 const injectStyles = () => {
   if (typeof document === 'undefined') return;
   if (document.getElementById('custom-app-styles')) return;
@@ -26,10 +24,8 @@ const injectStyles = () => {
   document.head.appendChild(style);
 };
 
-// Gọi hàm injectStyles để áp dụng CSS
 injectStyles();
 
-// Cấu hình dự án Firebase cá nhân của bạn (Fallback khi chạy Local)
 const myFirebaseConfig = {
   apiKey: "AIzaSyDedcI5SKRTek49VEkH6s71ogC8-orTjkg", 
   authDomain: "techmaintain-app.firebaseapp.com",
@@ -39,8 +35,6 @@ const myFirebaseConfig = {
   appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
-// Ưu tiên sử dụng Database của hệ thống Canvas để không bị lỗi Permission. 
-// Chỉ sử dụng Firebase cá nhân nếu như ứng dụng đang chạy ở môi trường ngoài (Local).
 const isCanvasEnv = typeof __firebase_config !== 'undefined';
 const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : myFirebaseConfig;
 
@@ -50,7 +44,6 @@ const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
 const db = app ? getFirestore(app) : null;
 
-// --- MOCK DATA MẶC ĐỊNH ---
 const INITIAL_MACHINES = [
   { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A', department: 'Cơ Khí', category: 'Cắt CNC', status: 'operational' },
 ];
@@ -60,9 +53,9 @@ const INITIAL_INVENTORY = [
 ];
 
 const INITIAL_USERS = [
-  { id: 'admin', username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin' },
-  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance' },
-  { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance' }
+  { id: 'admin', username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin', employeeId: 'EMP-001', position: 'Quản đốc', department: 'Ban Giám Đốc' },
+  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance', employeeId: 'EMP-002', position: 'Nhân viên', department: 'Bảo trì Cơ điện' },
+  { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance', employeeId: 'EMP-003', position: 'Nhân viên', department: 'Bảo trì Cơ điện' }
 ];
 
 const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
@@ -74,6 +67,17 @@ const loadXLSX = async () => {
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
     script.onload = () => resolve(window.XLSX);
     script.onerror = () => reject(new Error("Lỗi tải thư viện đọc Excel"));
+    document.body.appendChild(script);
+  });
+};
+
+const loadExcelJS = async () => {
+  if (window.ExcelJS) return window.ExcelJS;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js";
+    script.onload = () => resolve(window.ExcelJS);
+    script.onerror = () => reject(new Error("Lỗi tải thư viện ExcelJS"));
     document.body.appendChild(script);
   });
 };
@@ -158,9 +162,6 @@ const NativeCameraScanner = ({ onScan }) => {
   );
 };
 
-// ============================================================================
-// COMPONENT DÙNG CHUNG
-// ============================================================================
 const CustomConfirmModal = ({ isOpen, title, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
@@ -306,10 +307,6 @@ const CoWorkerSelect = ({ usersList, currentUser, selectedCoWorkers, setSelected
         </div>
     );
 };
-
-// ============================================================================
-// VIEWS CHÍNH CỦA HỆ THỐNG
-// ============================================================================
 
 const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
   const [username, setUsername] = useState('');
@@ -561,7 +558,6 @@ const ManualSelectView = ({ machines, logs, setView, handleScanSuccess, machineF
    if (machineFilter === 'issue') filtered = machines.filter(m => m.status !== 'operational');
    filtered = filtered.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase()));
 
-   // Gom nhóm theo chủng loại (tương tự trang Quản lý Thiết Bị)
    const groupedMachines = {};
    filtered.forEach(m => {
        const cat = m.category || 'Chưa phân loại';
@@ -681,7 +677,6 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
      water: editData?.water || { tong: '', bvChinh: '', bvPhu: '', cantinVPC: '', cantinXuong: '', vpChinh: '', tuoiCay: '' }
   });
 
-  // Lấy bản ghi của ngày gần nhất trước ngày đang chọn (để tính hiệu số nước)
   const sortedUtilityLogs = [...utilityLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
   const previousLog = sortedUtilityLogs.find(log => log.date < formData.date);
   const prevWaterData = previousLog ? (previousLog.water || {}) : {};
@@ -731,7 +726,6 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
       const prevVal = prevWaterData[fieldKey];
       let diffDisplay = null;
 
-      // Tính khối lượng tiêu thụ cho tất cả các đồng hồ
       if (currentVal !== '' && prevVal !== undefined && prevVal !== '') {
           const diff = parseFloat(currentVal) - parseFloat(prevVal);
           if (!isNaN(diff)) {
@@ -847,7 +841,6 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
       return matchTech && matchDate;
   });
 
-  // Thêm biến để chứa danh sách đã sắp xếp giảm dần theo ngày (mới nhất xếp trên)
   const sortedFilteredLogs = [...filteredLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const handleEdit = (log, mode) => { setEditData(log); setUtilityMode(mode); setView('utility_form'); };
@@ -896,7 +889,6 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                                     </tr>
                                 ) : (
                                     sortedFilteredLogs.map((log) => {
-                                        // Lấy log của ngày gần nhất trước đó để tính khối nước tiêu thụ (chỉ tính đồng hồ tổng)
                                         const logsBefore = utilityLogs.filter(l => l.date < log.date).sort((a, b) => new Date(b.date) - new Date(a.date));
                                         const previousLog = logsBefore.length > 0 ? logsBefore[0] : null;
 
@@ -953,7 +945,7 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
 const UserManagementView = ({ usersList, setView, showNotification, saveUserData, handleDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ id: '', username: '', password: '', name: '', role: 'maintenance' });
+  const [editForm, setEditForm] = useState({ id: '', username: '', password: '', name: '', role: 'maintenance', employeeId: '', position: '', department: '' });
   const [isAdding, setIsAdding] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
@@ -962,7 +954,16 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   const handleSave = async () => {
       if (!editForm.username || !editForm.password || !editForm.name) { return showNotification('Vui lòng điền đủ Tên ĐN, Mật khẩu, Họ tên!', 'error'); }
       if (isAdding && usersList.find(u => u.username === editForm.username)) { return showNotification('Tên đăng nhập đã tồn tại!', 'error'); }
-      await saveUserData({ id: editForm.id || `U-${Date.now()}`, username: editForm.username, password: editForm.password, name: editForm.name, role: editForm.role });
+      await saveUserData({ 
+          id: editForm.id || `U-${Date.now()}`, 
+          username: editForm.username, 
+          password: editForm.password, 
+          name: editForm.name, 
+          role: editForm.role,
+          employeeId: editForm.employeeId,
+          position: editForm.position,
+          department: editForm.department
+      });
       showNotification(isAdding ? 'Đã tạo tài khoản KTV mới' : 'Đã cập nhật tài khoản');
       setEditingId(null); setIsAdding(false);
   };
@@ -975,8 +976,8 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
       setDeleteModal({ isOpen: false, id: null });
   };
 
-  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance' }); }
-  const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm(u); }
+  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance', employeeId: '', position: '', department: '' }); }
+  const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm({ employeeId: '', position: '', department: '', ...u }); }
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
@@ -1001,6 +1002,11 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Tên đăng nhập</label><input disabled={!isAdding && editForm.id === 'admin'} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100" placeholder="VD: ktv_nguyen" /></div>
                         <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mật khẩu</label><input value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="***" /></div>
                         <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Họ và Tên</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Họ tên đầy đủ" /></div>
+                        
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mã nhân viên</label><input value={editForm.employeeId || ''} onChange={e => setEditForm({...editForm, employeeId: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: NV001" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Chức vụ</label><input value={editForm.position || ''} onChange={e => setEditForm({...editForm, position: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Tổ trưởng, Nhân viên..." /></div>
+                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Đơn vị</label><input value={editForm.department || ''} onChange={e => setEditForm({...editForm, department: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Tổ Cơ khí, Điện..." /></div>
+                        
                         <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Quyền hạn</label>
                             <select disabled={editForm.id === 'admin'} value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base bg-white outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100">
                                 <option value="maintenance">Kỹ thuật viên</option><option value="admin">Quản lý (Admin)</option>
@@ -1024,7 +1030,12 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
                        </div>
                        <div className="overflow-hidden">
                            <h4 className="font-bold text-slate-800 text-base md:text-lg truncate">{u.name}</h4>
-                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-2 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 break-all space-y-1">
+                           <div className="text-xs text-slate-500 mt-1.5 flex flex-col gap-1">
+                               {u.employeeId && <span><b className="text-slate-600 font-semibold">Mã NV:</b> {u.employeeId}</span>}
+                               {u.position && <span><b className="text-slate-600 font-semibold">Chức vụ:</b> {u.position}</span>}
+                               {u.department && <span><b className="text-slate-600 font-semibold">Đơn vị:</b> {u.department}</span>}
+                           </div>
+                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-3 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 break-all space-y-1">
                                <div><b className="text-slate-700">User:</b> {u.username}</div>
                                <div><b className="text-slate-700">Pass:</b> {u.password}</div>
                            </div>
@@ -1066,7 +1077,6 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
   const filteredMachines = baseMachines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
   const filterTitle = machineFilter === 'operational' ? '(Máy Đang Tốt)' : machineFilter === 'issue' ? '(Lỗi / Bảo Trì)' : '';
 
-  // Logic gom nhóm thiết bị theo chủng loại (category)
   const groupedMachines = {};
   filteredMachines.forEach(m => {
       const cat = m.category || 'Chưa phân loại';
@@ -1086,7 +1096,6 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' }); };
   const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', category: m.category || '', status: m.status || 'operational' }); };
 
-  // Lấy tổng hợp danh sách chủng loại
   const allCategories = Array.from(new Set([...(categoryList || []), ...machines.map(m => m.category).filter(Boolean)]));
 
   const handleAddCategory = () => {
@@ -1118,11 +1127,9 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
           if (!finalId) finalId = `M-${Date.now()}`;
           if (machines.find(m => m.id === finalId)) { showNotification('Mã thiết bị này đã tồn tại!', 'error'); return; }
       } else {
-          // Kiểm tra xem ID mới có trùng với ID của máy khác không
           if (finalId !== editingId && machines.find(m => m.id === finalId)) {
               showNotification('Mã thiết bị này đã tồn tại!', 'error'); return;
           }
-          // Nếu đổi mã máy (ID), ta cần xóa bản ghi cũ trước khi tạo bản mới
           if (finalId !== editingId) {
               await handleDeleteMachineApp(editingId);
           }
@@ -1485,15 +1492,45 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   );
 };
 
-const SettingsView = ({ setView, showNotification, googleSheetUrl, setGoogleSheetUrl }) => {
+const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, saveSettings }) => {
+    const [url, setUrl] = useState(googleSheetUrl);
+    const [errTimes, setErrTimes] = useState(sysSettings?.error_times || { level1: 1.5, level2: 4, level3: 24 });
+
+    const handleSave = () => {
+        saveSettings(url, { ...sysSettings, error_times: errTimes });
+        showNotification('Đã lưu cấu hình!');
+        setView('dashboard');
+    };
+
     return (
       <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
-        <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto">
+        <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
           <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
-              <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={googleSheetUrl} onChange={(e) => setGoogleSheetUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
-              <button onClick={() => { setGoogleSheetUrl(googleSheetUrl); localStorage.setItem('gs_url', googleSheetUrl); showNotification('Đã lưu cấu hình Google Sheet!'); setView('dashboard'); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
+              <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={url} onChange={(e) => setUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
+          </div>
+          
+          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><AlertTriangle className="w-6 h-6 mr-2 text-red-600"/> Cài đặt thời gian xử lý (Sửa chữa đột xuất)</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Lỗi Mức 1 (Giờ)</label>
+                      <input type="number" step="0.5" value={errTimes.level1} onChange={(e) => setErrTimes({...errTimes, level1: parseFloat(e.target.value) || 0})} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-red-500 outline-none bg-slate-50" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Lỗi Mức 2 (Giờ)</label>
+                      <input type="number" step="0.5" value={errTimes.level2} onChange={(e) => setErrTimes({...errTimes, level2: parseFloat(e.target.value) || 0})} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-red-500 outline-none bg-slate-50" />
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Lỗi Mức 3 mặc định (Giờ)</label>
+                      <input type="number" step="1" value={errTimes.level3} onChange={(e) => setErrTimes({...errTimes, level3: parseFloat(e.target.value) || 0})} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-red-500 outline-none bg-slate-50" />
+                  </div>
+              </div>
+          </div>
+          
+          <div className="max-w-3xl mx-auto">
+              <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
           </div>
         </div>
       </div>
@@ -1521,7 +1558,6 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
   const filteredTasks = dailyTasks.filter(t => {
       if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
-      // Cho phép tất cả KTV thấy việc tồn đọng của nhau
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
       
@@ -1533,7 +1569,6 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       return matchTech && matchDate;
   });
 
-  // Sắp xếp giảm dần theo ngày, sau đó theo giờ bắt đầu
   const sortedTasks = [...filteredTasks].sort((a, b) => {
       if (a.date !== b.date) {
           return new Date(b.date) - new Date(a.date);
@@ -1548,33 +1583,98 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
   const handleExportExcel = async () => {
       try {
-        setIsExporting(true); 
-        const XLSX = await loadXLSX();
-        const headers = ['Ngày', 'Bắt đầu', 'Kết thúc', 'KTV Chính', 'KTV làm cùng', 'Công việc / Thiết bị', 'Phân loại', 'Trạng thái', 'Ghi chú', 'Vật tư sử dụng', 'Thời gian thực làm'];
-        const rows = sortedTasks.map(t => {
-            const partsStr = t.parts && t.parts.length > 0 ? t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
-            const coWorkersStr = t.coWorkers && t.coWorkers.length > 0 ? t.coWorkers.map(cw => cw.name).join(', ') : '';
-            const realTime = calculateWorkTime(t.startTime, t.endTime);
-            return [t.date, t.startTime, t.endTime, t.technicianName, coWorkersStr, t.taskName, t.type, t.status, t.note, partsStr, realTime];
-        });
-        const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]); 
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Bao_Cao_Cong_Viec"); 
-        XLSX.writeFile(workbook, `Bao_Cao_Cong_Viec_${startDate}_den_${endDate}.xlsx`);
-        showNotification('Đã xuất file Excel thành công!');
-      } catch (err) { 
-        showNotification('Lỗi khi xuất file Excel', 'error'); 
-      } finally { 
-        setIsExporting(false); 
+          setIsExporting(true);
+          const ExcelJS = await loadExcelJS();
+          const workbook = new ExcelJS.Workbook();
+          const sheet = workbook.addWorksheet('So_Cong_Viec');
+          
+          // Căn chỉnh kích thước các cột cho giống Form mẫu
+          sheet.columns = [
+              { width: 15 }, // Ngày
+              { width: 12 }, // Bắt đầu
+              { width: 12 }, // Kết thúc
+              { width: 18 }, // Tgian thực làm
+              { width: 22 }, // Công việc
+              { width: 15 }, // Mức độ lỗi
+              { width: 35 }, // Nội dung
+              { width: 35 }, // Ghi chú
+              { width: 15 }, // Hoàn thành
+              { width: 18 }  // Thời gian trễ/sớm
+          ];
+
+          const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+
+          // Xây dựng Header
+          const headers = ['Ngày', 'Bắt đầu', 'Kết thúc', 'Thời gian thực làm', 'Công việc được giao', 'Mức độ lỗi', 'Nội dung công việc', 'Ghi chú công việc', 'Hoàn thành', 'Thời gian trễ/sớm'];
+          const headRow = sheet.addRow(headers);
+          headRow.eachCell(c => {
+              c.font = { bold: true };
+              c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              c.border = thinBorder;
+          });
+
+          // Điền dữ liệu
+          sortedTasks.forEach(t => {
+              const realTime = calculateWorkTime(t.startTime, t.endTime);
+              const errLvlStr = t.type === 'Sửa chữa đột xuất' && t.errorLevel ? `Mức ${t.errorLevel}` : '';
+              
+              let statusStr = t.status;
+              if (t.type === 'Sửa chữa đột xuất' && t.kpiStatus) {
+                  statusStr = t.kpiStatus; // Ưu tiên hiển thị Đạt / Không đạt
+              }
+              
+              const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+              
+              const row = sheet.addRow([
+                  t.date.split('-').reverse().join('/'), 
+                  t.startTime, 
+                  t.endTime, 
+                  realTime, 
+                  t.type, 
+                  errLvlStr, 
+                  t.taskName, 
+                  t.note + partsStr, 
+                  statusStr, 
+                  '' // Thời gian trễ sớm để trống
+              ]);
+
+              // Apply style viền, căn lề và wrap text
+              row.eachCell(c => {
+                  c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                  c.border = thinBorder;
+              });
+
+              // Căn giữa cho các cột như hình yêu cầu
+              row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          });
+
+          // Xuất và tải file 
+          const buffer = await workbook.xlsx.writeBuffer();
+          const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `So_Cong_Viec_${startDate}_den_${endDate}.xlsx`;
+          link.click();
+          showNotification('Đã xuất file Excel thành công!');
+      } catch (err) {
+          console.error(err);
+          showNotification('Lỗi xuất file. Đang tải lại thư viện...', 'error');
+      } finally {
+          setIsExporting(false);
       }
   };
 
-  // Hàm tính toán thời gian làm việc (Trừ đi 1.5h nghỉ trưa từ 11:30 - 13:00)
   const calculateWorkTime = (start, end) => {
       if (!start || !end) return '--';
       const parseTime = (timeStr) => {
           const [h, m] = timeStr.split(':').map(Number);
-          return h * 60 + m; // Quy đổi ra số phút tính từ 00:00
+          return h * 60 + m; 
       };
       
       const sMins = parseTime(start);
@@ -1584,16 +1684,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
       let totalMins = eMins - sMins;
 
-      // Khoảng thời gian nghỉ trưa (11:30 = 690 phút, 13:00 = 780 phút)
       const lunchStart = 690;
       const lunchEnd = 780;
 
-      // Tìm thời gian giao nhau giữa [Giờ làm việc] và [Giờ nghỉ trưa]
       const overlapStart = Math.max(sMins, lunchStart);
       const overlapEnd = Math.min(eMins, lunchEnd);
       const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
 
-      // Trừ đi thời gian trùng với giờ nghỉ trưa
       const actualMins = totalMins - lunchOverlap;
 
       const hours = Math.floor(actualMins / 60);
@@ -1682,6 +1779,12 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                                 <span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-md uppercase tracking-wider inline-block">
                                                     {task.type}
                                                 </span>
+                                                {task.type === 'Sửa chữa đột xuất' && task.errorLevel && (
+                                                    <div className="mt-2 flex gap-1 flex-wrap">
+                                                        <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">Lỗi mức {task.errorLevel}</span>
+                                                        {task.kpiStatus && <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${task.kpiStatus === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {task.kpiStatus}</span>}
+                                                    </div>
+                                                )}
                                             </td>
 
                                             <td className="px-4 py-4 align-top">
@@ -1746,7 +1849,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   );
 };
 
-const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData }) => {
+const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData, sysSettings }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
   const dateStr = new Date().toISOString().split('T')[0];
 
@@ -1763,6 +1866,8 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       endTime: isEditing ? editTaskData.endTime : nowStr,
       taskName: sourceData ? sourceData.taskName : '', 
       type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
+      errorLevel: sourceData && sourceData.errorLevel ? sourceData.errorLevel : '1',
+      approvedTime: sourceData && sourceData.approvedTime ? sourceData.approvedTime : (sysSettings?.error_times?.level3 || 24),
       note: isEditing ? editTaskData.note : (isContinuing ? `${initialTaskData.note}\n\n--- [${dateStr}] ${user.name} tiếp tục ---\n` : ''), 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
       parts: sourceData ? (sourceData.parts || []) : [], 
@@ -1802,11 +1907,46 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       setFormData({...formData, images: newImages});
   };
 
+  const calculateActualMinutes = (start, end) => {
+      if (!start || !end) return 0;
+      const [h1, m1] = start.split(':').map(Number);
+      const [h2, m2] = end.split(':').map(Number);
+      const sMins = h1 * 60 + m1;
+      const eMins = h2 * 60 + m2;
+      if (eMins <= sMins) return 0;
+      
+      let total = eMins - sMins;
+      const lunchStart = 690; // 11:30
+      const lunchEnd = 780;   // 13:00
+      
+      const overlapStart = Math.max(sMins, lunchStart);
+      const overlapEnd = Math.min(eMins, lunchEnd);
+      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
+      
+      return total - lunchOverlap;
+  };
+
+  const actualMins = calculateActualMinutes(formData.startTime, formData.endTime);
+  let maxMinutes = 0;
+  if (formData.errorLevel === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
+  else if (formData.errorLevel === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
+  else if (formData.errorLevel === '3') maxMinutes = (parseFloat(formData.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
+  const isKpiPassed = actualMins <= maxMinutes;
+
   const submitForm = () => {
       if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
       if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
       
-      handleSaveDailyTask(formData, isEditing || isContinuing);
+      const finalData = { ...formData };
+      if (finalData.type === 'Sửa chữa đột xuất') {
+          finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
+      } else {
+          delete finalData.errorLevel;
+          delete finalData.approvedTime;
+          delete finalData.kpiStatus;
+      }
+      
+      handleSaveDailyTask(finalData, isEditing || isContinuing);
       setInitialTaskData(null); 
       setEditTaskData(null);
   };
@@ -1840,6 +1980,48 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                       <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
                       <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
                   </div>
+
+                  {formData.type === 'Sửa chữa đột xuất' && (
+                      <div className="col-span-full bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200 animate-fade-in">
+                          <label className="block text-sm md:text-base font-bold text-red-800 mb-4 flex items-center"><AlertTriangle className="w-5 h-5 mr-2" /> Mức độ lỗi & KPI Thời gian xử lý</label>
+                          <div className="space-y-4">
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="1" checked={formData.errorLevel === '1'} onChange={() => setFormData({...formData, errorLevel: '1'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div>
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 1 (≤ {sysSettings?.error_times?.level1 || 1.5} giờ)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5">Nhẹ / căn chỉnh, thay nhanh</p>
+                                  </div>
+                              </label>
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="2" checked={formData.errorLevel === '2'} onChange={() => setFormData({...formData, errorLevel: '2'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div>
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 2 (≤ {sysSettings?.error_times?.level2 || 4} giờ)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5">Trung bình / thay phụ tùng, sự cố điện</p>
+                                  </div>
+                              </label>
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="3" checked={formData.errorLevel === '3'} onChange={() => setFormData({...formData, errorLevel: '3'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div className="flex-1">
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 3 (Nặng)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5 leading-relaxed">Hỏng cụm cơ khí chính, lỗi hệ thống, sự cố phức tạp vượt ngoài năng lực nội bộ</p>
+                                      {formData.errorLevel === '3' && (
+                                          <div className="mt-3 bg-white p-3 md:p-4 rounded-xl border border-red-200 shadow-sm animate-fade-in">
+                                              <label className="text-xs md:text-sm font-bold text-red-700 block mb-2">Thời gian chuẩn đoán được phê duyệt (giờ)</label>
+                                              <input type="number" step="0.5" value={formData.approvedTime} onChange={e => setFormData({...formData, approvedTime: e.target.value})} className="p-3 rounded-lg border border-red-300 w-full outline-none focus:ring-2 focus:ring-red-500 bg-red-50/30 font-bold text-red-900" />
+                                          </div>
+                                      )}
+                                  </div>
+                              </label>
+                          </div>
+                          
+                          <div className={`mt-5 p-4 rounded-xl border-2 font-bold flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-colors ${isKpiPassed ? 'bg-green-50 text-green-700 border-green-300' : 'bg-red-50 text-red-700 border-red-300'}`}>
+                              <span className="flex items-center"><Clock className="w-5 h-5 mr-2" /> T.Gian thực làm: {(actualMins / 60).toFixed(1)} giờ</span>
+                              <span className={`uppercase text-sm shadow-sm px-3 py-1.5 rounded-lg inline-flex items-center w-fit ${isKpiPassed ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+                                  {isKpiPassed ? <CheckCircle className="w-4 h-4 mr-1.5" /> : <AlertTriangle className="w-4 h-4 mr-1.5" />} KPI: {isKpiPassed ? 'ĐẠT' : 'KHÔNG ĐẠT'}
+                              </span>
+                          </div>
+                      </div>
+                  )}
               </div>
 
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
@@ -1886,7 +2068,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   );
 };
 
-const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList }) => {
+const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList, sysSettings }) => {
   const isEditing = !!editLogData;
   const dateStr = new Date().toISOString().split('T')[0];
   const nowStr = new Date().toTimeString().slice(0, 5);
@@ -1902,6 +2084,8 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       startTime: isEditing ? (editLogData.startTime || nowStr) : nowStr,
       endTime: isEditing ? (editLogData.endTime || nowStr) : nowStr,
       type: isEditing ? editLogData.type : 'Bảo dưỡng định kỳ',
+      errorLevel: isEditing && editLogData.errorLevel ? editLogData.errorLevel : '1',
+      approvedTime: isEditing && editLogData.approvedTime ? editLogData.approvedTime : (sysSettings?.error_times?.level3 || 24),
       note: isEditing ? editLogData.note : '',
       status: isEditing ? editLogData.status : 'Hoàn thành',
       images: isEditing ? (editLogData.images || []) : [],
@@ -1942,9 +2126,44 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       setFormData({...formData, images: newImages});
   };
 
+  const calculateActualMinutes = (start, end) => {
+      if (!start || !end) return 0;
+      const [h1, m1] = start.split(':').map(Number);
+      const [h2, m2] = end.split(':').map(Number);
+      const sMins = h1 * 60 + m1;
+      const eMins = h2 * 60 + m2;
+      if (eMins <= sMins) return 0;
+      
+      let total = eMins - sMins;
+      const lunchStart = 690;
+      const lunchEnd = 780;
+      
+      const overlapStart = Math.max(sMins, lunchStart);
+      const overlapEnd = Math.min(eMins, lunchEnd);
+      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
+      
+      return total - lunchOverlap;
+  };
+
+  const actualMins = calculateActualMinutes(formData.startTime, formData.endTime);
+  let maxMinutes = 0;
+  if (formData.errorLevel === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
+  else if (formData.errorLevel === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
+  else if (formData.errorLevel === '3') maxMinutes = (parseFloat(formData.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
+  const isKpiPassed = actualMins <= maxMinutes;
+
   const submitForm = () => {
       if(!formData.note) return showNotification('Vui lòng nhập nội dung chi tiết!', 'error');
-      handleSaveMachineLog(formData, machineStatus);
+      
+      const finalData = { ...formData };
+      if (finalData.type === 'Sửa chữa đột xuất') {
+          finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
+      } else {
+          delete finalData.errorLevel;
+          delete finalData.approvedTime;
+          delete finalData.kpiStatus;
+      }
+      handleSaveMachineLog(finalData, machineStatus);
   };
 
   return (
@@ -1979,6 +2198,48 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                       <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
                       <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
                   </div>
+
+                  {formData.type === 'Sửa chữa đột xuất' && (
+                      <div className="bg-red-50 p-4 md:p-6 rounded-2xl border border-red-200 animate-fade-in">
+                          <label className="block text-sm md:text-base font-bold text-red-800 mb-4 flex items-center"><AlertTriangle className="w-5 h-5 mr-2" /> Mức độ lỗi & KPI Thời gian xử lý</label>
+                          <div className="space-y-4">
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="1" checked={formData.errorLevel === '1'} onChange={() => setFormData({...formData, errorLevel: '1'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div>
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 1 (≤ {sysSettings?.error_times?.level1 || 1.5} giờ)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5">Nhẹ / căn chỉnh, thay nhanh</p>
+                                  </div>
+                              </label>
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="2" checked={formData.errorLevel === '2'} onChange={() => setFormData({...formData, errorLevel: '2'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div>
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 2 (≤ {sysSettings?.error_times?.level2 || 4} giờ)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5">Trung bình / thay phụ tùng, sự cố điện</p>
+                                  </div>
+                              </label>
+                              <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl hover:bg-red-100/50 transition-colors border border-transparent hover:border-red-200">
+                                  <input type="radio" name="errorLevel" value="3" checked={formData.errorLevel === '3'} onChange={() => setFormData({...formData, errorLevel: '3'})} className="mt-1 w-4 h-4 text-red-600 focus:ring-red-500" />
+                                  <div className="flex-1">
+                                      <span className="font-bold text-red-700 text-sm md:text-base">Lỗi mức 3 (Nặng)</span>
+                                      <p className="text-xs md:text-sm text-red-600 mt-0.5 leading-relaxed">Hỏng cụm cơ khí chính, lỗi hệ thống, sự cố phức tạp vượt ngoài năng lực nội bộ</p>
+                                      {formData.errorLevel === '3' && (
+                                          <div className="mt-3 bg-white p-3 md:p-4 rounded-xl border border-red-200 shadow-sm animate-fade-in">
+                                              <label className="text-xs md:text-sm font-bold text-red-700 block mb-2">Thời gian chuẩn đoán được phê duyệt (giờ)</label>
+                                              <input type="number" step="0.5" value={formData.approvedTime} onChange={e => setFormData({...formData, approvedTime: e.target.value})} className="p-3 rounded-lg border border-red-300 w-full outline-none focus:ring-2 focus:ring-red-500 bg-red-50/30 font-bold text-red-900" />
+                                          </div>
+                                      )}
+                                  </div>
+                              </label>
+                          </div>
+                          
+                          <div className={`mt-5 p-4 rounded-xl border-2 font-bold flex flex-col sm:flex-row justify-between sm:items-center gap-3 transition-colors ${isKpiPassed ? 'bg-blue-50 text-blue-700 border-blue-300' : 'bg-red-50 text-red-700 border-red-300'}`}>
+                              <span className="flex items-center"><Clock className="w-5 h-5 mr-2" /> T.Gian thực làm: {(actualMins / 60).toFixed(1)} giờ</span>
+                              <span className={`uppercase text-sm shadow-sm px-3 py-1.5 rounded-lg inline-flex items-center w-fit ${isKpiPassed ? 'bg-blue-500 text-white' : 'bg-red-500 text-white'}`}>
+                                  {isKpiPassed ? <CheckCircle className="w-4 h-4 mr-1.5" /> : <AlertTriangle className="w-4 h-4 mr-1.5" />} KPI: {isKpiPassed ? 'ĐẠT' : 'KHÔNG ĐẠT'}
+                              </span>
+                          </div>
+                      </div>
+                  )}
 
                   <div>
                       <label className="block text-sm md:text-base font-bold text-slate-700 mb-2">KTV làm cùng (Tự động thêm vào Báo cáo ngày)</label>
@@ -2035,7 +2296,6 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                   </div>
               </div>
 
-              {/* Tùy chọn chuyển đổi trạng thái máy móc */}
               <div className="bg-white p-4 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div className="flex items-center gap-3">
                       <div className={`p-2.5 rounded-xl transition-colors ${machineStatus === 'broken' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
@@ -2070,9 +2330,6 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
   );
 };
 
-// ============================================================================
-// ROOT APP (HYBRID RESPONSIVE WRAPPER)
-// ============================================================================
 export default function App() {
   const savedSession = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_active_session') : null;
   const initialUser = savedSession ? JSON.parse(savedSession) : null;
@@ -2100,6 +2357,11 @@ export default function App() {
   const [utilityLogs, setUtilityLogs] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_utility') : null; return saved ? JSON.parse(saved) : []; });
   const [googleSheetUrl, setGoogleSheetUrl] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('gs_url') || '' : '');
   
+  const [sysSettings, setSysSettings] = useState(() => {
+      const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_sysSettings') : null;
+      return saved ? JSON.parse(saved) : { error_times: { level1: 1.5, level2: 4, level3: 24 } };
+  });
+
   const [categoryList, setCategoryList] = useState(() => { 
       const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_categories') : null; 
       return saved ? JSON.parse(saved) : INITIAL_CATEGORIES; 
@@ -2162,7 +2424,15 @@ export default function App() {
     const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
     const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
     const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { const sData = snap.docs.find(d => d.id === 'general'); if (sData && sData.data().gs_url) setGoogleSheetUrl(sData.data().gs_url); setIsCloudSyncing(false); }, handleSnapError);
+    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { 
+        const sData = snap.docs.find(d => d.id === 'general'); 
+        if (sData) {
+            const data = sData.data();
+            if (data.gs_url) setGoogleSheetUrl(data.gs_url); 
+            if (data.sysSettings) setSysSettings(data.sysSettings);
+        }
+        setIsCloudSyncing(false); 
+    }, handleSnapError);
 
     const unsubCategories = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
         if (docSnap.exists()) {
@@ -2186,6 +2456,17 @@ export default function App() {
   const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
   const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+
+  const saveSettings = async (url, newSysSettings) => {
+      if (db && fbUser) {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { gs_url: url, sysSettings: newSysSettings }, { merge: true });
+      } else {
+          localStorage.setItem('gs_url', url);
+          localStorage.setItem('techmaintain_sysSettings', JSON.stringify(newSysSettings));
+      }
+      setGoogleSheetUrl(url);
+      setSysSettings(newSysSettings);
+  };
 
   const saveCategoryListData = async (newList) => { 
       if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
@@ -2314,6 +2595,9 @@ export default function App() {
                   endTime: entry.endTime || nowStr,
                   taskName: `[${machineNameStr}] ${entry.type}`,
                   type: entry.type,
+                  errorLevel: entry.errorLevel,
+                  approvedTime: entry.approvedTime,
+                  kpiStatus: entry.kpiStatus,
                   note: entry.note,
                   status: entry.status,
                   parts: entry.parts || [],
@@ -2358,7 +2642,6 @@ export default function App() {
   );
 
   return (
-    // ROOT WRAPPER HYBRID RESPONSIVE
     <div className="fixed inset-0 bg-slate-200 flex justify-center overflow-hidden font-sans text-slate-800">
       <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300">
         <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50"></div>
@@ -2366,10 +2649,10 @@ export default function App() {
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
           {view === 'machines' && <MachineManagementView machines={machines} logs={logs} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
-          {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} setGoogleSheetUrl={setGoogleSheetUrl} />}
+          {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} sysSettings={sysSettings} saveSettings={saveSettings} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
-          {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData}/>}
+          {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings}/>}
           {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} />}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
@@ -2400,12 +2683,19 @@ export default function App() {
                                     <div className="flex justify-between items-start mb-4 border-b border-slate-100 pb-4">
                                        <div>
                                            <span className="text-xs md:text-sm font-black text-blue-700 uppercase bg-blue-50 border border-blue-100 px-3 py-1 rounded-lg">{log.type}</span>
+                                           {log.type === 'Sửa chữa đột xuất' && log.errorLevel && (
+                                               <span className="ml-2 text-[10px] md:text-xs font-black text-red-700 uppercase bg-red-50 border border-red-100 px-3 py-1 rounded-lg">Mức {log.errorLevel}</span>
+                                           )}
                                            <div className="text-sm text-slate-500 mt-3 flex items-center bg-slate-50 px-3 py-1.5 rounded-lg w-fit"><Clock className="w-4 h-4 mr-2"/> {log.date}</div>
                                        </div>
+                                       {log.type === 'Sửa chữa đột xuất' && log.kpiStatus && (
+                                          <div className={`text-xs font-bold px-3 py-1 rounded-full border ${log.kpiStatus === 'Đạt' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                                              KPI: {log.kpiStatus}
+                                          </div>
+                                       )}
                                     </div>
                                     <p className="text-slate-700 text-base md:text-lg whitespace-pre-wrap flex-1 mb-4">{log.note}</p>
                                     
-                                    {/* HIỂN THỊ VẬT TƯ ĐÃ SỬ DỤNG */}
                                     {log.parts && log.parts.length > 0 && (
                                        <div className="mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
                                          <div className="text-[10px] md:text-xs text-slate-400 mb-2 flex items-center uppercase font-bold"><Package className="w-4 h-4 mr-1.5"/> Vật tư thay thế:</div>
@@ -2447,13 +2737,12 @@ export default function App() {
                    editLogData={editLogData} 
                    setEditLogData={setEditLogData} 
                    usersList={usersList}
+                   sysSettings={sysSettings}
                />
           )}
         </div>
         
-        {/* COMPONENT MODAL XEM ẢNH ZOOM */}
         <ImageZoomModal imageUrl={zoomedImage} onClose={() => setZoomedImage(null)} />
-
         <CustomConfirmModal isOpen={logDeleteModal.isOpen} title="Xóa báo cáo thiết bị" message="Bạn có chắc chắn muốn xóa báo cáo này? Hành động này sẽ không thể hoàn tác." onConfirm={handleConfirmDeleteLog} onCancel={() => setLogDeleteModal({ isOpen: false, id: null })} />
 
         {notification && (
