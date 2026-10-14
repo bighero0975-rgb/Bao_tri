@@ -1581,6 +1581,262 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const startEdit = (task) => { setEditTaskData(task); setInitialTaskData(null); setView('daily_task_form'); };
   const handleConfirmDelete = async () => { if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); } setDeleteModal({ isOpen: false, id: null }); };
 
+  const handleExportKPI = async () => {
+      if (filterTech === 'all') {
+          showNotification('Vui lòng chọn 1 nhân viên cụ thể ở bộ lọc để xuất KPI!', 'error');
+          return;
+      }
+      const selectedUser = usersList.find(u => u.username === filterTech || u.name === filterTech) || user;
+      if (!selectedUser) return;
+
+      try {
+          setIsExporting(true);
+          const ExcelJS = await loadExcelJS();
+          const workbook = new ExcelJS.Workbook();
+          const sheet = workbook.addWorksheet('Bao_Cao_KPI');
+
+          // Thiết lập trang in A4 Nằm ngang (Landscape)
+          sheet.pageSetup = {
+              paperSize: 9, // A4
+              orientation: 'landscape',
+              fitToPage: true,
+              fitToWidth: 1,
+              fitToHeight: 0,
+              margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+          };
+
+          // Độ rộng 10 cột chuẩn theo mẫu A -> J
+          sheet.columns = [
+              { width: 14 }, // A: Ngày / Kế hoạch PM (B)
+              { width: 12 }, // B: Bắt đầu / Hoãn hợp lệ (C)
+              { width: 12 }, // C: Kết thúc / Đạt PM (A)
+              { width: 16 }, // D: Thời gian thực làm / % PM Thực tế
+              { width: 22 }, // E: Công việc được giao / Điểm KPI PM
+              { width: 15 }, // F: Mức độ lỗi / Sự cố CM (Tổng)
+              { width: 32 }, // G: Nội dung công việc / Ca CM Đạt SLA (K)
+              { width: 32 }, // H: Ghi chú công việc / % CM Thực tế
+              { width: 15 }, // I: Hoàn thành / Điểm KPI CM
+              { width: 16 }  // J: Thời gian trễ/sớm / Tổng Điểm KPI
+          ];
+
+          const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+          const doubleBottomBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'double'}, right: {style:'thin'} };
+          const fontName = 'Arial';
+
+          // --- 1. TIÊU ĐỀ & LOGO ---
+          sheet.mergeCells('A1:B2');
+          const logoCell = sheet.getCell('A1');
+          logoCell.value = 'MARTECH\nBOILER';
+          logoCell.font = { name: fontName, size: 13, bold: true, color: { argb: 'FF00529B' } };
+          logoCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+          sheet.mergeCells('C1:J2');
+          const titleCell = sheet.getCell('C1');
+          const monthStr = startDate ? startDate.slice(5, 7) + '/' + startDate.slice(0, 4) : new Date().toISOString().slice(0, 7).split('-').reverse().join('/');
+          titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${monthStr}`;
+          titleCell.font = { name: fontName, size: 16, bold: true };
+          titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+          sheet.getRow(1).height = 22;
+          sheet.getRow(2).height = 22;
+
+          // --- 2. MỤC A: THÔNG TIN NHÂN SỰ ---
+          sheet.mergeCells('A3:J3');
+          sheet.getCell('A3').value = 'A. THÔNG TIN NHÂN SỰ:';
+          sheet.getCell('A3').font = { name: fontName, size: 11, bold: true };
+          sheet.getRow(3).height = 22;
+
+          sheet.getCell('A4').value = 'Mã NV:';
+          sheet.getCell('A4').font = { name: fontName, size: 11, bold: true };
+          sheet.mergeCells('B4:D4');
+          sheet.getCell('B4').value = selectedUser.employeeId || '';
+          sheet.getCell('B4').font = { name: fontName, size: 11 };
+
+          sheet.getCell('E4').value = 'Chức vụ:';
+          sheet.getCell('E4').font = { name: fontName, size: 11, bold: true };
+          sheet.mergeCells('G4:J4');
+          sheet.getCell('G4').value = selectedUser.position || 'Nhân viên';
+          sheet.getCell('G4').font = { name: fontName, size: 11 };
+          sheet.getRow(4).height = 20;
+
+          sheet.getCell('A5').value = 'Họ và tên:';
+          sheet.getCell('A5').font = { name: fontName, size: 11, bold: true };
+          sheet.mergeCells('B5:D5');
+          sheet.getCell('B5').value = selectedUser.name || '';
+          sheet.getCell('B5').font = { name: fontName, size: 11 };
+
+          sheet.getCell('E5').value = 'Đơn vị:';
+          sheet.getCell('E5').font = { name: fontName, size: 11, bold: true };
+          sheet.mergeCells('G5:J5');
+          sheet.getCell('G5').value = selectedUser.department || 'Bảo trì xưởng';
+          sheet.getCell('G5').font = { name: fontName, size: 11 };
+          sheet.getRow(5).height = 20;
+
+          // --- 3. MỤC B: BÁO CÁO KPI ---
+          sheet.mergeCells('A6:J6');
+          sheet.getCell('A6').value = 'B. BÁO CÁO KPI:';
+          sheet.getCell('A6').font = { name: fontName, size: 11, bold: true };
+          sheet.getRow(6).height = 24;
+
+          // Dòng 7 & 8: Tiêu đề bảng KPI
+          sheet.mergeCells('A7:E7');
+          const pmHeader = sheet.getCell('A7');
+          pmHeader.value = 'Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì, bảo dưỡng theo kế hoạch';
+          pmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
+          pmHeader.font = { name: fontName, size: 10, bold: true };
+          pmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+          sheet.mergeCells('F7:I7');
+          const cmHeader = sheet.getCell('F7');
+          cmHeader.value = 'Phản hồi và khắc phục sự cố kỹ thuật đột xuất kịp thời';
+          cmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+          cmHeader.font = { name: fontName, size: 10, bold: true };
+          cmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+          sheet.mergeCells('J7:J8');
+          const totalHeader = sheet.getCell('J7');
+          totalHeader.value = 'Tổng Điểm KPI';
+          totalHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
+          totalHeader.font = { name: fontName, size: 10, bold: true };
+          totalHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+          const subHeaders = [
+              'Kế hoạch PM (B)', 'Hoãn hợp lệ (C)', 'Đạt PM (A)', '% PM Thực tế', 'Điểm KPI PM (50%)',
+              'Sự cố CM (Tổng)', 'Ca CM Đạt SLA (K)', '% CM Thực tế', 'Điểm KPI CM (30%)'
+          ];
+          subHeaders.forEach((text, idx) => {
+              const cell = sheet.getCell(8, idx + 1);
+              cell.value = text;
+              cell.font = { name: fontName, size: 10, bold: true };
+              cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          });
+
+          sheet.getRow(7).height = 28;
+          sheet.getRow(8).height = 30;
+
+          // Tính toán số liệu thực tế từ Sổ công việc
+          let B = 0, C = 0, A = 0;
+          let cmTotal = 0, K = 0;
+
+          sortedTasks.forEach(t => {
+              if (t.type === 'Sửa chữa đột xuất') {
+                  cmTotal++;
+                  if (t.kpiStatus === 'Đạt' || (!t.kpiStatus && t.status === 'Hoàn thành')) {
+                      K++;
+                  }
+              } else {
+                  B++;
+                  if (t.status === 'Hoàn thành') {
+                      A++;
+                  }
+              }
+          });
+
+          const pmValidPlan = B - C;
+          const pmRate = pmValidPlan > 0 ? (A / pmValidPlan) : (B === 0 ? 1 : 0);
+          const pmScore = Math.min(0.5, pmRate * 0.5); // Tối đa 50%
+
+          const cmRate = cmTotal > 0 ? (K / cmTotal) : 1;
+          const cmScore = Math.min(0.3, cmRate * 0.3); // Tối đa 30%
+
+          const totalKpiScore = pmScore + cmScore;
+
+          const kpiValues = [
+              B,
+              C,
+              A,
+              `${(pmRate * 100).toFixed(1)}%`,
+              `${(pmScore * 100).toFixed(1)}%`,
+              cmTotal,
+              K,
+              `${(cmRate * 100).toFixed(1)}%`,
+              `${(cmScore * 100).toFixed(1)}%`,
+              `${(totalKpiScore * 100).toFixed(1)}%`
+          ];
+
+          const row9 = sheet.getRow(9);
+          row9.height = 32;
+          kpiValues.forEach((val, idx) => {
+              const cell = sheet.getCell(9, idx + 1);
+              cell.value = val;
+              cell.font = { name: fontName, size: 11, bold: idx === 4 || idx === 8 || idx === 9 };
+              cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          });
+
+          // Kẻ khung cho bảng KPI (Dòng 7 -> 9)
+          for (let r = 7; r <= 9; r++) {
+              for (let c = 1; c <= 10; c++) {
+                  sheet.getCell(r, c).border = r === 9 ? doubleBottomBorder : thinBorder;
+              }
+          }
+
+          // --- 4. MỤC C: NỘI DUNG CÔNG VIỆC ---
+          sheet.getRow(10).height = 14;
+          sheet.mergeCells('A11:J11');
+          sheet.getCell('A11').value = 'C. NỘI DUNG CÔNG VIỆC:';
+          sheet.getCell('A11').font = { name: fontName, size: 11, bold: true };
+          sheet.getRow(11).height = 24;
+
+          const cHeaders = ['Ngày', 'Bắt đầu', 'Kết thúc', 'Thời gian thực làm', 'Công việc được giao', 'Mức độ lỗi', 'Nội dung công việc', 'Ghi chú công việc', 'Hoàn thành', 'Thời gian trễ/sớm'];
+          const row12 = sheet.getRow(12);
+          row12.height = 28;
+          cHeaders.forEach((text, idx) => {
+              const cell = sheet.getCell(12, idx + 1);
+              cell.value = text;
+              cell.font = { name: fontName, size: 10, bold: true };
+              cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              cell.border = thinBorder;
+          });
+
+          sortedTasks.forEach(t => {
+              const realTime = calculateWorkTime(t.startTime, t.endTime);
+              const errLvlStr = t.type === 'Sửa chữa đột xuất' && t.errorLevel ? `Mức ${t.errorLevel}` : '';
+              
+              let statusStr = t.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
+              if (t.type === 'Sửa chữa đột xuất' && t.kpiStatus) {
+                  statusStr = t.kpiStatus;
+              }
+
+              const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+
+              const row = sheet.addRow([
+                  t.date.split('-').reverse().join('/'),
+                  t.startTime,
+                  t.endTime,
+                  realTime,
+                  t.type,
+                  errLvlStr,
+                  t.taskName,
+                  (t.note || '') + partsStr,
+                  statusStr,
+                  ''
+              ]);
+
+              row.eachCell({ includeEmpty: true }, (c, colNumber) => {
+                  c.font = { name: fontName, size: 10 };
+                  c.border = thinBorder;
+                  if (colNumber === 7 || colNumber === 8) {
+                      c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                  } else {
+                      c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                  }
+              });
+          });
+
+          const buffer = await workbook.xlsx.writeBuffer();
+          const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `KPI_${selectedUser.name.replace(/\s+/g, '_')}_${monthStr.replace('/', '-')}.xlsx`;
+          link.click();
+          showNotification('Đã xuất báo cáo KPI thành công!');
+      } catch (err) {
+          console.error(err);
+          showNotification('Lỗi xuất file KPI. Vui lòng thử lại!', 'error');
+      } finally {
+          setIsExporting(false);
+      }
+  };
+
   const handleExportExcel = async () => {
       try {
           setIsExporting(true);
@@ -1721,6 +1977,11 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                            <span className="text-slate-400">-</span>
                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                        </div>
+                   )}
+                   {taskFilter !== 'pending' && filterTech !== 'all' && (
+                       <button disabled={isExporting} onClick={handleExportKPI} className="shrink-0 bg-purple-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50">
+                           <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất KPI</span>
+                       </button>
                    )}
                    <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất Excel</span></button>
                 </div>
