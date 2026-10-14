@@ -88,15 +88,42 @@ const formatDurationMinutes = (mins) => {
   return `${hours}h ${m}p`;
 };
 
-const calculateEarlyLateStr = (task, sysSettings) => {
-  if (task.type !== 'Sửa chữa đột xuất' || !task.errorLevel) return '';
+const getNormalizedErrorLevel = (task) => {
+  if (!task || !task.type || !task.type.trim().toLowerCase().includes('đột xuất')) return '';
+  if (!task.errorLevel) return '1';
+  const match = String(task.errorLevel).match(/\d+/);
+  return match ? match[0] : '1';
+};
+
+const getErrorLevelDisplay = (task) => {
+  const lvl = getNormalizedErrorLevel(task);
+  return lvl ? `Lỗi mức ${lvl}` : '';
+};
+
+const getMaxSlaMinutes = (task, sysSettings) => {
+  const lvl = getNormalizedErrorLevel(task);
+  if (lvl === '1') return (sysSettings?.error_times?.level1 || 1.5) * 60;
+  if (lvl === '2') return (sysSettings?.error_times?.level2 || 4) * 60;
+  if (lvl === '3') return (parseFloat(task.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
+  return 0;
+};
+
+const evaluateTaskKpiStatus = (task, sysSettings) => {
+  const lvl = getNormalizedErrorLevel(task);
+  if (!lvl) return task.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
+  if (task.kpiStatus) return task.kpiStatus;
+  if (task.slaStatus) return task.slaStatus;
   const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
-  let maxMinutes = 0;
-  const lvl = String(task.errorLevel);
-  if (lvl === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
-  else if (lvl === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
-  else if (lvl === '3') maxMinutes = (parseFloat(task.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
-  else return '';
+  const maxMinutes = getMaxSlaMinutes(task, sysSettings);
+  return actualMins <= maxMinutes ? 'Đạt' : 'Không đạt';
+};
+
+const calculateEarlyLateStr = (task, sysSettings) => {
+  const lvl = getNormalizedErrorLevel(task);
+  if (!lvl) return '';
+  const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
+  const maxMinutes = getMaxSlaMinutes(task, sysSettings);
+  if (maxMinutes <= 0) return '';
 
   const diff = actualMins - maxMinutes;
   if (diff === 0) return '0h';
@@ -1859,9 +1886,10 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           let cmTotal = 0, K = 0;
 
           sortedTasks.forEach(t => {
-              if (t.type === 'Sửa chữa đột xuất') {
+              const isCM = !!getNormalizedErrorLevel(t);
+              if (isCM) {
                   cmTotal++;
-                  if (t.kpiStatus === 'Đạt' || (!t.kpiStatus && t.status === 'Hoàn thành')) {
+                  if (evaluateTaskKpiStatus(t, sysSettings) === 'Đạt') {
                       K++;
                   }
               } else {
@@ -1930,12 +1958,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
           sortedTasks.forEach(t => {
               const realTime = calculateWorkTime(t.startTime, t.endTime);
-              const errLvlStr = t.type === 'Sửa chữa đột xuất' && t.errorLevel ? `Mức ${t.errorLevel}` : '';
-              
-              let statusStr = t.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
-              if (t.type === 'Sửa chữa đột xuất' && t.kpiStatus) {
-                  statusStr = t.kpiStatus;
-              }
+              const errLvlStr = getErrorLevelDisplay(t);
+              const statusStr = evaluateTaskKpiStatus(t, sysSettings);
 
               const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
               const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
@@ -2014,12 +2038,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           // Điền dữ liệu
           sortedTasks.forEach(t => {
               const realTime = calculateWorkTime(t.startTime, t.endTime);
-              const errLvlStr = t.type === 'Sửa chữa đột xuất' && t.errorLevel ? `Mức ${t.errorLevel}` : '';
-              
-              let statusStr = t.status;
-              if (t.type === 'Sửa chữa đột xuất' && t.kpiStatus) {
-                  statusStr = t.kpiStatus; // Ưu tiên hiển thị Đạt / Không đạt
-              }
+              const errLvlStr = getErrorLevelDisplay(t);
+              const statusStr = getNormalizedErrorLevel(t) ? evaluateTaskKpiStatus(t, sysSettings) : t.status;
               
               const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
               const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
@@ -2032,7 +2052,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                   t.type, 
                   errLvlStr, 
                   t.taskName, 
-                  t.note + partsStr, 
+                  (t.note || '') + partsStr, 
                   statusStr, 
                   earlyLateStr
               ]);
@@ -2159,10 +2179,10 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                                 <span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-md uppercase tracking-wider inline-block">
                                                     {task.type}
                                                 </span>
-                                                {task.type === 'Sửa chữa đột xuất' && task.errorLevel && (
+                                                {getNormalizedErrorLevel(task) && (
                                                     <div className="mt-2 flex gap-1 flex-wrap">
-                                                        <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">Lỗi mức {task.errorLevel}</span>
-                                                        {task.kpiStatus && <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${task.kpiStatus === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {task.kpiStatus}</span>}
+                                                        <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">{getErrorLevelDisplay(task)}</span>
+                                                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${evaluateTaskKpiStatus(task, sysSettings) === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {evaluateTaskKpiStatus(task, sysSettings)}</span>
                                                         <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">
                                                             Trễ/Sớm: {calculateEarlyLateStr(task, sysSettings)}
                                                         </span>
