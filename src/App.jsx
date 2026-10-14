@@ -2277,6 +2277,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                            <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất KPI</span>
                        </button>
                    )}
+                   <button disabled={isExporting} onClick={() => handleSyncAllDailyTasksToSheet(dailyTasks)} className="shrink-0 bg-blue-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50" title="Đẩy toàn bộ dữ liệu Sổ ghi công việc hiện tại lên Google Sheet">
+                       <Cloud className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Đồng bộ Sheet</span>
+                   </button>
                    <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất Excel</span></button>
                 </div>
             </div>
@@ -2974,7 +2977,17 @@ export default function App() {
   const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
   const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
   const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
-  const handleDeleteDailyTaskApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const handleDeleteDailyTaskApp = async (id) => { 
+      if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); 
+      else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } 
+      if (googleSheetUrl) {
+          pushToGoogleSheet({
+              action: 'delete_daily_task',
+              formType: 'daily_task',
+              id: String(id)
+          });
+      }
+  };
   const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
 
   const saveSettings = async (url, newSysSettings) => {
@@ -3013,20 +3026,66 @@ export default function App() {
   
   const handleScanSuccess = (id) => { if (!id) return; const machine = machines.find(m => m.id === id); if (machine) { setSelectedMachine(machine); setView('details'); showNotification(`Quét thành công`); } else if (typeof id === 'string' && id.length > 2) if (!notification) showNotification(`Mã không hợp lệ`, 'error'); };
 
-  const pushToGoogleSheet = async (logData) => { 
-      if (!googleSheetUrl) return;
+  const pushToGoogleSheet = async (payload) => { 
+      if (!googleSheetUrl) return false;
       try {
           await fetch(googleSheetUrl, {
               method: 'POST',
               mode: 'no-cors',
               headers: {
-                  'Content-Type': 'application/json',
+                  'Content-Type': 'text/plain;charset=utf-8',
               },
-              body: JSON.stringify(logData)
+              body: JSON.stringify(payload)
           });
-          console.log(`Đã đẩy dữ liệu ${logData.formType} lên Google Sheet.`);
+          console.log(`Đã đồng bộ dữ liệu (${payload.action || payload.formType}) lên Google Sheet.`);
+          return true;
       } catch (error) {
           console.error("Lỗi khi đẩy lên Google Sheet:", error);
+          return false;
+      }
+  };
+
+  const enrichTaskForSheet = (task) => {
+      const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
+      const actualTimeStr = formatDurationMinutes(actualMins);
+      const errorLevel = getErrorLevelDisplay(task);
+      const slaStatus = evaluateTaskKpiStatus(task, sysSettings);
+      const earlyLateStr = calculateEarlyLateStr(task, sysSettings);
+      const partsStr = task.parts && task.parts.length > 0 
+          ? task.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') 
+          : '';
+
+      return {
+          ...task,
+          errorLevel,
+          actualTimeStr,
+          slaStatus,
+          earlyLateStr,
+          partsStr
+      };
+  };
+
+  const handleSyncAllDailyTasksToSheet = async (tasksToSync = dailyTasks) => {
+      if (!googleSheetUrl) {
+          showNotification('Vui lòng cấu hình Google Sheet URL trong phần Cài đặt trước!', 'error');
+          return;
+      }
+      try {
+          showNotification('Đang đồng bộ toàn bộ Sổ công việc lên Google Sheet...');
+          const sorted = [...tasksToSync].sort((a, b) => {
+              if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
+              return (b.startTime || '').localeCompare(a.startTime || '');
+          });
+          const enrichedList = sorted.map(t => enrichTaskForSheet(t));
+          
+          await pushToGoogleSheet({
+              action: 'sync_all_daily_tasks',
+              formType: 'daily_task_bulk',
+              records: enrichedList
+          });
+          showNotification(`Đã gửi đồng bộ ${enrichedList.length} bản ghi công việc lên Google Sheet!`);
+      } catch (err) {
+          showNotification('Lỗi khi đồng bộ lên Google Sheet!', 'error');
       }
   };
   
@@ -3038,17 +3097,32 @@ export default function App() {
       if (!isEditingRecord) { 
           // Tự động Đóng (Hoàn thành) phiếu cũ nếu đây là phiếu được "Tiếp tục" để tránh dồn ứ Việc tồn đọng
           if (initialTaskData && initialTaskData.status !== 'Hoàn thành') {
-             await saveDailyTaskData({ ...initialTaskData, status: 'Hoàn thành' });
+             const updatedOldTask = { ...initialTaskData, status: 'Hoàn thành' };
+             await saveDailyTaskData(updatedOldTask);
+             if (googleSheetUrl) {
+                 pushToGoogleSheet({
+                     action: 'upsert_daily_task',
+                     formType: 'daily_task',
+                     ...enrichTaskForSheet(updatedOldTask)
+                 });
+             }
           }
 
-          for (const usedPart of entry.parts) { 
+          for (const usedPart of entry.parts || []) { 
               const foundPart = inventory.find(i => i.name === usedPart.name); 
               if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
           } 
-          if(googleSheetUrl) pushToGoogleSheet(entry); 
       } 
+
+      if (googleSheetUrl) {
+          pushToGoogleSheet({
+              action: 'upsert_daily_task',
+              formType: 'daily_task',
+              ...enrichTaskForSheet(entry)
+          });
+      }
       
-      showNotification(isEditingRecord ? 'Đã lưu cập nhật công việc!' : 'Đã tạo báo cáo mới thành công!'); 
+      showNotification(isEditingRecord ? 'Đã lưu và cập nhật lên Sheet!' : 'Đã tạo báo cáo mới thành công!'); 
       setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
@@ -3129,6 +3203,13 @@ export default function App() {
                   images: entry.images || []
               };
               await saveDailyTaskData(taskEntry);
+              if (googleSheetUrl) {
+                  pushToGoogleSheet({
+                      action: 'upsert_daily_task',
+                      formType: 'daily_task',
+                      ...enrichTaskForSheet(taskEntry)
+                  });
+              }
           }
       }
 
@@ -3178,7 +3259,7 @@ export default function App() {
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings}/>}
-          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} sysSettings={sysSettings} />}
+          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} sysSettings={sysSettings} handleSyncAllDailyTasksToSheet={handleSyncAllDailyTasksToSheet} />}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
