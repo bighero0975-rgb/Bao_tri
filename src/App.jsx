@@ -1699,7 +1699,7 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
     );
 };
 
-const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings }) => {
+const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings, handleSyncAllDailyTasksToSheet }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterType, setFilterType] = useState('all');
   const [startDate, setStartDate] = useState(() => {
