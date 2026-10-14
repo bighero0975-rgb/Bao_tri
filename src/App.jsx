@@ -60,6 +60,141 @@ const INITIAL_USERS = [
 
 const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
 
+const getActualWorkMinutes = (start, end) => {
+  if (!start || !end) return 0;
+  const [h1, m1] = start.split(':').map(Number);
+  const [h2, m2] = end.split(':').map(Number);
+  const sMins = h1 * 60 + m1;
+  const eMins = h2 * 60 + m2;
+  if (eMins <= sMins) return 0;
+
+  let total = eMins - sMins;
+
+  // Trừ giờ nghỉ trưa: 11:30 (690p) -> 13:00 (780p)
+  const lunchOverlap = Math.max(0, Math.min(eMins, 780) - Math.max(sMins, 690));
+  
+  // Trừ giờ nghỉ chiều: 17:00 (1020p) -> 17:30 (1050p)
+  const eveningOverlap = Math.max(0, Math.min(eMins, 1050) - Math.max(sMins, 1020));
+
+  return Math.max(0, total - lunchOverlap - eveningOverlap);
+};
+
+const formatDurationMinutes = (mins) => {
+  if (mins <= 0) return '0h';
+  const hours = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (hours === 0) return `${m}p`;
+  if (m === 0) return `${hours}h`;
+  return `${hours}h ${m}p`;
+};
+
+const calculateEarlyLateStr = (task, sysSettings) => {
+  if (task.type !== 'Sửa chữa đột xuất' || !task.errorLevel) return '';
+  const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
+  let maxMinutes = 0;
+  const lvl = String(task.errorLevel);
+  if (lvl === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
+  else if (lvl === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
+  else if (lvl === '3') maxMinutes = (parseFloat(task.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
+  else return '';
+
+  const diff = actualMins - maxMinutes;
+  if (diff === 0) return '0h';
+  const sign = diff > 0 ? '+' : '-';
+  return `${sign}${formatDurationMinutes(Math.abs(diff))}`;
+};
+
+const getMartechLogoBase64 = () => {
+  const canvas = document.createElement('canvas');
+  canvas.width = 360;
+  canvas.height = 110;
+  const ctx = canvas.getContext('2d');
+
+  // Nền trắng
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Vòng tròn xanh bên trái
+  ctx.strokeStyle = '#0066b3';
+  ctx.lineWidth = 4.5;
+  ctx.beginPath();
+  ctx.arc(52, 55, 42, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Tam giác bên trong vòng tròn
+  ctx.beginPath();
+  ctx.moveTo(52, 16);
+  ctx.lineTo(17, 80);
+  ctx.lineTo(87, 80);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Chữ M bên trong tam giác
+  ctx.fillStyle = '#0066b3';
+  ctx.font = '900 34px Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('M', 52, 76);
+
+  // Chữ MARTECH
+  ctx.textAlign = 'left';
+  ctx.font = '900 33px Arial, sans-serif';
+  ctx.fillStyle = '#0066b3';
+  ctx.fillText('MARTECH', 108, 42);
+
+  // Ký hiệu ®
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.fillText('®', 332, 22);
+
+  // Chữ B + O cách điệu + ILER
+  ctx.font = '900 36px Arial, sans-serif';
+  ctx.fillText('B', 108, 80);
+
+  // Chữ O cách điệu (vòng tròn xanh đậm + chấm trắng lệch tâm dưới)
+  ctx.beginPath();
+  ctx.arc(158, 67, 17, 0, Math.PI * 2);
+  ctx.fillStyle = '#0066b3';
+  ctx.fill();
+
+  // Các vạch ngang nhỏ nửa trên chữ O
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(146, 58); ctx.lineTo(170, 58);
+  ctx.moveTo(144, 62); ctx.lineTo(172, 62);
+  ctx.stroke();
+
+  // Lỗ tròn trắng bên dưới trong chữ O
+  ctx.beginPath();
+  ctx.arc(158, 72, 9, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  // Chữ ILER
+  ctx.fillStyle = '#0066b3';
+  ctx.fillText('ILER', 180, 80);
+
+  // Slogan: The [Sóng đỏ] Energy Solutions
+  ctx.fillStyle = '#e06666';
+  ctx.font = 'italic 15px Arial, sans-serif';
+  ctx.fillText('The', 128, 102);
+
+  // Biểu tượng 3 gợn sóng đỏ
+  ctx.strokeStyle = '#e06666';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    ctx.beginPath();
+    const y = 92 + i * 4;
+    ctx.moveTo(164, y);
+    ctx.bezierCurveTo(170, y - 3, 176, y + 3, 182, y);
+    ctx.stroke();
+  }
+
+  ctx.fillText('Energy Solutions', 188, 102);
+
+  return canvas.toDataURL('image/png');
+};
+
 const loadXLSX = async () => {
   if (window.XLSX) return window.XLSX;
   return new Promise((resolve, reject) => {
@@ -1537,7 +1672,7 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
     );
 };
 
-const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage }) => {
+const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [startDate, setStartDate] = useState(() => {
       const d = new Date();
@@ -1625,15 +1760,21 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
           // --- 1. TIÊU ĐỀ & LOGO ---
           sheet.mergeCells('A1:B2');
-          const logoCell = sheet.getCell('A1');
-          logoCell.value = 'MARTECH\nBOILER';
-          logoCell.font = { name: fontName, size: 13, bold: true, color: { argb: 'FF00529B' } };
-          logoCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          const logoBase64 = getMartechLogoBase64();
+          const logoId = workbook.addImage({
+              base64: logoBase64,
+              extension: 'png',
+          });
+          sheet.addImage(logoId, {
+              tl: { col: 0.1, row: 0.1 },
+              ext: { width: 175, height: 53 }
+          });
 
           sheet.mergeCells('C1:J2');
           const titleCell = sheet.getCell('C1');
-          const monthStr = startDate ? startDate.slice(5, 7) + '/' + startDate.slice(0, 4) : new Date().toISOString().slice(0, 7).split('-').reverse().join('/');
-          titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${monthStr}`;
+          const now = new Date();
+          const currentMonthStr = String(now.getMonth() + 1).padStart(2, '0') + '/' + now.getFullYear();
+          titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${currentMonthStr}`;
           titleCell.font = { name: fontName, size: 16, bold: true };
           titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
           sheet.getRow(1).height = 22;
@@ -1653,9 +1794,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
           sheet.getCell('E4').value = 'Chức vụ:';
           sheet.getCell('E4').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('G4:J4');
-          sheet.getCell('G4').value = selectedUser.position || 'Nhân viên';
-          sheet.getCell('G4').font = { name: fontName, size: 11 };
+          sheet.mergeCells('F4:J4');
+          sheet.getCell('F4').value = selectedUser.position || 'Nhân viên';
+          sheet.getCell('F4').font = { name: fontName, size: 11 };
           sheet.getRow(4).height = 20;
 
           sheet.getCell('A5').value = 'Họ và tên:';
@@ -1666,9 +1807,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
           sheet.getCell('E5').value = 'Đơn vị:';
           sheet.getCell('E5').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('G5:J5');
-          sheet.getCell('G5').value = selectedUser.department || 'Bảo trì xưởng';
-          sheet.getCell('G5').font = { name: fontName, size: 11 };
+          sheet.mergeCells('F5:J5');
+          sheet.getCell('F5').value = selectedUser.department || 'Bảo trì xưởng';
+          sheet.getCell('F5').font = { name: fontName, size: 11 };
           sheet.getRow(5).height = 20;
 
           // --- 3. MỤC B: BÁO CÁO KPI ---
@@ -1797,6 +1938,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               }
 
               const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+              const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
 
               const row = sheet.addRow([
                   t.date.split('-').reverse().join('/'),
@@ -1808,7 +1950,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                   t.taskName,
                   (t.note || '') + partsStr,
                   statusStr,
-                  ''
+                  earlyLateStr
               ]);
 
               row.eachCell({ includeEmpty: true }, (c, colNumber) => {
@@ -1826,7 +1968,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
-          link.download = `KPI_${selectedUser.name.replace(/\s+/g, '_')}_${monthStr.replace('/', '-')}.xlsx`;
+          link.download = `KPI_${selectedUser.name.replace(/\s+/g, '_')}_${currentMonthStr.replace('/', '-')}.xlsx`;
           link.click();
           showNotification('Đã xuất báo cáo KPI thành công!');
       } catch (err) {
@@ -1880,6 +2022,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               }
               
               const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+              const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
               
               const row = sheet.addRow([
                   t.date.split('-').reverse().join('/'), 
@@ -1891,7 +2034,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                   t.taskName, 
                   t.note + partsStr, 
                   statusStr, 
-                  '' // Thời gian trễ sớm để trống
+                  earlyLateStr
               ]);
 
               // Apply style viền, căn lề và wrap text
@@ -1908,6 +2051,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
               row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
               row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           });
 
           // Xuất và tải file 
@@ -1928,33 +2072,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
   const calculateWorkTime = (start, end) => {
       if (!start || !end) return '--';
-      const parseTime = (timeStr) => {
-          const [h, m] = timeStr.split(':').map(Number);
-          return h * 60 + m; 
-      };
-      
-      const sMins = parseTime(start);
-      const eMins = parseTime(end);
-      
-      if (eMins <= sMins) return '0h';
-
-      let totalMins = eMins - sMins;
-
-      const lunchStart = 690;
-      const lunchEnd = 780;
-
-      const overlapStart = Math.max(sMins, lunchStart);
-      const overlapEnd = Math.min(eMins, lunchEnd);
-      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
-
-      const actualMins = totalMins - lunchOverlap;
-
-      const hours = Math.floor(actualMins / 60);
-      const mins = actualMins % 60;
-      
-      if (hours === 0) return `${mins}p`;
-      if (mins === 0) return `${hours}h`;
-      return `${hours}h ${mins}p`;
+      const actualMins = getActualWorkMinutes(start, end);
+      return formatDurationMinutes(actualMins);
   };
 
   return (
@@ -2044,6 +2163,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                                     <div className="mt-2 flex gap-1 flex-wrap">
                                                         <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">Lỗi mức {task.errorLevel}</span>
                                                         {task.kpiStatus && <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${task.kpiStatus === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {task.kpiStatus}</span>}
+                                                        <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">
+                                                            Trễ/Sớm: {calculateEarlyLateStr(task, sysSettings)}
+                                                        </span>
                                                     </div>
                                                 )}
                                             </td>
@@ -2168,26 +2290,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       setFormData({...formData, images: newImages});
   };
 
-  const calculateActualMinutes = (start, end) => {
-      if (!start || !end) return 0;
-      const [h1, m1] = start.split(':').map(Number);
-      const [h2, m2] = end.split(':').map(Number);
-      const sMins = h1 * 60 + m1;
-      const eMins = h2 * 60 + m2;
-      if (eMins <= sMins) return 0;
-      
-      let total = eMins - sMins;
-      const lunchStart = 690; // 11:30
-      const lunchEnd = 780;   // 13:00
-      
-      const overlapStart = Math.max(sMins, lunchStart);
-      const overlapEnd = Math.min(eMins, lunchEnd);
-      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
-      
-      return total - lunchOverlap;
-  };
-
-  const actualMins = calculateActualMinutes(formData.startTime, formData.endTime);
+  const actualMins = getActualWorkMinutes(formData.startTime, formData.endTime);
   let maxMinutes = 0;
   if (formData.errorLevel === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
   else if (formData.errorLevel === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
@@ -2387,26 +2490,7 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       setFormData({...formData, images: newImages});
   };
 
-  const calculateActualMinutes = (start, end) => {
-      if (!start || !end) return 0;
-      const [h1, m1] = start.split(':').map(Number);
-      const [h2, m2] = end.split(':').map(Number);
-      const sMins = h1 * 60 + m1;
-      const eMins = h2 * 60 + m2;
-      if (eMins <= sMins) return 0;
-      
-      let total = eMins - sMins;
-      const lunchStart = 690;
-      const lunchEnd = 780;
-      
-      const overlapStart = Math.max(sMins, lunchStart);
-      const overlapEnd = Math.min(eMins, lunchEnd);
-      const lunchOverlap = Math.max(0, overlapEnd - overlapStart);
-      
-      return total - lunchOverlap;
-  };
-
-  const actualMins = calculateActualMinutes(formData.startTime, formData.endTime);
+  const actualMins = getActualWorkMinutes(formData.startTime, formData.endTime);
   let maxMinutes = 0;
   if (formData.errorLevel === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
   else if (formData.errorLevel === '2') maxMinutes = (sysSettings?.error_times?.level2 || 4) * 60;
@@ -2919,7 +3003,7 @@ export default function App() {
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings}/>}
-          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} />}
+          {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} sysSettings={sysSettings} />}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
