@@ -1701,6 +1701,7 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
+  const [filterType, setFilterType] = useState('all');
   const [startDate, setStartDate] = useState(() => {
       const d = new Date();
       d.setDate(1);
@@ -1709,6 +1710,10 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [isExporting, setIsExporting] = useState(false);
+  const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
+  const [selectedKpiUsers, setSelectedKpiUsers] = useState([]);
+
+  const techUsers = usersList.filter(u => u.role !== 'admin');
 
   useEffect(() => { 
       if(taskFilter === 'pending') {
@@ -1716,6 +1721,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       } else {
           setFilterTech(user.role === 'admin' ? 'all' : user.username);
       }
+      setFilterType('all');
   }, [taskFilter, user]);
 
   const filteredTasks = dailyTasks.filter(t => {
@@ -1723,12 +1729,14 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
       
+      let matchType = filterType === 'all' ? true : (t.type && t.type.trim().toLowerCase() === filterType.toLowerCase());
+      
       let matchDate = true;
       if (taskFilter !== 'pending') {
           if (startDate && t.date < startDate) matchDate = false;
           if (endDate && t.date > endDate) matchDate = false;
       }
-      return matchTech && matchDate;
+      return matchTech && matchType && matchDate;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
@@ -1743,258 +1751,328 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const startEdit = (task) => { setEditTaskData(task); setInitialTaskData(null); setView('daily_task_form'); };
   const handleConfirmDelete = async () => { if(deleteModal.id) { await handleDeleteDailyTaskApp(deleteModal.id); showNotification('Đã xóa công việc!'); } setDeleteModal({ isOpen: false, id: null }); };
 
-  const handleExportKPI = async () => {
-      if (filterTech === 'all') {
-          showNotification('Vui lòng chọn 1 nhân viên cụ thể ở bộ lọc để xuất KPI!', 'error');
+  const openKpiExportModal = () => {
+      if (user.role !== 'admin') {
+          handleExportKPI([user]);
           return;
       }
-      const selectedUser = usersList.find(u => u.username === filterTech || u.name === filterTech) || user;
-      if (!selectedUser) return;
+      if (filterTech !== 'all') {
+          const found = techUsers.find(u => u.username === filterTech || u.name === filterTech);
+          setSelectedKpiUsers(found ? [found.username] : techUsers.map(u => u.username));
+      } else {
+          setSelectedKpiUsers(techUsers.map(u => u.username));
+      }
+      setIsKpiModalOpen(true);
+  };
+
+  const toggleSelectKpiUser = (username) => {
+      setSelectedKpiUsers(prev =>
+          prev.includes(username) ? prev.filter(u => u !== username) : [...prev, username]
+      );
+  };
+
+  const toggleSelectAllKpiUsers = () => {
+      if (selectedKpiUsers.length === techUsers.length) {
+          setSelectedKpiUsers([]);
+      } else {
+          setSelectedKpiUsers(techUsers.map(u => u.username));
+      }
+  };
+
+  const populateKpiWorksheet = (workbook, sheet, selectedUser, userTasks, logoId, currentMonthStr) => {
+      // Thiết lập trang in A4 Nằm ngang (Landscape)
+      sheet.pageSetup = {
+          paperSize: 9, // A4
+          orientation: 'landscape',
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+      };
+
+      // Độ rộng 10 cột chuẩn theo mẫu A -> J
+      sheet.columns = [
+          { width: 14 }, // A: Ngày / Kế hoạch PM (B)
+          { width: 12 }, // B: Bắt đầu / Hoãn hợp lệ (C)
+          { width: 12 }, // C: Kết thúc / Đạt PM (A)
+          { width: 16 }, // D: Thời gian thực làm / % PM Thực tế
+          { width: 22 }, // E: Công việc được giao / Điểm KPI PM
+          { width: 15 }, // F: Mức độ lỗi / Sự cố CM (Tổng)
+          { width: 32 }, // G: Nội dung công việc / Ca CM Đạt SLA (K)
+          { width: 32 }, // H: Ghi chú công việc / % CM Thực tế
+          { width: 15 }, // I: Hoàn thành / Điểm KPI CM
+          { width: 16 }  // J: Thời gian trễ/sớm / Tổng Điểm KPI
+      ];
+
+      const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+      const doubleBottomBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'double'}, right: {style:'thin'} };
+      const fontName = 'Arial';
+
+      // --- 1. TIÊU ĐỀ & LOGO ---
+      sheet.mergeCells('A1:B2');
+      sheet.addImage(logoId, {
+          tl: { col: 0.1, row: 0.1 },
+          ext: { width: 175, height: 53 }
+      });
+
+      sheet.mergeCells('C1:J2');
+      const titleCell = sheet.getCell('C1');
+      titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${currentMonthStr}`;
+      titleCell.font = { name: fontName, size: 16, bold: true };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      sheet.getRow(1).height = 22;
+      sheet.getRow(2).height = 22;
+
+      // --- 2. MỤC A: THÔNG TIN NHÂN SỰ ---
+      sheet.mergeCells('A3:J3');
+      sheet.getCell('A3').value = 'A. THÔNG TIN NHÂN SỰ:';
+      sheet.getCell('A3').font = { name: fontName, size: 11, bold: true };
+      sheet.getRow(3).height = 22;
+
+      sheet.getCell('A4').value = 'Mã NV:';
+      sheet.getCell('A4').font = { name: fontName, size: 11, bold: true };
+      sheet.mergeCells('B4:D4');
+      sheet.getCell('B4').value = selectedUser.employeeId || '';
+      sheet.getCell('B4').font = { name: fontName, size: 11 };
+
+      sheet.getCell('E4').value = 'Chức vụ:';
+      sheet.getCell('E4').font = { name: fontName, size: 11, bold: true };
+      sheet.mergeCells('F4:J4');
+      sheet.getCell('F4').value = selectedUser.position || 'Nhân viên';
+      sheet.getCell('F4').font = { name: fontName, size: 11 };
+      sheet.getRow(4).height = 20;
+
+      sheet.getCell('A5').value = 'Họ và tên:';
+      sheet.getCell('A5').font = { name: fontName, size: 11, bold: true };
+      sheet.mergeCells('B5:D5');
+      sheet.getCell('B5').value = selectedUser.name || '';
+      sheet.getCell('B5').font = { name: fontName, size: 11 };
+
+      sheet.getCell('E5').value = 'Đơn vị:';
+      sheet.getCell('E5').font = { name: fontName, size: 11, bold: true };
+      sheet.mergeCells('F5:J5');
+      sheet.getCell('F5').value = selectedUser.department || 'Bảo trì xưởng';
+      sheet.getCell('F5').font = { name: fontName, size: 11 };
+      sheet.getRow(5).height = 20;
+
+      // --- 3. MỤC B: BÁO CÁO KPI ---
+      sheet.mergeCells('A6:J6');
+      sheet.getCell('A6').value = 'B. BÁO CÁO KPI:';
+      sheet.getCell('A6').font = { name: fontName, size: 11, bold: true };
+      sheet.getRow(6).height = 24;
+
+      // Dòng 7 & 8: Tiêu đề bảng KPI
+      sheet.mergeCells('A7:E7');
+      const pmHeader = sheet.getCell('A7');
+      pmHeader.value = 'Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì, bảo dưỡng theo kế hoạch';
+      pmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
+      pmHeader.font = { name: fontName, size: 10, bold: true };
+      pmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+      sheet.mergeCells('F7:I7');
+      const cmHeader = sheet.getCell('F7');
+      cmHeader.value = 'Phản hồi và khắc phục sự cố kỹ thuật đột xuất kịp thời';
+      cmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
+      cmHeader.font = { name: fontName, size: 10, bold: true };
+      cmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+      sheet.mergeCells('J7:J8');
+      const totalHeader = sheet.getCell('J7');
+      totalHeader.value = 'Tổng Điểm KPI';
+      totalHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
+      totalHeader.font = { name: fontName, size: 10, bold: true };
+      totalHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+      const subHeaders = [
+          'Kế hoạch PM (B)', 'Hoãn hợp lệ (C)', 'Đạt PM (A)', '% PM Thực tế', 'Điểm KPI PM (50%)',
+          'Sự cố CM (Tổng)', 'Ca CM Đạt SLA (K)', '% CM Thực tế', 'Điểm KPI CM (30%)'
+      ];
+      subHeaders.forEach((text, idx) => {
+          const cell = sheet.getCell(8, idx + 1);
+          cell.value = text;
+          cell.font = { name: fontName, size: 10, bold: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      });
+
+      sheet.getRow(7).height = 28;
+      sheet.getRow(8).height = 30;
+
+      // Tính toán số liệu thực tế từ Sổ công việc của nhân viên này
+      let B = 0, C = 0, A = 0;
+      let cmTotal = 0, K = 0;
+
+      userTasks.forEach(t => {
+          const isCM = !!getNormalizedErrorLevel(t);
+          if (isCM) {
+              cmTotal++;
+              if (evaluateTaskKpiStatus(t, sysSettings) === 'Đạt') {
+                  K++;
+              }
+          } else {
+              B++;
+              if (t.status === 'Hoàn thành') {
+                  A++;
+              }
+          }
+      });
+
+      const pmValidPlan = B - C;
+      const pmRate = pmValidPlan > 0 ? (A / pmValidPlan) : (B === 0 ? 1 : 0);
+      const pmScore = Math.min(0.5, pmRate * 0.5); // Tối đa 50%
+
+      const cmRate = cmTotal > 0 ? (K / cmTotal) : 1;
+      const cmScore = Math.min(0.3, cmRate * 0.3); // Tối đa 30%
+
+      const totalKpiScore = pmScore + cmScore;
+
+      const kpiValues = [
+          B,
+          C,
+          A,
+          `${(pmRate * 100).toFixed(1)}%`,
+          `${(pmScore * 100).toFixed(1)}%`,
+          cmTotal,
+          K,
+          `${(cmRate * 100).toFixed(1)}%`,
+          `${(cmScore * 100).toFixed(1)}%`,
+          `${(totalKpiScore * 100).toFixed(1)}%`
+      ];
+
+      const row9 = sheet.getRow(9);
+      row9.height = 32;
+      kpiValues.forEach((val, idx) => {
+          const cell = sheet.getCell(9, idx + 1);
+          cell.value = val;
+          cell.font = { name: fontName, size: 11, bold: idx === 4 || idx === 8 || idx === 9 };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      });
+
+      // Kẻ khung cho bảng KPI (Dòng 7 -> 9)
+      for (let r = 7; r <= 9; r++) {
+          for (let c = 1; c <= 10; c++) {
+              sheet.getCell(r, c).border = r === 9 ? doubleBottomBorder : thinBorder;
+          }
+      }
+
+      // --- 4. MỤC C: NỘI DUNG CÔNG VIỆC ---
+      sheet.getRow(10).height = 14;
+      sheet.mergeCells('A11:J11');
+      sheet.getCell('A11').value = 'C. NỘI DUNG CÔNG VIỆC:';
+      sheet.getCell('A11').font = { name: fontName, size: 11, bold: true };
+      sheet.getRow(11).height = 24;
+
+      const cHeaders = ['Ngày', 'Bắt đầu', 'Kết thúc', 'Thời gian thực làm', 'Công việc được giao', 'Mức độ lỗi', 'Nội dung công việc', 'Ghi chú công việc', 'Hoàn thành', 'Thời gian trễ/sớm'];
+      const row12 = sheet.getRow(12);
+      row12.height = 28;
+      cHeaders.forEach((text, idx) => {
+          const cell = sheet.getCell(12, idx + 1);
+          cell.value = text;
+          cell.font = { name: fontName, size: 10, bold: true };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          cell.border = thinBorder;
+      });
+
+      userTasks.forEach(t => {
+          const realTime = calculateWorkTime(t.startTime, t.endTime);
+          const errLvlStr = getErrorLevelDisplay(t);
+          const statusStr = evaluateTaskKpiStatus(t, sysSettings);
+
+          const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
+          const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
+
+          const row = sheet.addRow([
+              t.date.split('-').reverse().join('/'),
+              t.startTime,
+              t.endTime,
+              realTime,
+              t.type,
+              errLvlStr,
+              t.taskName,
+              (t.note || '') + partsStr,
+              statusStr,
+              earlyLateStr
+          ]);
+
+          row.eachCell({ includeEmpty: true }, (c, colNumber) => {
+              c.font = { name: fontName, size: 10 };
+              c.border = thinBorder;
+              if (colNumber === 7 || colNumber === 8) {
+                  c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+              } else {
+                  c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              }
+          });
+      });
+  };
+
+  const handleExportKPI = async (usersToExport) => {
+      if (!usersToExport || usersToExport.length === 0) {
+          showNotification('Vui lòng chọn ít nhất 1 nhân sự để xuất KPI!', 'error');
+          return;
+      }
 
       try {
           setIsExporting(true);
+          setIsKpiModalOpen(false);
           const ExcelJS = await loadExcelJS();
           const workbook = new ExcelJS.Workbook();
-          const sheet = workbook.addWorksheet('Bao_Cao_KPI');
 
-          // Thiết lập trang in A4 Nằm ngang (Landscape)
-          sheet.pageSetup = {
-              paperSize: 9, // A4
-              orientation: 'landscape',
-              fitToPage: true,
-              fitToWidth: 1,
-              fitToHeight: 0,
-              margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
-          };
-
-          // Độ rộng 10 cột chuẩn theo mẫu A -> J
-          sheet.columns = [
-              { width: 14 }, // A: Ngày / Kế hoạch PM (B)
-              { width: 12 }, // B: Bắt đầu / Hoãn hợp lệ (C)
-              { width: 12 }, // C: Kết thúc / Đạt PM (A)
-              { width: 16 }, // D: Thời gian thực làm / % PM Thực tế
-              { width: 22 }, // E: Công việc được giao / Điểm KPI PM
-              { width: 15 }, // F: Mức độ lỗi / Sự cố CM (Tổng)
-              { width: 32 }, // G: Nội dung công việc / Ca CM Đạt SLA (K)
-              { width: 32 }, // H: Ghi chú công việc / % CM Thực tế
-              { width: 15 }, // I: Hoàn thành / Điểm KPI CM
-              { width: 16 }  // J: Thời gian trễ/sớm / Tổng Điểm KPI
-          ];
-
-          const thinBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-          const doubleBottomBorder = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'double'}, right: {style:'thin'} };
-          const fontName = 'Arial';
-
-          // --- 1. TIÊU ĐỀ & LOGO ---
-          sheet.mergeCells('A1:B2');
           const logoBase64 = getMartechLogoBase64();
           const logoId = workbook.addImage({
               base64: logoBase64,
               extension: 'png',
           });
-          sheet.addImage(logoId, {
-              tl: { col: 0.1, row: 0.1 },
-              ext: { width: 175, height: 53 }
-          });
 
-          sheet.mergeCells('C1:J2');
-          const titleCell = sheet.getCell('C1');
           const now = new Date();
           const currentMonthStr = String(now.getMonth() + 1).padStart(2, '0') + '/' + now.getFullYear();
-          titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${currentMonthStr}`;
-          titleCell.font = { name: fontName, size: 16, bold: true };
-          titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-          sheet.getRow(1).height = 22;
-          sheet.getRow(2).height = 22;
 
-          // --- 2. MỤC A: THÔNG TIN NHÂN SỰ ---
-          sheet.mergeCells('A3:J3');
-          sheet.getCell('A3').value = 'A. THÔNG TIN NHÂN SỰ:';
-          sheet.getCell('A3').font = { name: fontName, size: 11, bold: true };
-          sheet.getRow(3).height = 22;
+          const usedSheetNames = new Set();
 
-          sheet.getCell('A4').value = 'Mã NV:';
-          sheet.getCell('A4').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('B4:D4');
-          sheet.getCell('B4').value = selectedUser.employeeId || '';
-          sheet.getCell('B4').font = { name: fontName, size: 11 };
-
-          sheet.getCell('E4').value = 'Chức vụ:';
-          sheet.getCell('E4').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('F4:J4');
-          sheet.getCell('F4').value = selectedUser.position || 'Nhân viên';
-          sheet.getCell('F4').font = { name: fontName, size: 11 };
-          sheet.getRow(4).height = 20;
-
-          sheet.getCell('A5').value = 'Họ và tên:';
-          sheet.getCell('A5').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('B5:D5');
-          sheet.getCell('B5').value = selectedUser.name || '';
-          sheet.getCell('B5').font = { name: fontName, size: 11 };
-
-          sheet.getCell('E5').value = 'Đơn vị:';
-          sheet.getCell('E5').font = { name: fontName, size: 11, bold: true };
-          sheet.mergeCells('F5:J5');
-          sheet.getCell('F5').value = selectedUser.department || 'Bảo trì xưởng';
-          sheet.getCell('F5').font = { name: fontName, size: 11 };
-          sheet.getRow(5).height = 20;
-
-          // --- 3. MỤC B: BÁO CÁO KPI ---
-          sheet.mergeCells('A6:J6');
-          sheet.getCell('A6').value = 'B. BÁO CÁO KPI:';
-          sheet.getCell('A6').font = { name: fontName, size: 11, bold: true };
-          sheet.getRow(6).height = 24;
-
-          // Dòng 7 & 8: Tiêu đề bảng KPI
-          sheet.mergeCells('A7:E7');
-          const pmHeader = sheet.getCell('A7');
-          pmHeader.value = 'Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì, bảo dưỡng theo kế hoạch';
-          pmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00B0F0' } };
-          pmHeader.font = { name: fontName, size: 10, bold: true };
-          pmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-
-          sheet.mergeCells('F7:I7');
-          const cmHeader = sheet.getCell('F7');
-          cmHeader.value = 'Phản hồi và khắc phục sự cố kỹ thuật đột xuất kịp thời';
-          cmHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF92D050' } };
-          cmHeader.font = { name: fontName, size: 10, bold: true };
-          cmHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-
-          sheet.mergeCells('J7:J8');
-          const totalHeader = sheet.getCell('J7');
-          totalHeader.value = 'Tổng Điểm KPI';
-          totalHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC000' } };
-          totalHeader.font = { name: fontName, size: 10, bold: true };
-          totalHeader.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-
-          const subHeaders = [
-              'Kế hoạch PM (B)', 'Hoãn hợp lệ (C)', 'Đạt PM (A)', '% PM Thực tế', 'Điểm KPI PM (50%)',
-              'Sự cố CM (Tổng)', 'Ca CM Đạt SLA (K)', '% CM Thực tế', 'Điểm KPI CM (30%)'
-          ];
-          subHeaders.forEach((text, idx) => {
-              const cell = sheet.getCell(8, idx + 1);
-              cell.value = text;
-              cell.font = { name: fontName, size: 10, bold: true };
-              cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-          });
-
-          sheet.getRow(7).height = 28;
-          sheet.getRow(8).height = 30;
-
-          // Tính toán số liệu thực tế từ Sổ công việc
-          let B = 0, C = 0, A = 0;
-          let cmTotal = 0, K = 0;
-
-          sortedTasks.forEach(t => {
-              const isCM = !!getNormalizedErrorLevel(t);
-              if (isCM) {
-                  cmTotal++;
-                  if (evaluateTaskKpiStatus(t, sysSettings) === 'Đạt') {
-                      K++;
-                  }
-              } else {
-                  B++;
-                  if (t.status === 'Hoàn thành') {
-                      A++;
-                  }
+          usersToExport.forEach((u, index) => {
+              // Tạo tên Sheet hợp lệ trong Excel (không chứa ký tự đặc biệt và tối đa 31 ký tự)
+              let baseName = (u.name || u.username || `NV_${index + 1}`).replace(/[*?:\\/[\]]/g, '').trim();
+              if (u.employeeId) {
+                  baseName = `${u.employeeId}_${baseName}`.replace(/[*?:\\/[\]]/g, '').trim();
               }
-          });
-
-          const pmValidPlan = B - C;
-          const pmRate = pmValidPlan > 0 ? (A / pmValidPlan) : (B === 0 ? 1 : 0);
-          const pmScore = Math.min(0.5, pmRate * 0.5); // Tối đa 50%
-
-          const cmRate = cmTotal > 0 ? (K / cmTotal) : 1;
-          const cmScore = Math.min(0.3, cmRate * 0.3); // Tối đa 30%
-
-          const totalKpiScore = pmScore + cmScore;
-
-          const kpiValues = [
-              B,
-              C,
-              A,
-              `${(pmRate * 100).toFixed(1)}%`,
-              `${(pmScore * 100).toFixed(1)}%`,
-              cmTotal,
-              K,
-              `${(cmRate * 100).toFixed(1)}%`,
-              `${(cmScore * 100).toFixed(1)}%`,
-              `${(totalKpiScore * 100).toFixed(1)}%`
-          ];
-
-          const row9 = sheet.getRow(9);
-          row9.height = 32;
-          kpiValues.forEach((val, idx) => {
-              const cell = sheet.getCell(9, idx + 1);
-              cell.value = val;
-              cell.font = { name: fontName, size: 11, bold: idx === 4 || idx === 8 || idx === 9 };
-              cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          });
-
-          // Kẻ khung cho bảng KPI (Dòng 7 -> 9)
-          for (let r = 7; r <= 9; r++) {
-              for (let c = 1; c <= 10; c++) {
-                  sheet.getCell(r, c).border = r === 9 ? doubleBottomBorder : thinBorder;
+              let sheetName = baseName.slice(0, 28);
+              let counter = 1;
+              while (usedSheetNames.has(sheetName.toLowerCase())) {
+                  sheetName = `${baseName.slice(0, 25)}_${counter}`;
+                  counter++;
               }
-          }
+              usedSheetNames.add(sheetName.toLowerCase());
 
-          // --- 4. MỤC C: NỘI DUNG CÔNG VIỆC ---
-          sheet.getRow(10).height = 14;
-          sheet.mergeCells('A11:J11');
-          sheet.getCell('A11').value = 'C. NỘI DUNG CÔNG VIỆC:';
-          sheet.getCell('A11').font = { name: fontName, size: 11, bold: true };
-          sheet.getRow(11).height = 24;
+              const sheet = workbook.addWorksheet(sheetName);
 
-          const cHeaders = ['Ngày', 'Bắt đầu', 'Kết thúc', 'Thời gian thực làm', 'Công việc được giao', 'Mức độ lỗi', 'Nội dung công việc', 'Ghi chú công việc', 'Hoàn thành', 'Thời gian trễ/sớm'];
-          const row12 = sheet.getRow(12);
-          row12.height = 28;
-          cHeaders.forEach((text, idx) => {
-              const cell = sheet.getCell(12, idx + 1);
-              cell.value = text;
-              cell.font = { name: fontName, size: 10, bold: true };
-              cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              cell.border = thinBorder;
-          });
-
-          sortedTasks.forEach(t => {
-              const realTime = calculateWorkTime(t.startTime, t.endTime);
-              const errLvlStr = getErrorLevelDisplay(t);
-              const statusStr = evaluateTaskKpiStatus(t, sysSettings);
-
-              const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
-              const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
-
-              const row = sheet.addRow([
-                  t.date.split('-').reverse().join('/'),
-                  t.startTime,
-                  t.endTime,
-                  realTime,
-                  t.type,
-                  errLvlStr,
-                  t.taskName,
-                  (t.note || '') + partsStr,
-                  statusStr,
-                  earlyLateStr
-              ]);
-
-              row.eachCell({ includeEmpty: true }, (c, colNumber) => {
-                  c.font = { name: fontName, size: 10 };
-                  c.border = thinBorder;
-                  if (colNumber === 7 || colNumber === 8) {
-                      c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-                  } else {
-                      c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+              // Lọc danh sách công việc của nhân viên này theo bộ lọc ngày & loại công việc hiện tại
+              const userFilteredTasks = dailyTasks.filter(t => {
+                  if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
+                  const matchTech = (t.username === u.username || t.technicianName === u.name || t.technicianName === u.username);
+                  const matchType = filterType === 'all' ? true : (t.type && t.type.trim().toLowerCase() === filterType.toLowerCase());
+                  let matchDate = true;
+                  if (taskFilter !== 'pending') {
+                      if (startDate && t.date < startDate) matchDate = false;
+                      if (endDate && t.date > endDate) matchDate = false;
                   }
+                  return matchTech && matchType && matchDate;
+              }).sort((a, b) => {
+                  if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
+                  return (b.startTime || '').localeCompare(a.startTime || '');
               });
+
+              populateKpiWorksheet(workbook, sheet, u, userFilteredTasks, logoId, currentMonthStr);
           });
 
           const buffer = await workbook.xlsx.writeBuffer();
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
-          link.download = `KPI_${selectedUser.name.replace(/\s+/g, '_')}_${currentMonthStr.replace('/', '-')}.xlsx`;
+          const fileNameSuffix = usersToExport.length === 1
+              ? usersToExport[0].name.replace(/\s+/g, '_')
+              : `${usersToExport.length}_Nhan_Su`;
+          link.download = `KPI_${fileNameSuffix}_${currentMonthStr.replace('/', '-')}.xlsx`;
           link.click();
-          showNotification('Đã xuất báo cáo KPI thành công!');
+          showNotification(`Đã xuất báo cáo KPI (${usersToExport.length} sheet) thành công!`);
       } catch (err) {
           console.error(err);
           showNotification('Lỗi xuất file KPI. Vui lòng thử lại!', 'error');
@@ -2100,6 +2178,74 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
         <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa công việc" message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
 
+        {isKpiModalOpen && (
+            <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm animate-fade-in">
+                <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]">
+                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-purple-100 text-purple-600 p-3 rounded-2xl"><FileSpreadsheet className="w-6 h-6" /></div>
+                            <div>
+                                <h3 className="font-bold text-lg md:text-xl text-slate-800">Xuất Báo Cáo KPI (Excel)</h3>
+                                <p className="text-xs text-slate-500 mt-0.5">Mỗi nhân sự được chọn sẽ xuất thành 1 Sheet riêng</p>
+                            </div>
+                        </div>
+                        <button onClick={() => setIsKpiModalOpen(false)} className="p-2 text-slate-400 hover:text-red-500 rounded-full hover:bg-slate-100 transition-colors"><X className="w-6 h-6" /></button>
+                    </div>
+
+                    <div className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-2xl border border-purple-100 mb-4">
+                        <label className="flex items-center space-x-3 cursor-pointer flex-1" onClick={toggleSelectAllKpiUsers}>
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedKpiUsers.length === techUsers.length && techUsers.length > 0 ? 'bg-purple-600 border-purple-600' : 'bg-white border-slate-300'}`}>
+                                {selectedKpiUsers.length === techUsers.length && techUsers.length > 0 && <CheckCircle className="w-4 h-4 text-white" />}
+                            </div>
+                            <span className="font-bold text-purple-900 text-sm md:text-base">Chọn tất cả nhân sự ({techUsers.length})</span>
+                        </label>
+                        <span className="text-xs font-bold text-purple-700 bg-white px-2.5 py-1 rounded-lg border border-purple-200">
+                            Đã chọn: {selectedKpiUsers.length}
+                        </span>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-6">
+                        {techUsers.length === 0 ? (
+                            <div className="text-center text-slate-400 py-8">Chưa có tài khoản Kỹ thuật viên nào.</div>
+                        ) : (
+                            techUsers.map(u => {
+                                const isChecked = selectedKpiUsers.includes(u.username);
+                                return (
+                                    <div key={u.id} onClick={() => toggleSelectKpiUser(u.username)} className={`p-3.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isChecked ? 'bg-purple-50/60 border-purple-300 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}>
+                                        <div className="flex items-center space-x-3 overflow-hidden">
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isChecked ? 'bg-purple-600 border-purple-600' : 'bg-white border-slate-300'}`}>
+                                                {isChecked && <CheckCircle className="w-4 h-4 text-white" />}
+                                            </div>
+                                            <div className="truncate">
+                                                <p className={`font-bold text-sm md:text-base truncate ${isChecked ? 'text-purple-900' : 'text-slate-700'}`}>{u.name}</p>
+                                                <p className="text-xs text-slate-500 truncate">
+                                                    {u.employeeId ? `Mã NV: ${u.employeeId} • ` : ''}{u.position || 'Kỹ thuật viên'} {u.department ? `(${u.department})` : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
+                        <button onClick={() => setIsKpiModalOpen(false)} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm md:text-base transition-colors">Hủy</button>
+                        <button
+                            disabled={selectedKpiUsers.length === 0 || isExporting}
+                            onClick={() => {
+                                const usersToExport = techUsers.filter(u => selectedKpiUsers.includes(u.username));
+                                handleExportKPI(usersToExport);
+                            }}
+                            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-bold text-sm md:text-base shadow-lg shadow-purple-500/30 transition-all flex items-center gap-2"
+                        >
+                            <Download className="w-5 h-5" /> Xuất ({selectedKpiUsers.length} Sheet)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
             <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
                 <div className="flex items-center space-x-3 shrink-0"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2></div>
@@ -2107,9 +2253,18 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                    {user.role === 'admin' && (
                       <div className="relative shrink-0">
                           <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-32 md:w-40 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-36 md:w-44 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
+                   <div className="relative shrink-0">
+                       <ListFilter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                       <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-44 md:w-52 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
+                           <option value="all">Tất cả phân loại</option>
+                           <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
+                           <option value="Chế tạo máy">Chế tạo máy</option>
+                           <option value="Sửa chữa đột xuất">Sửa chữa đột xuất</option>
+                       </select>
+                   </div>
                    {taskFilter !== 'pending' && (
                        <div className="flex items-center gap-1 md:gap-2 shrink-0">
                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
@@ -2117,8 +2272,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                        </div>
                    )}
-                   {taskFilter !== 'pending' && filterTech !== 'all' && (
-                       <button disabled={isExporting} onClick={handleExportKPI} className="shrink-0 bg-purple-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50">
+                   {taskFilter !== 'pending' && (
+                       <button disabled={isExporting} onClick={openKpiExportModal} className="shrink-0 bg-purple-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50">
                            <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất KPI</span>
                        </button>
                    )}
