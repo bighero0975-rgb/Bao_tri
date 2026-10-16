@@ -131,6 +131,72 @@ const calculateEarlyLateStr = (task, sysSettings) => {
   return `${sign}${formatDurationMinutes(Math.abs(diff))}`;
 };
 
+// Hàm tự động tách các phiếu cũ bị gộp "--- [YYYY-MM-DD] Tên tiếp tục ---" trong cột Ghi chú thành các dòng phiếu độc lập
+const expandMergedTaskEntries = (tasksList) => {
+  if (!Array.isArray(tasksList)) return [];
+  const result = [];
+  const splitRegex = /\n*---\s*\[(\d{4}-\d{2}-\d{2})\]\s*(.*?)\s*tiếp tục\s*---\n*/gi;
+
+  tasksList.forEach(task => {
+    const rawNote = String(task.note || '');
+    if (!rawNote.includes('tiếp tục ---')) {
+      result.push(task);
+      return;
+    }
+
+    const segments = [];
+    let lastIndex = 0;
+    let currentHeader = null;
+    let match;
+    const regex = new RegExp(splitRegex.source, 'gi');
+
+    while ((match = regex.exec(rawNote)) !== null) {
+      const content = rawNote.slice(lastIndex, match.index).trim();
+      segments.push({
+        header: currentHeader,
+        note: content
+      });
+      currentHeader = {
+        date: match[1],
+        techName: (match[2] || '').trim()
+      };
+      lastIndex = regex.lastIndex;
+    }
+
+    const tailContent = rawNote.slice(lastIndex).trim();
+    segments.push({
+      header: currentHeader,
+      note: tailContent
+    });
+
+    // Lọc bỏ các phân đoạn rỗng không có nội dung ghi chú (do bấm Tiếp nhiều lần nhưng không ghi thêm)
+    const validSegments = segments.filter((seg, idx) => idx === 0 || seg.note.length > 0);
+
+    if (validSegments.length <= 1) {
+      result.push({
+        ...task,
+        note: validSegments[0]?.note || rawNote.replace(splitRegex, '\n').trim()
+      });
+    } else {
+      validSegments.forEach((seg, idx) => {
+        const isLastSeg = idx === validSegments.length - 1;
+        result.push({
+          ...task,
+          id: idx === 0 ? task.id : `${task.id}-SUB-${idx}`,
+          originalTaskId: task.id,
+          date: seg.header?.date || task.date,
+          technicianName: seg.header?.techName || task.technicianName,
+          note: seg.note || task.taskName,
+          status: isLastSeg ? task.status : 'Hoàn thành',
+          parts: idx === 0 ? (task.parts || []) : []
+        });
+      });
+    }
+  });
+
+  return result;
+};
+
 const getMartechLogoBase64 = () => {
   const canvas = document.createElement('canvas');
   canvas.width = 360;
@@ -1724,7 +1790,10 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       setFilterType('all');
   }, [taskFilter, user]);
 
-  const filteredTasks = dailyTasks.filter(t => {
+  // Tự động tách các phiếu có ghi chú gộp "--- [Ngày] ... tiếp tục ---" thành từng dòng phiếu riêng biệt
+  const unmergedDailyTasks = expandMergedTaskEntries(dailyTasks);
+
+  const filteredTasks = unmergedDailyTasks.filter(t => {
       if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
@@ -2044,8 +2113,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
               const sheet = workbook.addWorksheet(sheetName);
 
-              // Lọc danh sách công việc của nhân viên này theo bộ lọc ngày & loại công việc hiện tại
-              const userFilteredTasks = dailyTasks.filter(t => {
+              // Lọc danh sách công việc đã tách riêng từng phiếu của nhân viên này theo bộ lọc ngày & loại công việc hiện tại
+              const userFilteredTasks = unmergedDailyTasks.filter(t => {
                   if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
                   const matchTech = (t.username === u.username || t.technicianName === u.name || t.technicianName === u.username);
                   const matchType = filterType === 'all' ? true : (t.type && t.type.trim().toLowerCase() === filterType.toLowerCase());
@@ -2381,7 +2450,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                             <td className="px-4 py-4 align-top whitespace-nowrap">
                                                 <div className="flex flex-col gap-2 items-center">
                                                     {task.status !== 'Hoàn thành' && (
-                                                        <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-purple-700 transition-colors shadow-sm w-full">
+                                                        <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-purple-700 transition-colors shadow-sm w-full" title="Đóng phiếu cũ và tạo 1 phiếu mới cho ca làm việc tiếp theo">
                                                             <PlaySquare className="w-3.5 h-3.5" /> Tiếp
                                                         </button>
                                                     )}
@@ -2390,7 +2459,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                                             <button onClick={() => startEdit(task)} className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-200" title="Sửa">
                                                                 <Edit className="w-4 h-4" />
                                                             </button>
-                                                            <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-transparent hover:border-red-200" title="Xóa">
+                                                            <button onClick={() => setDeleteModal({ isOpen: true, id: task.originalTaskId || task.id })} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-transparent hover:border-red-200" title="Xóa">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
                                                         </div>
@@ -2419,7 +2488,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const sourceData = editTaskData || initialTaskData;
 
   const [formData, setFormData] = useState({ 
-      id: isEditing ? editTaskData.id : Date.now(),
+      id: isEditing ? editTaskData.id : `DT-${Date.now()}`,
       technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''),
       username: isEditing ? editTaskData.username : (user?.username || ''), 
       date: isEditing ? editTaskData.date : dateStr, 
@@ -2498,11 +2567,20 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
+          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tạo Phiếu Mới (Tiếp Tục Công Việc)' : 'Báo cáo Hằng ngày')}</h2></div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
           <div className="max-w-3xl mx-auto space-y-6">
+              {isContinuing && initialTaskData && (
+                  <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex items-start gap-3 animate-fade-in">
+                      <CheckCircle className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                      <div className="text-xs md:text-sm text-purple-900">
+                          <p className="font-bold">Đang tạo phiếu mới tiếp nối công việc: "{initialTaskData.taskName}"</p>
+                          <p className="text-purple-700 mt-0.5">Phiếu cũ ngày <b>{initialTaskData.date}</b> ({initialTaskData.startTime} - {initialTaskData.endTime}) sẽ tự động được đóng (chuyển sang <b>Hoàn thành</b>) và tách thành dòng riêng khi lưu phiếu mới này.</p>
+                      </div>
+                  </div>
+              )}
               {user.role === 'admin' && (<div className="bg-slate-100 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-600 mb-2">Người thực hiện (Admin nhập hộ)</label><input type="text" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-purple-500 outline-none font-bold" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} /></div>)}
 
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
@@ -2942,10 +3020,10 @@ export default function App() {
     };
 
     const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
-    const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
+      const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { 
+          const rawTasks = snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => String(b.id).localeCompare(String(a.id)));
+          setDailyTasks(rawTasks); 
+      }, handleSnapError);
     const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
     const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { 
         const sData = snap.docs.find(d => d.id === 'general'); 
@@ -3072,7 +3150,8 @@ export default function App() {
       }
       try {
           showNotification('Đang đồng bộ toàn bộ Sổ công việc lên Google Sheet...');
-          const sorted = [...tasksToSync].sort((a, b) => {
+          const unmergedTasks = expandMergedTaskEntries(tasksToSync);
+          const sorted = [...unmergedTasks].sort((a, b) => {
               if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
               return (b.startTime || '').localeCompare(a.startTime || '');
           });
@@ -3090,14 +3169,30 @@ export default function App() {
   };
   
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
-      const entryId = isEditingRecord && editTaskData ? editTaskData.id : newLog.id; 
-      const entry = { ...newLog, id: entryId, formType: 'daily_task' }; 
+      // Nếu sửa 1 dòng được tách tự động từ phiếu gộp cũ, lưu thành phiếu độc lập và cập nhật lại phiếu gốc
+      const isEditingSplitSubTask = isEditingRecord && editTaskData && editTaskData.originalTaskId;
+      const entryId = isEditingRecord && editTaskData && !isEditingSplitSubTask
+          ? editTaskData.id
+          : `DT-${Date.now()}-${Math.floor(Math.random() * 1000)}`; 
+      const entry = { ...newLog, id: entryId, formType: 'daily_task' };
+      delete entry.originalTaskId;
+
       await saveDailyTaskData(entry); 
       
       if (!isEditingRecord) { 
-          // Tự động Đóng (Hoàn thành) phiếu cũ nếu đây là phiếu được "Tiếp tục" để tránh dồn ứ Việc tồn đọng
-          if (initialTaskData && initialTaskData.status !== 'Hoàn thành') {
-             const updatedOldTask = { ...initialTaskData, status: 'Hoàn thành' };
+          // Tự động Đóng (chuyển trạng thái thành Hoàn thành) phiếu cũ khi nhấn "Tiếp"
+          if (initialTaskData) {
+             const oldId = initialTaskData.originalTaskId || initialTaskData.id;
+             const originalTaskObj = dailyTasks.find(t => String(t.id) === String(oldId)) || initialTaskData;
+             // Làm sạch ghi chú gộp cũ (nếu có) và đóng phiếu cũ
+             const cleanedOldNote = String(originalTaskObj.note || '').split(/\n*---\s*\[\d{4}-\d{2}-\d{2}\]/i)[0].trim();
+             const updatedOldTask = { 
+                 ...originalTaskObj, 
+                 id: oldId,
+                 note: cleanedOldNote || originalTaskObj.note,
+                 status: 'Hoàn thành' 
+             };
+             delete updatedOldTask.originalTaskId;
              await saveDailyTaskData(updatedOldTask);
              if (googleSheetUrl) {
                  pushToGoogleSheet({
@@ -3122,7 +3217,7 @@ export default function App() {
           });
       }
       
-      showNotification(isEditingRecord ? 'Đã lưu và cập nhật lên Sheet!' : 'Đã tạo báo cáo mới thành công!'); 
+      showNotification(isEditingRecord ? 'Đã lưu và cập nhật lên Sheet!' : (initialTaskData ? 'Đã đóng phiếu cũ và tạo phiếu mới thành công!' : 'Đã tạo báo cáo mới thành công!')); 
       setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
