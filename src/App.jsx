@@ -60,6 +60,48 @@ const INITIAL_USERS = [
 
 const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
 
+const getTodayDateStr = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getFirstDayOfMonthStr = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
+};
+
+const sanitizeForFirestore = (obj) => {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizeForFirestore);
+  const cleaned = {};
+  Object.keys(obj).forEach((key) => {
+    if (obj[key] !== undefined) {
+      cleaned[key] = sanitizeForFirestore(obj[key]);
+    }
+  });
+  return cleaned;
+};
+
+const mergeCollectionsById = (cloudList, localList, deletedIds = new Set()) => {
+  const map = new Map();
+  (localList || []).forEach(item => {
+    if (item && item.id !== undefined && !deletedIds.has(String(item.id))) {
+      map.set(String(item.id), item);
+    }
+  });
+  (cloudList || []).forEach(item => {
+    if (item && item.id !== undefined && !deletedIds.has(String(item.id))) {
+      map.set(String(item.id), item);
+    }
+  });
+  return Array.from(map.values());
+};
+
 const getActualWorkMinutes = (start, end) => {
   if (!start || !end) return 0;
   const [h1, m1] = start.split(':').map(Number);
@@ -879,7 +921,7 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => {
 
 const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
   const isElec = mode === 'elec';
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
   const [formData, setFormData] = useState({
      id: editData ? editData.id : Date.now(),
      technicianName: user.name,
@@ -1755,12 +1797,8 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings, handleSyncAllDailyTasksToSheet }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterType, setFilterType] = useState('all');
-  const [startDate, setStartDate] = useState(() => {
-      const d = new Date();
-      d.setDate(1);
-      return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => getFirstDayOfMonthStr());
+  const [endDate, setEndDate] = useState(() => getTodayDateStr());
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [isExporting, setIsExporting] = useState(false);
   const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
@@ -2468,7 +2506,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
 const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData, sysSettings }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
 
   const isEditing = !!editTaskData;
   const isContinuing = !!initialTaskData;
@@ -2483,7 +2521,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       endTime: isEditing ? editTaskData.endTime : nowStr,
       taskName: sourceData ? sourceData.taskName : '', 
       type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
-      errorLevel: sourceData && sourceData.errorLevel ? sourceData.errorLevel : '1',
+      errorLevel: sourceData && sourceData.errorLevel ? String(sourceData.errorLevel).replace(/\D/g, '') || '1' : '1',
       approvedTime: sourceData && sourceData.approvedTime ? sourceData.approvedTime : (sysSettings?.error_times?.level3 || 24),
       note: isEditing ? editTaskData.note : '', 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
@@ -2532,10 +2570,18 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const isKpiPassed = actualMins <= maxMinutes;
 
   const submitForm = () => {
-      if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
-      if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
+      const trimmedTaskName = (formData.taskName || '').trim();
+      const trimmedNote = (formData.note || '').trim();
+      if (!trimmedTaskName && !trimmedNote) {
+          return showNotification('Vui lòng nhập Tên công việc hoặc Ghi chú chi tiết!', 'error');
+      }
       
-      const finalData = { ...formData };
+      const finalData = {
+          ...formData,
+          taskName: trimmedTaskName || trimmedNote,
+          note: trimmedNote || trimmedTaskName
+      };
+
       if (finalData.type === 'Sửa chữa đột xuất') {
           finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
       } else {
@@ -2545,8 +2591,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       }
       
       handleSaveDailyTask(finalData, isEditing);
-      setInitialTaskData(null); 
-      setEditTaskData(null);
   };
 
   const handleBack = () => { setInitialTaskData(null); setEditTaskData(null); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
@@ -2677,7 +2721,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 
 const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList, sysSettings }) => {
   const isEditing = !!editLogData;
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
   const nowStr = new Date().toTimeString().slice(0, 5);
 
   const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
@@ -2958,6 +3002,7 @@ export default function App() {
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
   const [permissionError, setPermissionError] = useState(false);
+  const deletedDailyTaskIdsRef = useRef(new Set());
 
   const setView = (newView, replace = false) => {
     if (newView === view) return;
@@ -3042,9 +3087,13 @@ export default function App() {
     }, handleSnapError));
 
     unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { 
-        const rawTasks = snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => String(b.id).localeCompare(String(a.id)));
-        setDailyTasks(rawTasks); 
-        localStorage.setItem('techmaintain_daily', JSON.stringify(rawTasks));
+        const cloudTasks = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        setDailyTasks(prev => {
+            const merged = mergeCollectionsById(cloudTasks, prev, deletedDailyTaskIdsRef.current)
+                .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+            localStorage.setItem('techmaintain_daily', JSON.stringify(merged));
+            return merged;
+        });
     }, handleSnapError));
 
     unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { 
@@ -3082,103 +3131,113 @@ export default function App() {
 
   const canUseCloud = Boolean(db && fbUser && !permissionError);
 
+  const syncDocToCloud = (collectionName, docId, dataObj, options) => {
+      if (!canUseCloud) return;
+      const cleanData = sanitizeForFirestore(dataObj);
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', collectionName, String(docId));
+      const writePromise = options ? setDoc(docRef, cleanData, options) : setDoc(docRef, cleanData);
+      writePromise.catch((e) => {
+          console.warn(`Chuyển sang lưu cục bộ do lỗi ghi Cloud (${collectionName}):`, e);
+          setPermissionError(true);
+      });
+  };
+
+  const deleteDocFromCloud = (collectionName, docId) => {
+      if (!canUseCloud) return;
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', collectionName, String(docId));
+      deleteDoc(docRef).catch((e) => {
+          console.warn(`Lỗi xóa trên Cloud (${collectionName}):`, e);
+          setPermissionError(true);
+      });
+  };
+
   const saveUserData = async (uObj) => {
-      const nList = usersList.map(u => u.id === uObj.id ? uObj : u);
-      if (!nList.find(u => u.id === uObj.id)) nList.push(uObj);
-      setUsersList(nList);
-      localStorage.setItem('techmaintain_users', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uObj.id), uObj); }
-          catch (e) { setPermissionError(true); }
-      }
+      setUsersList(prev => {
+          const nList = prev.some(u => u.id === uObj.id) ? prev.map(u => u.id === uObj.id ? uObj : u) : [...prev, uObj];
+          localStorage.setItem('techmaintain_users', JSON.stringify(nList));
+          return nList;
+      });
+      syncDocToCloud('users', uObj.id, uObj);
   };
 
   const handleDeleteUser = async (id) => {
-      const nList = usersList.filter(u => u.id !== id);
-      setUsersList(nList);
-      localStorage.setItem('techmaintain_users', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id)); }
-          catch (e) { setPermissionError(true); }
-      }
+      setUsersList(prev => {
+          const nList = prev.filter(u => u.id !== id);
+          localStorage.setItem('techmaintain_users', JSON.stringify(nList));
+          return nList;
+      });
+      deleteDocFromCloud('users', id);
   };
 
   const saveMachineData = async (newMachineObj) => {
-      const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m);
-      if (!nList.find(m => m.id === newMachineObj.id)) nList.push(newMachineObj);
-      setMachines(nList);
-      localStorage.setItem('techmaintain_machines', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); }
-          catch (e) { setPermissionError(true); }
-      }
+      setMachines(prev => {
+          const nList = prev.some(m => m.id === newMachineObj.id) ? prev.map(m => m.id === newMachineObj.id ? newMachineObj : m) : [...prev, newMachineObj];
+          localStorage.setItem('techmaintain_machines', JSON.stringify(nList));
+          return nList;
+      });
+      syncDocToCloud('machines', newMachineObj.id, newMachineObj);
   }; 
 
   const handleDeleteMachineApp = async (id) => {
-      const nList = machines.filter(m => m.id !== id);
-      setMachines(nList);
-      localStorage.setItem('techmaintain_machines', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', id)); }
-          catch (e) { setPermissionError(true); }
-      }
+      setMachines(prev => {
+          const nList = prev.filter(m => m.id !== id);
+          localStorage.setItem('techmaintain_machines', JSON.stringify(nList));
+          return nList;
+      });
+      deleteDocFromCloud('machines', id);
   };
 
   const saveInventoryData = async (newInvObj) => {
-      const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i);
-      if (!nList.find(i => i.id === newInvObj.id)) nList.push(newInvObj);
-      setInventory(nList);
-      localStorage.setItem('techmaintain_inventory', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); }
-          catch (e) { setPermissionError(true); }
-      }
+      setInventory(prev => {
+          const nList = prev.some(i => i.id === newInvObj.id) ? prev.map(i => i.id === newInvObj.id ? newInvObj : i) : [...prev, newInvObj];
+          localStorage.setItem('techmaintain_inventory', JSON.stringify(nList));
+          return nList;
+      });
+      syncDocToCloud('inventory', newInvObj.id, newInvObj);
   };
 
   const saveLogData = async (logEntry) => {
-      const nList = logs.find(l => l.id === logEntry.id) ? logs.map(l => l.id === logEntry.id ? logEntry : l) : [logEntry, ...logs];
-      setLogs(nList);
-      localStorage.setItem('techmaintain_logs', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); }
-          catch (e) { setPermissionError(true); }
-      }
+      setLogs(prev => {
+          const nList = prev.some(l => String(l.id) === String(logEntry.id))
+              ? prev.map(l => String(l.id) === String(logEntry.id) ? logEntry : l)
+              : [logEntry, ...prev];
+          localStorage.setItem('techmaintain_logs', JSON.stringify(nList));
+          return nList;
+      });
+      syncDocToCloud('logs', String(logEntry.id), logEntry);
   };
 
   const handleDeleteLogApp = async (id) => {
-      const nList = logs.filter(l => l.id !== id);
-      setLogs(nList);
-      localStorage.setItem('techmaintain_logs', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); }
-          catch (e) { setPermissionError(true); }
-      }
+      setLogs(prev => {
+          const nList = prev.filter(l => String(l.id) !== String(id));
+          localStorage.setItem('techmaintain_logs', JSON.stringify(nList));
+          return nList;
+      });
+      deleteDocFromCloud('logs', String(id));
   };
 
   const saveDailyTaskData = async (taskObj) => {
+      const cleanTask = sanitizeForFirestore(taskObj);
+      deletedDailyTaskIdsRef.current.delete(String(cleanTask.id));
       setDailyTasks(prev => {
-          const nList = prev.find(t => String(t.id) === String(taskObj.id))
-              ? prev.map(t => String(t.id) === String(taskObj.id) ? taskObj : t)
-              : [taskObj, ...prev];
+          const exists = prev.some(t => String(t.id) === String(cleanTask.id));
+          const nList = exists
+              ? prev.map(t => String(t.id) === String(cleanTask.id) ? cleanTask : t)
+              : [cleanTask, ...prev];
           localStorage.setItem('techmaintain_daily', JSON.stringify(nList));
           return nList;
       });
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); }
-          catch (e) { setPermissionError(true); }
-      }
+      syncDocToCloud('daily_tasks', String(cleanTask.id), cleanTask);
   };
 
   const handleDeleteDailyTaskApp = async (id) => { 
+      deletedDailyTaskIdsRef.current.add(String(id));
       setDailyTasks(prev => {
           const nList = prev.filter(t => String(t.id) !== String(id));
           localStorage.setItem('techmaintain_daily', JSON.stringify(nList));
           return nList;
       });
-      if (canUseCloud) {
-          try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); }
-          catch (e) { setPermissionError(true); }
-      }
+      deleteDocFromCloud('daily_tasks', String(id));
       if (googleSheetUrl) {
           pushToGoogleSheet({
               action: 'delete_daily_task',
@@ -3189,15 +3248,14 @@ export default function App() {
   };
 
   const saveUtilityLogData = async (logObj) => {
-      const nList = utilityLogs.find(l => String(l.id) === String(logObj.id))
-          ? utilityLogs.map(l => String(l.id) === String(logObj.id) ? logObj : l)
-          : [logObj, ...utilityLogs];
-      setUtilityLogs(nList);
-      localStorage.setItem('techmaintain_utility', JSON.stringify(nList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); }
-          catch (e) { setPermissionError(true); }
-      }
+      setUtilityLogs(prev => {
+          const nList = prev.some(l => String(l.id) === String(logObj.id))
+              ? prev.map(l => String(l.id) === String(logObj.id) ? logObj : l)
+              : [logObj, ...prev];
+          localStorage.setItem('techmaintain_utility', JSON.stringify(nList));
+          return nList;
+      });
+      syncDocToCloud('utility_logs', String(logObj.id), logObj);
   };
 
   const saveSettings = async (url, newSysSettings) => {
@@ -3205,19 +3263,13 @@ export default function App() {
       localStorage.setItem('techmaintain_sysSettings', JSON.stringify(newSysSettings));
       setGoogleSheetUrl(url);
       setSysSettings(newSysSettings);
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { gs_url: url, sysSettings: newSysSettings }, { merge: true }); }
-          catch (e) { setPermissionError(true); }
-      }
+      syncDocToCloud('settings', 'general', { gs_url: url, sysSettings: newSysSettings }, { merge: true });
   };
 
   const saveCategoryListData = async (newList) => { 
       setCategoryList(newList);
       localStorage.setItem('techmaintain_categories', JSON.stringify(newList));
-      if (canUseCloud) {
-          try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); }
-          catch (e) { setPermissionError(true); }
-      }
+      syncDocToCloud('settings', 'categories', { list: newList });
   };
 
   const handleLogin = (username, password) => {
@@ -3305,56 +3357,63 @@ export default function App() {
   };
   
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
-      // Nếu sửa 1 dòng được tách tự động từ phiếu gộp cũ, lưu thành phiếu độc lập và cập nhật lại phiếu gốc
-      const isEditingSplitSubTask = isEditingRecord && editTaskData && editTaskData.originalTaskId;
-      const entryId = isEditingRecord && editTaskData && !isEditingSplitSubTask
-          ? editTaskData.id
-          : `DT-${Date.now()}-${Math.floor(Math.random() * 1000)}`; 
-      const entry = { ...newLog, id: entryId, formType: 'daily_task' };
-      delete entry.originalTaskId;
+      try {
+          const isEditingSplitSubTask = isEditingRecord && editTaskData && editTaskData.originalTaskId;
+          const entryId = isEditingRecord && editTaskData && !isEditingSplitSubTask
+              ? editTaskData.id
+              : `DT-${Date.now()}-${Math.floor(Math.random() * 1000)}`; 
+          const entry = sanitizeForFirestore({ ...newLog, id: entryId, formType: 'daily_task' });
+          delete entry.originalTaskId;
 
-      await saveDailyTaskData(entry); 
-      
-      if (!isEditingRecord) { 
-          // Tự động Đóng (chuyển trạng thái thành Hoàn thành) phiếu cũ khi nhấn "Tiếp"
-          if (initialTaskData) {
-             const oldId = initialTaskData.originalTaskId || initialTaskData.id;
-             const originalTaskObj = dailyTasks.find(t => String(t.id) === String(oldId)) || initialTaskData;
-             // Làm sạch ghi chú gộp cũ (nếu có) và đóng phiếu cũ
-             const cleanedOldNote = String(originalTaskObj.note || '').split(/\n*---\s*\[\d{4}-\d{2}-\d{2}\]/i)[0].trim();
-             const updatedOldTask = { 
-                 ...originalTaskObj, 
-                 id: oldId,
-                 note: cleanedOldNote || originalTaskObj.note,
-                 status: 'Hoàn thành' 
-             };
-             delete updatedOldTask.originalTaskId;
-             await saveDailyTaskData(updatedOldTask);
-             if (googleSheetUrl) {
-                 pushToGoogleSheet({
-                     action: 'upsert_daily_task',
-                     formType: 'daily_task',
-                     ...enrichTaskForSheet(updatedOldTask)
+          await saveDailyTaskData(entry); 
+          
+          if (!isEditingRecord) { 
+              // Tự động Đóng (chuyển trạng thái thành Hoàn thành) phiếu cũ khi nhấn "Tiếp"
+              if (initialTaskData) {
+                 const oldId = initialTaskData.originalTaskId || initialTaskData.id;
+                 const originalTaskObj = dailyTasks.find(t => String(t.id) === String(oldId)) || initialTaskData;
+                 const cleanedOldNote = String(originalTaskObj.note || '').split(/\n*---\s*\[\d{4}-\d{2}-\d{2}\]/i)[0].trim();
+                 const updatedOldTask = sanitizeForFirestore({ 
+                     ...originalTaskObj, 
+                     id: oldId,
+                     note: cleanedOldNote || originalTaskObj.note,
+                     status: 'Hoàn thành' 
                  });
-             }
-          }
+                 delete updatedOldTask.originalTaskId;
+                 await saveDailyTaskData(updatedOldTask);
+                 if (googleSheetUrl) {
+                     pushToGoogleSheet({
+                         action: 'upsert_daily_task',
+                         formType: 'daily_task',
+                         ...enrichTaskForSheet(updatedOldTask)
+                     });
+                 }
+              }
 
-          for (const usedPart of entry.parts || []) { 
-              const foundPart = inventory.find(i => i.name === usedPart.name); 
-              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+              for (const usedPart of entry.parts || []) { 
+                  const foundPart = inventory.find(i => i.name === usedPart.name); 
+                  if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+              } 
           } 
-      } 
 
-      if (googleSheetUrl) {
-          pushToGoogleSheet({
-              action: 'upsert_daily_task',
-              formType: 'daily_task',
-              ...enrichTaskForSheet(entry)
-          });
+          if (googleSheetUrl) {
+              pushToGoogleSheet({
+                  action: 'upsert_daily_task',
+                  formType: 'daily_task',
+                  ...enrichTaskForSheet(entry)
+              });
+          }
+          
+          const wasContinuing = !!initialTaskData;
+          setInitialTaskData(null); 
+          setEditTaskData(null);
+          showNotification(isEditingRecord ? 'Đã lưu cập nhật báo cáo!' : (wasContinuing ? 'Đã đóng phiếu cũ và tạo phiếu mới thành công!' : 'Đã lưu báo cáo hằng ngày thành công!')); 
+          setTaskFilter('all');
+          setView('daily_task_history'); 
+      } catch (err) {
+          console.error("Lỗi khi lưu báo cáo hằng ngày:", err);
+          showNotification('Có lỗi xảy ra khi lưu báo cáo, vui lòng thử lại!', 'error');
       }
-      
-      showNotification(isEditingRecord ? 'Đã lưu và cập nhật lên Sheet!' : (initialTaskData ? 'Đã đóng phiếu cũ và tạo phiếu mới thành công!' : 'Đã tạo báo cáo mới thành công!')); 
-      setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
   const handleSaveUtilityLog = async (data, mode) => { 
