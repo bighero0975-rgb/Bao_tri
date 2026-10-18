@@ -5,23 +5,112 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
 
+const safeGetStorage = (key, fallback) => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed !== null && parsed !== undefined ? parsed : fallback;
+  } catch (err) {
+    console.warn(`Lỗi đọc localStorage [${key}], dùng dữ liệu mặc định:`, err);
+    return fallback;
+  }
+};
+
+const safeSetStorage = (key, value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    window.localStorage.setItem(key, serialized);
+  } catch (err) {
+    console.warn(`Cảnh báo đầy bộ nhớ localStorage [${key}], tự động lược bỏ ảnh nặng để tránh treo máy:`, err);
+    try {
+      if (Array.isArray(value)) {
+        const lightweight = value.map(item => (item && typeof item === 'object' ? { ...item, images: [] } : item));
+        window.localStorage.setItem(key, JSON.stringify(lightweight));
+      }
+    } catch (e) {
+      // Bỏ qua nếu trình duyệt chặn hoàn toàn localStorage
+    }
+  }
+};
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, errorMsg: error ? String(error.message || error) : 'Lỗi không xác định' };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('AppErrorBoundary bắt được lỗi:', error, errorInfo);
+  }
+  handleResetSession = () => {
+    try {
+      window.localStorage.removeItem('techmaintain_active_session');
+    } catch (e) {}
+    this.setState({ hasError: false, errorMsg: '' });
+    window.location.reload();
+  };
+  handleClearAllCache = () => {
+    try {
+      window.localStorage.clear();
+    } catch (e) {}
+    this.setState({ hasError: false, errorMsg: '' });
+    window.location.reload();
+  };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-slate-900 text-white flex items-center justify-center p-6 font-sans">
+          <div className="bg-slate-800 border border-slate-700 rounded-3xl p-8 max-w-md w-full text-center shadow-2xl space-y-5">
+            <div className="bg-red-500/20 text-red-400 p-4 rounded-full w-fit mx-auto">
+              <AlertTriangle className="w-12 h-12" />
+            </div>
+            <h2 className="text-xl font-black">Đã xảy ra sự cố hiển thị</h2>
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Bộ nhớ đệm của trình duyệt có dữ liệu không tương thích hoặc quá tải. Bạn có thể bấm nút bên dưới để khôi phục ngay lập tức (dữ liệu trên Đám mây vẫn được giữ nguyên).
+            </p>
+            <div className="bg-slate-900/80 p-3 rounded-xl text-xs font-mono text-red-300 break-words">
+              {this.state.errorMsg}
+            </div>
+            <div className="flex flex-col gap-3 pt-2">
+              <button onClick={this.handleResetSession} className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold shadow-lg transition-all">
+                Tải lại & Khôi phục phiên làm việc
+              </button>
+              <button onClick={this.handleClearAllCache} className="w-full py-3 bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white rounded-xl font-bold text-sm transition-all">
+                Xóa bộ nhớ đệm trình duyệt & Làm mới
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const injectStyles = () => {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('custom-app-styles')) return;
-  const style = document.createElement('style');
-  style.id = 'custom-app-styles';
-  style.innerHTML = `
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-    @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
-    @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
-    .animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-    @keyframes scan { 0% { transform: translateY(0); } 50% { transform: translateY(1000%); } 100% { transform: translateY(0); } }
-  `;
-  document.head.appendChild(style);
+  try {
+    if (document.getElementById('custom-app-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'custom-app-styles';
+    style.innerHTML = `
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      @keyframes fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fade-in { animation: fade-in 0.3s ease-out forwards; }
+      @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+      .animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+      @keyframes scan { 0% { transform: translateY(0); } 50% { transform: translateY(1000%); } 100% { transform: translateY(0); } }
+    `;
+    document.head.appendChild(style);
+  } catch (e) {}
 };
 
 injectStyles();
@@ -35,35 +124,36 @@ const myFirebaseConfig = {
   appId: "1:202386593017:web:3e47d12a813446e770be28"
 };
 
-const isCanvasEnv = typeof __firebase_config !== 'undefined';
-const firebaseConfig = isCanvasEnv ? JSON.parse(__firebase_config) : myFirebaseConfig;
+let firebaseConfig = myFirebaseConfig;
+try {
+  if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+    firebaseConfig = typeof __firebase_config === 'string' ? JSON.parse(__firebase_config) : __firebase_config;
+  }
+} catch (e) {
+  firebaseConfig = myFirebaseConfig;
+}
 
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'techmaintain-app';
+const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'techmaintain-app';
 
-const app = firebaseConfig ? initializeApp(firebaseConfig) : null;
-const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
-
-const INITIAL_MACHINES = [
-  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A', department: 'Cơ Khí', category: 'Cắt CNC', status: 'operational' },
-];
-
-const INITIAL_INVENTORY = [
-  { id: 'P-101', name: 'Dầu máy CNC', unit: 'Lít', quantity: 45 },
-];
-
-const INITIAL_USERS = [
-  { id: 'admin', username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin', employeeId: 'EMP-001', position: 'Quản đốc', department: 'Ban Giám Đốc' },
-  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance', employeeId: 'EMP-002', position: 'Nhân viên', department: 'Bảo trì Cơ điện' },
-  { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance', employeeId: 'EMP-003', position: 'Nhân viên', department: 'Bảo trì Cơ điện' }
-];
-
-const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
+let app = null;
+let auth = null;
+let db = null;
+try {
+  app = firebaseConfig ? initializeApp(firebaseConfig) : null;
+  auth = app ? getAuth(app) : null;
+  db = app ? getFirestore(app) : null;
+} catch (err) {
+  console.warn('Khởi tạo Firebase ở chế độ Offline:', err);
+}
 
 const getActualWorkMinutes = (start, end) => {
-  if (!start || !end) return 0;
-  const [h1, m1] = start.split(':').map(Number);
-  const [h2, m2] = end.split(':').map(Number);
+  if (!start || !end || typeof start !== 'string' || typeof end !== 'string') return 0;
+  const parts1 = start.split(':');
+  const parts2 = end.split(':');
+  if (parts1.length < 2 || parts2.length < 2) return 0;
+  const [h1, m1] = parts1.map(Number);
+  const [h2, m2] = parts2.map(Number);
+  if (isNaN(h1) || isNaN(m1) || isNaN(h2) || isNaN(m2)) return 0;
   const sMins = h1 * 60 + m1;
   const eMins = h2 * 60 + m2;
   if (eMins <= sMins) return 0;
@@ -89,10 +179,35 @@ const formatDurationMinutes = (mins) => {
 };
 
 const getNormalizedErrorLevel = (task) => {
-  if (!task || !task.type || !task.type.trim().toLowerCase().includes('đột xuất')) return '';
+  if (!task || !task.type || !String(task.type).trim().toLowerCase().includes('đột xuất')) return '';
   if (!task.errorLevel) return '1';
   const match = String(task.errorLevel).match(/\d+/);
   return match ? match[0] : '1';
+};
+
+const getTodayDateStr = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getFirstDayOfMonthStr = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
+};
+
+const getTargetSlaMinutes = (task, sysSettings) => {
+  const lvl = getNormalizedErrorLevel(task);
+  if (!lvl) return 0;
+  const errTimes = sysSettings?.error_times || { level1: 1.5, level2: 4, level3: 24 };
+  if (lvl === '1') return Math.round((Number(errTimes.level1) || 1.5) * 60);
+  if (lvl === '2') return Math.round((Number(errTimes.level2) || 4) * 60);
+  const approved = Number(task.approvedTime || task.approvedHours || errTimes.level3 || 24);
+  return Math.round(approved * 60);
 };
 
 const getErrorLevelDisplay = (task) => {
@@ -100,35 +215,142 @@ const getErrorLevelDisplay = (task) => {
   return lvl ? `Lỗi mức ${lvl}` : '';
 };
 
-const getMaxSlaMinutes = (task, sysSettings) => {
-  const lvl = getNormalizedErrorLevel(task);
-  if (lvl === '1') return (sysSettings?.error_times?.level1 || 1.5) * 60;
-  if (lvl === '2') return (sysSettings?.error_times?.level2 || 4) * 60;
-  if (lvl === '3') return (parseFloat(task.approvedTime) || sysSettings?.error_times?.level3 || 24) * 60;
-  return 0;
-};
-
 const evaluateTaskKpiStatus = (task, sysSettings) => {
+  if (!task) return 'Không đạt';
   const lvl = getNormalizedErrorLevel(task);
-  if (!lvl) return task.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
-  if (task.kpiStatus) return task.kpiStatus;
-  if (task.slaStatus) return task.slaStatus;
-  const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
-  const maxMinutes = getMaxSlaMinutes(task, sysSettings);
-  return actualMins <= maxMinutes ? 'Đạt' : 'Không đạt';
+  if (lvl) {
+    const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
+    const targetMins = getTargetSlaMinutes(task, sysSettings);
+    return actualMins <= targetMins ? 'Đạt' : 'Không đạt';
+  }
+  return task.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
 };
 
 const calculateEarlyLateStr = (task, sysSettings) => {
   const lvl = getNormalizedErrorLevel(task);
   if (!lvl) return '';
   const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
-  const maxMinutes = getMaxSlaMinutes(task, sysSettings);
-  if (maxMinutes <= 0) return '';
+  const targetMins = getTargetSlaMinutes(task, sysSettings);
+  const diffMins = actualMins - targetMins;
+  if (diffMins === 0) return '0h';
+  const absMins = Math.abs(diffMins);
+  const sign = diffMins > 0 ? '+' : '-';
+  return `${sign}${formatDurationMinutes(absMins)}`;
+};
 
-  const diff = actualMins - maxMinutes;
-  if (diff === 0) return '0h';
-  const sign = diff > 0 ? '+' : '-';
-  return `${sign}${formatDurationMinutes(Math.abs(diff))}`;
+const sanitizeForFirestore = (obj) => {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirestore(item)).filter(v => v !== undefined);
+  }
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    Object.keys(obj).forEach(key => {
+      const val = obj[key];
+      if (val !== undefined) {
+        cleaned[key] = sanitizeForFirestore(val);
+      }
+    });
+    return cleaned;
+  }
+  return obj;
+};
+
+const mergeCollectionsById = (cloudList = [], localList = [], deletedIds = new Set()) => {
+  const map = new Map();
+  (Array.isArray(localList) ? localList : []).forEach(item => {
+    if (item && item.id !== undefined && !deletedIds.has(String(item.id))) {
+      map.set(String(item.id), item);
+    }
+  });
+  (Array.isArray(cloudList) ? cloudList : []).forEach(item => {
+    if (item && item.id !== undefined && !deletedIds.has(String(item.id))) {
+      map.set(String(item.id), item);
+    }
+  });
+  return Array.from(map.values());
+};
+
+const INITIAL_MACHINES = [
+  { id: 'M-101', name: 'Máy Phay CNC 3 Trục', model: 'Haas VF-2', location: 'Xưởng A', department: 'Cơ Khí', category: 'Cắt CNC', status: 'operational' },
+];
+
+const INITIAL_INVENTORY = [
+  { id: 'P-101', name: 'Dầu máy CNC', unit: 'Lít', quantity: 45 },
+];
+
+const INITIAL_USERS = [
+  { id: 'admin', username: 'admin', password: '123', name: 'Quản Lý Trưởng', role: 'admin', employeeId: 'ADMIN', position: 'Quản lý', department: 'Ban Quản Lý' },
+  { id: 'tech1', username: 'ktv1', password: '123', name: 'Nguyễn Văn KTV', role: 'maintenance', employeeId: 'CN0314', position: 'Thợ cơ', department: 'Bảo trì xưởng' },
+  { id: 'tech2', username: 'ktv2', password: '123', name: 'Lê Văn KTV', role: 'maintenance', employeeId: 'CN0644', position: 'Thợ điện', department: 'Bảo trì xưởng' }
+];
+
+const INITIAL_CATEGORIES = ['Cầu trục', 'Cắt CNC', 'Kho', 'Sơn', 'Quạt', 'Băng tải', 'P.Máy nén khí', 'Cơ khí', 'Vách ướt', 'STT', 'Khác'];
+
+const expandMergedTaskEntries = (tasks) => {
+  if (!Array.isArray(tasks)) return [];
+  const result = [];
+  const splitRegex = /\n*---\s*\[(\d{4}-\d{2}-\d{2})\]\s*(.*?)\s*tiếp tục\s*---\n*/gi;
+
+  tasks.forEach(task => {
+    if (!task) return;
+    const rawNote = String(task.note || '');
+    if (!rawNote.includes('tiếp tục ---')) {
+      result.push(task);
+      return;
+    }
+
+    const segments = [];
+    let lastIndex = 0;
+    let currentHeader = null;
+    const regex = new RegExp(splitRegex.source, 'gi');
+    let match;
+
+    while ((match = regex.exec(rawNote)) !== null) {
+      const contentBefore = rawNote.slice(lastIndex, match.index).trim();
+      segments.push({
+        header: currentHeader,
+        note: contentBefore
+      });
+      currentHeader = {
+        date: match[1],
+        techName: (match[2] || '').trim()
+      };
+      lastIndex = regex.lastIndex;
+    }
+
+    const tailContent = rawNote.slice(lastIndex).trim();
+    segments.push({
+      header: currentHeader,
+      note: tailContent
+    });
+
+    // Lọc bỏ các phân đoạn rỗng không có nội dung ghi chú (do bấm Tiếp nhiều lần nhưng không ghi thêm)
+    const validSegments = segments.filter((seg, idx) => idx === 0 || seg.note.length > 0);
+
+    if (validSegments.length <= 1) {
+      result.push({
+        ...task,
+        note: validSegments[0]?.note || rawNote.replace(splitRegex, '\n').trim()
+      });
+    } else {
+      validSegments.forEach((seg, idx) => {
+        const isLastSeg = idx === validSegments.length - 1;
+        result.push({
+          ...task,
+          id: idx === 0 ? task.id : `${task.id}-SUB-${idx}`,
+          originalTaskId: task.id,
+          date: seg.header?.date || task.date,
+          technicianName: seg.header?.techName || task.technicianName,
+          note: seg.note || task.taskName,
+          status: isLastSeg ? task.status : 'Hoàn thành',
+          parts: idx === 0 ? (task.parts || []) : []
+        });
+      });
+    }
+  });
+
+  return result;
 };
 
 const getMartechLogoBase64 = () => {
@@ -364,7 +586,8 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const filtered = inventory.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+    const safeInventory = Array.isArray(inventory) ? inventory : [];
+    const filtered = safeInventory.filter(i => String(i?.name || '').toLowerCase().includes(search.toLowerCase()));
 
     const handleSelect = (val) => {
         if (val === 'CUSTOM') {
@@ -372,7 +595,7 @@ const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPa
             setTempPart({ name: '', unit: '', quantity: '' });
         } else {
             setIsCustomPart(false);
-            const selectedItem = inventory.find(i => i.name === val);
+            const selectedItem = safeInventory.find(i => i?.name === val);
             setTempPart({ ...tempPart, name: val, unit: selectedItem ? selectedItem.unit : '' });
         }
         setIsOpen(false); setSearch(''); 
@@ -496,7 +719,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
               <label className="block text-sm font-medium text-slate-300 mb-2">Mật khẩu</label>
               <div className="relative">
                  <Lock className="absolute left-4 top-4 w-5 h-5 text-slate-500" />
-                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="***" />
+                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleLogin(username, password)} className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-600 rounded-xl text-lg focus:ring-2 focus:ring-blue-500 outline-none text-white placeholder:text-slate-600 transition-all" placeholder="***" />
               </div>
             </div>
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
@@ -508,20 +731,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
            ) : db && !permissionError ? (
                <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></div>
            ) : (
-               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Cục bộ)</span></div>
-           )}
-           
-           {permissionError && (
-               <div className="mt-4 p-4 bg-red-900/40 border border-red-700 rounded-xl text-red-400 text-xs text-center max-w-sm">
-                   <AlertTriangle className="w-5 h-5 mx-auto mb-2 text-red-500 animate-pulse" />
-                   Bị từ chối quyền truy cập Đám mây! Vui lòng truy cập Firebase Console kiểm tra lại ngày hết hạn trong <b>Firestore Security Rules</b>.
-               </div>
-           )}
-
-           {!isCanvasEnv && db && !permissionError && (
-               <div className="mt-4 p-4 bg-yellow-900/40 border border-yellow-700 rounded-xl text-yellow-400 text-xs text-center max-w-sm">
-                   Đang dùng Firebase cá nhân. Đảm bảo bạn đã mở <b>Anonymous Sign-in</b>.
-               </div>
+               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Lưu cục bộ trên trình duyệt)</span></div>
            )}
         </div>
       </div>
@@ -584,7 +794,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                <button onClick={() => setView('user_management')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-emerald-300 transition-all active:scale-95 text-left group">
                   <div className="bg-emerald-100 p-4 md:p-5 rounded-2xl text-emerald-600 mr-4 md:mr-5 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><User className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Tài khoản (KTV)</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý User & Pass</p></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Tài khoản (KTV)</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý Nhân sự</p></div>
                </button>
                <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-indigo-300 transition-all active:scale-95 text-left group">
                   <div className="bg-indigo-100 p-4 md:p-5 rounded-2xl text-indigo-600 mr-4 md:mr-5 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Database className="w-6 h-6 md:w-8 md:h-8" /></div>
@@ -594,9 +804,9 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
                   <div className="bg-orange-100 p-4 md:p-5 rounded-2xl text-orange-600 mr-4 md:mr-5 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8" /></div>
                   <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Kho Vật Tư</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý tồn kho</p></div>
                </button>
-               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
+               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
                   <div className="bg-pink-100 p-4 md:p-5 rounded-2xl text-pink-600 mr-4 md:mr-5 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử BC hằng ngày</p></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử & Xuất KPI</p></div>
                </button>
                <button onClick={() => setView('utility_history')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-cyan-300 transition-all active:scale-95 text-left group">
                   <div className="bg-cyan-100 p-4 md:p-5 rounded-2xl text-cyan-600 mr-4 md:mr-5 group-hover:bg-cyan-500 group-hover:text-white transition-colors"><Droplets className="w-6 h-6 md:w-8 md:h-8" /></div>
@@ -604,7 +814,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
                </button>
                <button onClick={() => setView('settings')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-green-300 transition-all active:scale-95 text-left group">
                   <div className="bg-green-100 p-4 md:p-5 rounded-2xl text-green-600 mr-4 md:mr-5 group-hover:bg-green-500 group-hover:text-white transition-colors"><FileSpreadsheet className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Xuất báo cáo</p><p className="text-xs md:text-sm text-slate-500 mt-1">Cấu hình Google Sheet</p></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Cài đặt & SLA</p><p className="text-xs md:text-sm text-slate-500 mt-1">Google Sheet & Thời gian lỗi</p></div>
                </button>
                <button onClick={() => setView('home')} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl border border-blue-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 text-left group lg:col-span-3 xl:col-span-2">
                   <div className="bg-blue-600 p-4 md:p-5 rounded-2xl text-white mr-4 md:mr-5 shadow-md"><Wrench className="w-6 h-6 md:w-8 md:h-8" /></div>
@@ -715,13 +925,14 @@ const ManualSelectView = ({ machines, logs, setView, handleScanSuccess, machineF
    const [search, setSearch] = useState('');
    const [expandedGroups, setExpandedGroups] = useState({});
 
-   let filtered = machines;
-   if (machineFilter === 'operational') filtered = machines.filter(m => m.status === 'operational');
-   if (machineFilter === 'issue') filtered = machines.filter(m => m.status !== 'operational');
-   filtered = filtered.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.id.toLowerCase().includes(search.toLowerCase()));
+   let filtered = Array.isArray(machines) ? machines : [];
+   if (machineFilter === 'operational') filtered = filtered.filter(m => m?.status === 'operational');
+   if (machineFilter === 'issue') filtered = filtered.filter(m => m?.status !== 'operational');
+   filtered = filtered.filter(m => String(m?.name || '').toLowerCase().includes(search.toLowerCase()) || String(m?.id || '').toLowerCase().includes(search.toLowerCase()));
 
    const groupedMachines = {};
    filtered.forEach(m => {
+       if (!m) return;
        const cat = m.category || 'Chưa phân loại';
        if (!groupedMachines[cat]) groupedMachines[cat] = [];
        groupedMachines[cat].push(m);
@@ -826,7 +1037,7 @@ const MeterMenuView = ({ setView, user, setUtilityMode }) => {
 
 const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog, editData, setEditData, utilityLogs, mode }) => {
   const isElec = mode === 'elec';
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
   const [formData, setFormData] = useState({
      id: editData ? editData.id : Date.now(),
      technicianName: user.name,
@@ -995,15 +1206,17 @@ const UtilityFormView = ({ user, setView, showNotification, handleSaveUtilityLog
 
 const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData, setUtilityMode, setZoomedImage }) => {
   const [filterTech, setFilterTech] = useState('all');
-  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
   
-  const filteredLogs = utilityLogs.filter(t => {
+  const safeLogs = Array.isArray(utilityLogs) ? utilityLogs : [];
+  const filteredLogs = safeLogs.filter(t => {
+      if (!t) return false;
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
-      let matchDate = t.date.startsWith(filterMonth);
+      let matchDate = String(t.date || '').startsWith(filterMonth);
       return matchTech && matchDate;
   });
 
-  const sortedFilteredLogs = [...filteredLogs].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sortedFilteredLogs = [...filteredLogs].sort((a, b) => new Date(b?.date || 0) - new Date(a?.date || 0));
 
   const handleEdit = (log, mode) => { setEditData(log); setUtilityMode(mode); setView('utility_form'); };
 
@@ -1111,20 +1324,27 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
   const [isAdding, setIsAdding] = useState(false);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
 
-  const filteredUsers = usersList.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.username.toLowerCase().includes(searchTerm.toLowerCase()));
+  const safeUsers = Array.isArray(usersList) ? usersList : [];
+  const filteredUsers = safeUsers.filter(u =>
+    u && (
+      String(u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(u.employeeId || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  );
 
   const handleSave = async () => {
       if (!editForm.username || !editForm.password || !editForm.name) { return showNotification('Vui lòng điền đủ Tên ĐN, Mật khẩu, Họ tên!', 'error'); }
       if (isAdding && usersList.find(u => u.username === editForm.username)) { return showNotification('Tên đăng nhập đã tồn tại!', 'error'); }
-      await saveUserData({ 
-          id: editForm.id || `U-${Date.now()}`, 
-          username: editForm.username, 
-          password: editForm.password, 
-          name: editForm.name, 
+      await saveUserData({
+          id: editForm.id || `U-${Date.now()}`,
+          username: editForm.username,
+          password: editForm.password,
+          name: editForm.name,
           role: editForm.role,
-          employeeId: editForm.employeeId,
-          position: editForm.position,
-          department: editForm.department
+          employeeId: editForm.employeeId || '',
+          position: editForm.position || '',
+          department: editForm.department || ''
       });
       showNotification(isAdding ? 'Đã tạo tài khoản KTV mới' : 'Đã cập nhật tài khoản');
       setEditingId(null); setIsAdding(false);
@@ -1138,8 +1358,8 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
       setDeleteModal({ isOpen: false, id: null });
   };
 
-  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance', employeeId: '', position: '', department: '' }); }
-  const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm({ employeeId: '', position: '', department: '', ...u }); }
+  const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', username: '', password: '', name: '', role: 'maintenance', employeeId: '', position: 'Nhân viên', department: 'Bảo trì xưởng' }); };
+  const startEdit = (u) => { setIsAdding(false); setEditingId(u.id); setEditForm({ employeeId: '', position: '', department: '', ...u }); };
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
@@ -1149,7 +1369,7 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center space-x-3"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Quản lý Tài Khoản</h2></div>
             <div className="flex gap-3 md:w-1/2 lg:w-1/3">
-                <div className="relative flex-1"><Search className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" /><input type="text" placeholder="Tìm tài khoản..." className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
+                <div className="relative flex-1"><Search className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" /><input type="text" placeholder="Tìm tài khoản, Mã NV..." className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border-none rounded-xl text-sm md:text-base focus:ring-2 focus:ring-blue-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} /></div>
                 <button onClick={startAdd} className="bg-blue-600 text-white px-4 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold flex items-center shadow-sm hover:bg-blue-700 transition-colors"><User className="w-4 h-4 md:w-5 md:h-5 mr-2"/> Tạo mới</button>
             </div>
         </div>
@@ -1161,14 +1381,12 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
                 <div className="bg-blue-50 p-5 md:p-8 rounded-3xl border border-blue-200 shadow-sm mb-6 animate-fade-in max-w-3xl mx-auto">
                     <h3 className="font-bold text-blue-800 mb-6 md:text-xl">{isAdding ? 'Tạo tài khoản KTV mới' : 'Cập nhật tài khoản'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Tên đăng nhập</label><input disabled={!isAdding && editForm.id === 'admin'} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100" placeholder="VD: ktv_nguyen" /></div>
-                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mật khẩu</label><input value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="***" /></div>
-                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Họ và Tên</label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="Họ tên đầy đủ" /></div>
-                        
-                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mã nhân viên</label><input value={editForm.employeeId || ''} onChange={e => setEditForm({...editForm, employeeId: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: NV001" /></div>
-                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Chức vụ</label><input value={editForm.position || ''} onChange={e => setEditForm({...editForm, position: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Tổ trưởng, Nhân viên..." /></div>
-                        <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Đơn vị</label><input value={editForm.department || ''} onChange={e => setEditForm({...editForm, department: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Tổ Cơ khí, Điện..." /></div>
-                        
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Tên đăng nhập <span className="text-red-500">*</span></label><input disabled={!isAdding && editForm.id === 'admin'} value={editForm.username} onChange={e => setEditForm({...editForm, username: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100" placeholder="VD: ktv_nguyen" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mật khẩu <span className="text-red-500">*</span></label><input value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="***" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Họ và Tên <span className="text-red-500">*</span></label><input value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white font-bold" placeholder="Họ tên đầy đủ" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Mã nhân viên</label><input value={editForm.employeeId || ''} onChange={e => setEditForm({...editForm, employeeId: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: CN0314" /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Chức vụ</label><input value={editForm.position || ''} onChange={e => setEditForm({...editForm, position: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Thợ điện, Thợ cơ..." /></div>
+                        <div><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Đơn vị / Bộ phận</label><input value={editForm.department || ''} onChange={e => setEditForm({...editForm, department: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-blue-500 bg-white" placeholder="VD: Bảo trì xưởng" /></div>
                         <div className="md:col-span-2"><label className="text-xs md:text-sm font-bold text-slate-600 mb-2 block">Quyền hạn</label>
                             <select disabled={editForm.id === 'admin'} value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="w-full p-3 md:p-4 border border-blue-200 rounded-xl text-sm md:text-base bg-white outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100">
                                 <option value="maintenance">Kỹ thuật viên</option><option value="admin">Quản lý (Admin)</option>
@@ -1190,14 +1408,12 @@ const UserManagementView = ({ usersList, setView, showNotification, saveUserData
                        <div className={`p-3 md:p-4 rounded-2xl shrink-0 ${u.role === 'admin' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-600'}`}>
                            {u.role === 'admin' ? <Lock className="w-6 h-6 md:w-8 md:h-8" /> : <User className="w-6 h-6 md:w-8 md:h-8" />}
                        </div>
-                       <div className="overflow-hidden">
+                       <div className="overflow-hidden flex-1">
                            <h4 className="font-bold text-slate-800 text-base md:text-lg truncate">{u.name}</h4>
-                           <div className="text-xs text-slate-500 mt-1.5 flex flex-col gap-1">
-                               {u.employeeId && <span><b className="text-slate-600 font-semibold">Mã NV:</b> {u.employeeId}</span>}
-                               {u.position && <span><b className="text-slate-600 font-semibold">Chức vụ:</b> {u.position}</span>}
-                               {u.department && <span><b className="text-slate-600 font-semibold">Đơn vị:</b> {u.department}</span>}
-                           </div>
-                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-3 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 break-all space-y-1">
+                           <div className="text-xs md:text-sm text-slate-500 font-mono mt-2 bg-slate-50 p-2 md:p-3 rounded-xl border border-slate-100 break-all space-y-1">
+                               <div><b className="text-slate-700">Mã NV:</b> {u.employeeId || '--'}</div>
+                               <div><b className="text-slate-700">Chức vụ:</b> {u.position || '--'}</div>
+                               <div><b className="text-slate-700">Đơn vị:</b> {u.department || '--'}</div>
                                <div><b className="text-slate-700">User:</b> {u.username}</div>
                                <div><b className="text-slate-700">Pass:</b> {u.password}</div>
                            </div>
@@ -1232,11 +1448,11 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
   const [newCatName, setNewCatName] = useState('');
   const [deleteCatModal, setDeleteCatModal] = useState({ isOpen: false, cat: null });
 
-  let baseMachines = machines;
-  if (machineFilter === 'operational') baseMachines = machines.filter(m => m.status === 'operational');
-  if (machineFilter === 'issue') baseMachines = machines.filter(m => m.status === 'maintenance' || m.status === 'broken');
+  let baseMachines = Array.isArray(machines) ? machines : [];
+  if (machineFilter === 'operational') baseMachines = baseMachines.filter(m => m?.status === 'operational');
+  if (machineFilter === 'issue') baseMachines = baseMachines.filter(m => m?.status === 'maintenance' || m?.status === 'broken');
 
-  const filteredMachines = baseMachines.filter(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()) || m.id.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredMachines = baseMachines.filter(m => m && (String(m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || String(m.id || '').toLowerCase().includes(searchTerm.toLowerCase())));
   const filterTitle = machineFilter === 'operational' ? '(Máy Đang Tốt)' : machineFilter === 'issue' ? '(Lỗi / Bảo Trì)' : '';
 
   const groupedMachines = {};
@@ -1245,15 +1461,15 @@ const MachineManagementView = ({ machines, logs, setView, showNotification, save
       if (!groupedMachines[cat]) groupedMachines[cat] = [];
       groupedMachines[cat].push(m);
   });
-   const sortedGroups = Object.keys(groupedMachines).sort((a, b) => {
-       if (a === 'Chưa phân loại') return 1;
-       if (b === 'Chưa phân loại') return -1;
-       return a.localeCompare(b);
-   });
+  const sortedGroups = Object.keys(groupedMachines).sort((a, b) => {
+      if (a === 'Chưa phân loại') return 1;
+      if (b === 'Chưa phân loại') return -1;
+      return a.localeCompare(b);
+  });
 
-   const toggleGroup = (groupName) => {
-       setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
-   };
+  const toggleGroup = (groupName) => {
+      setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
+  };
 
   const startAdd = () => { setIsAdding(true); setEditingId(null); setEditForm({ id: '', name: '', model: '', location: '', department: '', category: '', status: 'operational' }); };
   const startEdit = (m) => { setIsAdding(false); setEditingId(m.id); setEditForm({ id: m.id, name: m.name, model: m.model || '', location: m.location || '', department: m.department || '', category: m.category || '', status: m.status || 'operational' }); };
@@ -1535,8 +1751,8 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', unit: '', quantity: '' });
 
-  const filteredInventory = inventory.filter(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()));
-
+  const safeInventory = Array.isArray(inventory) ? inventory : [];
+  const filteredInventory = safeInventory.filter(item => item && String(item.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
   const handleAddOrUpdate = async () => {
     if (!newItem.name || !newItem.unit || !newItem.quantity) { showNotification('Vui lòng nhập đủ thông tin!', 'error'); return; }
     const existingItem = inventory.find(i => i.name.toLowerCase() === newItem.name.toLowerCase());
@@ -1702,12 +1918,8 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings, handleSyncAllDailyTasksToSheet }) => {
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterType, setFilterType] = useState('all');
-  const [startDate, setStartDate] = useState(() => {
-      const d = new Date();
-      d.setDate(1);
-      return d.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => getFirstDayOfMonthStr());
+  const [endDate, setEndDate] = useState(() => getTodayDateStr());
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [isExporting, setIsExporting] = useState(false);
   const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
@@ -1724,26 +1936,33 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       setFilterType('all');
   }, [taskFilter, user]);
 
-  const filteredTasks = dailyTasks.filter(t => {
+  // Tự động tách các phiếu có ghi chú gộp "--- [Ngày] ... tiếp tục ---" thành từng dòng phiếu riêng biệt
+  const unmergedDailyTasks = expandMergedTaskEntries(dailyTasks);
+
+  const filteredTasks = unmergedDailyTasks.filter(t => {
+      if (!t) return false;
       if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
       let matchTech = filterTech === 'all' ? true : (t.username === filterTech || t.technicianName === filterTech);
       if (taskFilter === 'pending') matchTech = true; 
       
-      let matchType = filterType === 'all' ? true : (t.type && t.type.trim().toLowerCase() === filterType.toLowerCase());
+      let matchType = filterType === 'all' ? true : (t.type && String(t.type).trim().toLowerCase() === filterType.toLowerCase());
       
       let matchDate = true;
+      const taskDate = String(t.date || '');
       if (taskFilter !== 'pending') {
-          if (startDate && t.date < startDate) matchDate = false;
-          if (endDate && t.date > endDate) matchDate = false;
+          if (startDate && taskDate < startDate) matchDate = false;
+          if (endDate && taskDate > endDate) matchDate = false;
       }
       return matchTech && matchType && matchDate;
   });
 
   const sortedTasks = [...filteredTasks].sort((a, b) => {
-      if (a.date !== b.date) {
-          return new Date(b.date) - new Date(a.date);
+      const dateA = String(a?.date || '');
+      const dateB = String(b?.date || '');
+      if (dateA !== dateB) {
+          return new Date(dateB || 0) - new Date(dateA || 0);
       }
-      return (b.startTime || '').localeCompare(a.startTime || '');
+      return String(b?.startTime || '').localeCompare(String(a?.startTime || ''));
   });
 
   const viewTitle = taskFilter === 'pending' ? 'Công Việc Đang Dở' : 'Sổ Ghi Công Việc';
@@ -1981,13 +2200,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
 
           const row = sheet.addRow([
-              t.date.split('-').reverse().join('/'),
-              t.startTime,
-              t.endTime,
+              String(t.date || '').split('-').reverse().join('/'),
+              t.startTime || '',
+              t.endTime || '',
               realTime,
-              t.type,
+              t.type || '',
               errLvlStr,
-              t.taskName,
+              t.taskName || '',
               (t.note || '') + partsStr,
               statusStr,
               earlyLateStr
@@ -2044,8 +2263,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
               const sheet = workbook.addWorksheet(sheetName);
 
-              // Lọc danh sách công việc của nhân viên này theo bộ lọc ngày & loại công việc hiện tại
-              const userFilteredTasks = dailyTasks.filter(t => {
+              // Lọc danh sách công việc đã tách riêng từng phiếu của nhân viên này theo bộ lọc ngày & loại công việc hiện tại
+              const userFilteredTasks = unmergedDailyTasks.filter(t => {
                   if (taskFilter === 'pending' && t.status === 'Hoàn thành') return false;
                   const matchTech = (t.username === u.username || t.technicianName === u.name || t.technicianName === u.username);
                   const matchType = filterType === 'all' ? true : (t.type && t.type.trim().toLowerCase() === filterType.toLowerCase());
@@ -2123,13 +2342,13 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
               
               const row = sheet.addRow([
-                  t.date.split('-').reverse().join('/'), 
-                  t.startTime, 
-                  t.endTime, 
+                  String(t.date || '').split('-').reverse().join('/'), 
+                  t.startTime || '', 
+                  t.endTime || '', 
                   realTime, 
-                  t.type, 
+                  t.type || '', 
                   errLvlStr, 
-                  t.taskName, 
+                  t.taskName || '', 
                   (t.note || '') + partsStr, 
                   statusStr, 
                   earlyLateStr
@@ -2381,7 +2600,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                             <td className="px-4 py-4 align-top whitespace-nowrap">
                                                 <div className="flex flex-col gap-2 items-center">
                                                     {task.status !== 'Hoàn thành' && (
-                                                        <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-purple-700 transition-colors shadow-sm w-full">
+                                                        <button onClick={() => { setInitialTaskData(task); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 hover:bg-purple-700 transition-colors shadow-sm w-full" title="Đóng phiếu cũ và tạo 1 phiếu mới cho ca làm việc tiếp theo">
                                                             <PlaySquare className="w-3.5 h-3.5" /> Tiếp
                                                         </button>
                                                     )}
@@ -2390,7 +2609,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                                             <button onClick={() => startEdit(task)} className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors border border-transparent hover:border-blue-200" title="Sửa">
                                                                 <Edit className="w-4 h-4" />
                                                             </button>
-                                                            <button onClick={() => setDeleteModal({ isOpen: true, id: task.id })} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-transparent hover:border-red-200" title="Xóa">
+                                                            <button onClick={() => setDeleteModal({ isOpen: true, id: task.originalTaskId || task.id })} className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors border border-transparent hover:border-red-200" title="Xóa">
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
                                                         </div>
@@ -2412,14 +2631,14 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
 const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleSaveDailyTask, initialTaskData, setInitialTaskData, editTaskData, setEditTaskData, sysSettings }) => {
   const nowStr = new Date().toTimeString().slice(0, 5);
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
 
   const isEditing = !!editTaskData;
   const isContinuing = !!initialTaskData;
   const sourceData = editTaskData || initialTaskData;
 
   const [formData, setFormData] = useState({ 
-      id: isEditing ? editTaskData.id : Date.now(),
+      id: isEditing ? editTaskData.id : `DT-${Date.now()}`,
       technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''),
       username: isEditing ? editTaskData.username : (user?.username || ''), 
       date: isEditing ? editTaskData.date : dateStr, 
@@ -2427,7 +2646,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       endTime: isEditing ? editTaskData.endTime : nowStr,
       taskName: sourceData ? sourceData.taskName : '', 
       type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
-      errorLevel: sourceData && sourceData.errorLevel ? sourceData.errorLevel : '1',
+      errorLevel: sourceData && sourceData.errorLevel ? String(sourceData.errorLevel).replace(/\D/g, '') || '1' : '1',
       approvedTime: sourceData && sourceData.approvedTime ? sourceData.approvedTime : (sysSettings?.error_times?.level3 || 24),
       note: isEditing ? editTaskData.note : '', 
       status: isEditing ? editTaskData.status : 'Hoàn thành', 
@@ -2476,10 +2695,18 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const isKpiPassed = actualMins <= maxMinutes;
 
   const submitForm = () => {
-      if(!formData.taskName) return showNotification('Nhập Tên công việc/Thiết bị!', 'error');
-      if(!formData.note) return showNotification('Nhập Ghi chú/Nội dung CV!', 'error');
+      const trimmedTaskName = (formData.taskName || '').trim();
+      const trimmedNote = (formData.note || '').trim();
+      if (!trimmedTaskName && !trimmedNote) {
+          return showNotification('Vui lòng nhập Tên công việc hoặc Ghi chú chi tiết!', 'error');
+      }
       
-      const finalData = { ...formData };
+      const finalData = {
+          ...formData,
+          taskName: trimmedTaskName || trimmedNote,
+          note: trimmedNote || trimmedTaskName
+      };
+
       if (finalData.type === 'Sửa chữa đột xuất') {
           finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
       } else {
@@ -2489,8 +2716,6 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       }
       
       handleSaveDailyTask(finalData, isEditing);
-      setInitialTaskData(null); 
-      setEditTaskData(null);
   };
 
   const handleBack = () => { setInitialTaskData(null); setEditTaskData(null); setView(user.role === 'admin' ? 'daily_task_history' : 'home'); };
@@ -2498,11 +2723,20 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tiếp tục Công Việc' : 'Báo cáo Hằng ngày')}</h2></div>
+          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tạo Phiếu Mới (Tiếp Tục Công Việc)' : 'Báo cáo Hằng ngày')}</h2></div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
           <div className="max-w-3xl mx-auto space-y-6">
+              {isContinuing && initialTaskData && (
+                  <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex items-start gap-3 animate-fade-in">
+                      <CheckCircle className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+                      <div className="text-xs md:text-sm text-purple-900">
+                          <p className="font-bold">Đang tạo phiếu mới tiếp nối công việc: "{initialTaskData.taskName}"</p>
+                          <p className="text-purple-700 mt-0.5">Phiếu cũ ngày <b>{initialTaskData.date}</b> ({initialTaskData.startTime} - {initialTaskData.endTime}) sẽ tự động được đóng (chuyển sang <b>Hoàn thành</b>) và tách thành dòng riêng khi lưu phiếu mới này.</p>
+                      </div>
+                  </div>
+              )}
               {user.role === 'admin' && (<div className="bg-slate-100 p-4 rounded-xl border border-slate-200"><label className="block text-sm font-bold text-slate-600 mb-2">Người thực hiện (Admin nhập hộ)</label><input type="text" className="w-full p-3.5 rounded-xl border border-slate-300 bg-white text-base focus:ring-2 focus:ring-purple-500 outline-none font-bold" value={formData.technicianName} onChange={e => setFormData({...formData, technicianName: e.target.value})} /></div>)}
 
               <div className="bg-white p-5 md:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-6">
@@ -2612,7 +2846,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
 
 const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNotification, handleSaveMachineLog, editLogData, setEditLogData, usersList, sysSettings }) => {
   const isEditing = !!editLogData;
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getTodayDateStr();
   const nowStr = new Date().toTimeString().slice(0, 5);
 
   const [machineStatus, setMachineStatus] = useState(selectedMachine.status);
@@ -2853,12 +3087,12 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
   );
 };
 
-export default function App() {
-  const savedSession = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_active_session') : null;
-  const initialUser = savedSession ? JSON.parse(savedSession) : null;
+function MainApp() {
+  const initialUser = safeGetStorage('techmaintain_active_session', null);
+  const validInitialUser = initialUser && typeof initialUser === 'object' && initialUser.username ? initialUser : null;
 
-  const [user, setUser] = useState(initialUser); 
-  const [view, setViewInternal] = useState(initialUser ? (initialUser.role === 'admin' ? 'dashboard' : 'home') : 'login'); 
+  const [user, setUser] = useState(validInitialUser); 
+  const [view, setViewInternal] = useState(validInitialUser ? (validInitialUser.role === 'admin' ? 'dashboard' : 'home') : 'login'); 
   const [selectedMachine, setSelectedMachine] = useState(null);
   const [notification, setNotification] = useState(null);
   
@@ -2872,48 +3106,76 @@ export default function App() {
   const [initialTaskData, setInitialTaskData] = useState(null); 
   const [logDeleteModal, setLogDeleteModal] = useState({ isOpen: false, id: null });
 
-  const [usersList, setUsersList] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_users') : null; return saved ? JSON.parse(saved) : INITIAL_USERS; });
-  const [dailyTasks, setDailyTasks] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_daily') : null; return saved ? JSON.parse(saved) : []; });
-  const [machines, setMachines] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_machines') : null; return saved ? JSON.parse(saved) : INITIAL_MACHINES; });
-  const [logs, setLogs] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_logs') : null; return saved ? JSON.parse(saved) : []; });
-  const [inventory, setInventory] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_inventory') : null; return saved ? JSON.parse(saved) : INITIAL_INVENTORY; });
-  const [utilityLogs, setUtilityLogs] = useState(() => { const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_utility') : null; return saved ? JSON.parse(saved) : []; });
-  const [googleSheetUrl, setGoogleSheetUrl] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('gs_url') || '' : '');
+  const [usersList, setUsersList] = useState(() => {
+    const saved = safeGetStorage('techmaintain_users', INITIAL_USERS);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_USERS;
+  });
+  const [dailyTasks, setDailyTasks] = useState(() => {
+    const saved = safeGetStorage('techmaintain_daily', []);
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [machines, setMachines] = useState(() => {
+    const saved = safeGetStorage('techmaintain_machines', INITIAL_MACHINES);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_MACHINES;
+  });
+  const [logs, setLogs] = useState(() => {
+    const saved = safeGetStorage('techmaintain_logs', []);
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [inventory, setInventory] = useState(() => {
+    const saved = safeGetStorage('techmaintain_inventory', INITIAL_INVENTORY);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_INVENTORY;
+  });
+  const [utilityLogs, setUtilityLogs] = useState(() => {
+    const saved = safeGetStorage('techmaintain_utility', []);
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [googleSheetUrl, setGoogleSheetUrl] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try { return window.localStorage.getItem('gs_url') || ''; } catch (e) { return ''; }
+  });
   
   const [sysSettings, setSysSettings] = useState(() => {
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_sysSettings') : null;
-      return saved ? JSON.parse(saved) : { error_times: { level1: 1.5, level2: 4, level3: 24 } };
+    const saved = safeGetStorage('techmaintain_sysSettings', { error_times: { level1: 1.5, level2: 4, level3: 24 } });
+    return saved && typeof saved === 'object' ? saved : { error_times: { level1: 1.5, level2: 4, level3: 24 } };
   });
 
   const [categoryList, setCategoryList] = useState(() => { 
-      const saved = typeof window !== 'undefined' ? localStorage.getItem('techmaintain_categories') : null; 
-      return saved ? JSON.parse(saved) : INITIAL_CATEGORIES; 
+    const saved = safeGetStorage('techmaintain_categories', INITIAL_CATEGORIES);
+    return Array.isArray(saved) ? saved : INITIAL_CATEGORIES; 
   });
 
   const [fbUser, setFbUser] = useState(null);
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
   const [permissionError, setPermissionError] = useState(false);
+  const deletedDailyTaskIdsRef = useRef(new Set());
 
   const setView = (newView, replace = false) => {
     if (newView === view) return;
-    if (replace) window.history.replaceState({ view: newView }, '', ''); else window.history.pushState({ view: newView }, '', '');
+    try {
+      if (replace) window.history.replaceState({ view: newView }, '', '');
+      else window.history.pushState({ view: newView }, '', '');
+    } catch (e) {}
     setViewInternal(newView);
   };
 
   useEffect(() => {
-    if (!initialUser) {
-        window.history.replaceState({ view: 'login' }, '', '');
+    if (!validInitialUser) {
+      try { window.history.replaceState({ view: 'login' }, '', ''); } catch (e) {}
     }
     const handlePopState = (event) => {
         if (event.state && event.state.view) {
             let nextView = event.state.view;
-            if (user && nextView === 'login') { nextView = user.role === 'admin' ? 'dashboard' : 'home'; window.history.replaceState({ view: nextView }, '', ''); }
+            if (user && nextView === 'login') {
+              nextView = user.role === 'admin' ? 'dashboard' : 'home';
+              try { window.history.replaceState({ view: nextView }, '', ''); } catch (e) {}
+            }
             setViewInternal(nextView);
         }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [user, initialUser]);
+  }, [user, validInitialUser]);
 
   useEffect(() => {
     if (!auth) { setIsCloudSyncing(false); return; }
@@ -2924,7 +3186,10 @@ export default function App() {
         } else {
            await signInAnonymously(auth);
         }
-      } catch (error) { console.error("Lỗi xác thực Firebase:", error); }
+      } catch (error) {
+        setIsCloudSyncing(false);
+        setPermissionError(true);
+      }
     };
     initAuth();
     const unsubscribe = onAuthStateChanged(auth, setFbUser);
@@ -2932,22 +3197,64 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!fbUser || !db) return;
+    if (!fbUser || !db || permissionError) return;
+    let isUnmounted = false;
+    const unsubs = [];
+
     const handleSnapError = (error) => { 
-        console.error("Firebase Sync Error:", error); 
+        if (isUnmounted) return;
         setIsCloudSyncing(false); 
         if (error.code === 'permission-denied' || (error.message && error.message.includes('permission'))) {
             setPermissionError(true);
+            unsubs.forEach(u => { try { u(); } catch(e) {} });
         }
     };
 
-    const unsubMachines = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => setMachines(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubInventory = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => setInventory(snap.docs.map(d => ({ ...d.data(), id: d.id }))), handleSnapError);
-    const unsubLogs = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)), handleSnapError);
-    const unsubUsers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => { if(snap.empty) { INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u)); } else setUsersList(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, handleSnapError);
-    const unsubDaily = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { setDailyTasks(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubUtility = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { setUtilityLogs(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => b.id - a.id)); }, handleSnapError);
-    const unsubSettings = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { 
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'machines'), (snap) => {
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        setMachines(list);
+        safeSetStorage('techmaintain_machines', list);
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (snap) => {
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        setInventory(list);
+        safeSetStorage('techmaintain_inventory', list);
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), (snap) => {
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => String(b.id).localeCompare(String(a.id)));
+        setLogs(list);
+        safeSetStorage('techmaintain_logs', list);
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => {
+        if (snap.empty) {
+            INITIAL_USERS.forEach(u => setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', u.id), u).catch(() => {}));
+        } else {
+            const list = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+            setUsersList(list);
+            safeSetStorage('techmaintain_users', list);
+        }
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'daily_tasks'), (snap) => { 
+        const cloudTasks = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        setDailyTasks(prev => {
+            const merged = mergeCollectionsById(cloudTasks, prev, deletedDailyTaskIdsRef.current)
+                .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+            safeSetStorage('techmaintain_daily', merged);
+            return merged;
+        });
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'utility_logs'), (snap) => { 
+        const list = snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a,b) => String(b.id).localeCompare(String(a.id)));
+        setUtilityLogs(list); 
+        safeSetStorage('techmaintain_utility', list);
+    }, handleSnapError));
+
+    unsubs.push(onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'settings'), (snap) => { 
         const sData = snap.docs.find(d => d.id === 'general'); 
         if (sData) {
             const data = sData.data();
@@ -2955,31 +3262,134 @@ export default function App() {
             if (data.sysSettings) setSysSettings(data.sysSettings);
         }
         setIsCloudSyncing(false); 
-    }, handleSnapError);
+    }, handleSnapError));
 
-    const unsubCategories = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
+    unsubs.push(onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), (docSnap) => {
         if (docSnap.exists()) {
-            setCategoryList(docSnap.data().list || []);
+            const list = docSnap.data().list || [];
+            setCategoryList(list);
+            safeSetStorage('techmaintain_categories', list);
         } else {
-            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(e => console.error(e));
+            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: INITIAL_CATEGORIES }).catch(() => {});
             setCategoryList(INITIAL_CATEGORIES);
         }
-    }, handleSnapError);
+    }, handleSnapError));
 
-    return () => { unsubMachines(); unsubInventory(); unsubLogs(); unsubUsers(); unsubDaily(); unsubUtility(); unsubSettings(); unsubCategories(); };
-  }, [fbUser, db]);
+    return () => {
+        isUnmounted = true;
+        unsubs.forEach(u => { try { u(); } catch(e) {} });
+    };
+  }, [fbUser, db, permissionError]);
 
-  const saveUserData = async (uObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', uObj.id), uObj); else { const nList = usersList.map(u => u.id === uObj.id ? uObj : u); if(!nList.find(u=>u.id===uObj.id)) nList.push(uObj); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const handleDeleteUser = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id)); else { const nList = usersList.filter(u => u.id !== id); setUsersList(nList); localStorage.setItem('techmaintain_users', JSON.stringify(nList)); } };
-  const saveMachineData = async (newMachineObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', newMachineObj.id), newMachineObj); else { const nList = machines.map(m => m.id === newMachineObj.id ? newMachineObj : m); if(!nList.find(m=>m.id===newMachineObj.id)) nList.push(newMachineObj); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } }; 
-  const handleDeleteMachineApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'machines', id)); else { const nList = machines.filter(m => m.id !== id); setMachines(nList); localStorage.setItem('techmaintain_machines', JSON.stringify(nList)); } };
-  const saveInventoryData = async (newInvObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', newInvObj.id), newInvObj); else { const nList = inventory.map(i => i.id === newInvObj.id ? newInvObj : i); if(!nList.find(i=>i.id===newInvObj.id)) nList.push(newInvObj); setInventory(nList); localStorage.setItem('techmaintain_inventory', JSON.stringify(nList)); } };
-  const saveLogData = async (logEntry) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(logEntry.id)), logEntry); else { const nList = logs.find(l=>l.id===logEntry.id) ? logs.map(l=>l.id===logEntry.id?logEntry:l) : [logEntry, ...logs]; setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const handleDeleteLogApp = async (id) => { if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'logs', String(id))); else { const nList = logs.filter(l => l.id !== id); setLogs(nList); localStorage.setItem('techmaintain_logs', JSON.stringify(nList)); } };
-  const saveDailyTaskData = async (taskObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(taskObj.id)), taskObj); else { const nList = dailyTasks.find(t=>t.id===taskObj.id) ? dailyTasks.map(t=>t.id===taskObj.id?taskObj:t) : [taskObj, ...dailyTasks]; setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } };
+  const canUseCloud = Boolean(db && fbUser && !permissionError);
+
+  const syncDocToCloud = (collectionName, docId, dataObj, options) => {
+      if (!canUseCloud) return;
+      const cleanData = sanitizeForFirestore(dataObj);
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', collectionName, String(docId));
+      const writePromise = options ? setDoc(docRef, cleanData, options) : setDoc(docRef, cleanData);
+      writePromise.catch((e) => {
+          console.warn(`Chuyển sang lưu cục bộ do lỗi ghi Cloud (${collectionName}):`, e);
+          setPermissionError(true);
+      });
+  };
+
+  const deleteDocFromCloud = (collectionName, docId) => {
+      if (!canUseCloud) return;
+      const docRef = doc(db, 'artifacts', appId, 'public', 'data', collectionName, String(docId));
+      deleteDoc(docRef).catch((e) => {
+          console.warn(`Lỗi xóa trên Cloud (${collectionName}):`, e);
+          setPermissionError(true);
+      });
+  };
+
+  const saveUserData = async (uObj) => {
+      setUsersList(prev => {
+          const nList = prev.some(u => u.id === uObj.id) ? prev.map(u => u.id === uObj.id ? uObj : u) : [...prev, uObj];
+          safeSetStorage('techmaintain_users', nList);
+          return nList;
+      });
+      syncDocToCloud('users', uObj.id, uObj);
+  };
+
+  const handleDeleteUser = async (id) => {
+      setUsersList(prev => {
+          const nList = prev.filter(u => u.id !== id);
+          safeSetStorage('techmaintain_users', nList);
+          return nList;
+      });
+      deleteDocFromCloud('users', id);
+  };
+
+  const saveMachineData = async (newMachineObj) => {
+      setMachines(prev => {
+          const nList = prev.some(m => m.id === newMachineObj.id) ? prev.map(m => m.id === newMachineObj.id ? newMachineObj : m) : [...prev, newMachineObj];
+          safeSetStorage('techmaintain_machines', nList);
+          return nList;
+      });
+      syncDocToCloud('machines', newMachineObj.id, newMachineObj);
+  }; 
+
+  const handleDeleteMachineApp = async (id) => {
+      setMachines(prev => {
+          const nList = prev.filter(m => m.id !== id);
+          safeSetStorage('techmaintain_machines', nList);
+          return nList;
+      });
+      deleteDocFromCloud('machines', id);
+  };
+
+  const saveInventoryData = async (newInvObj) => {
+      setInventory(prev => {
+          const nList = prev.some(i => i.id === newInvObj.id) ? prev.map(i => i.id === newInvObj.id ? newInvObj : i) : [...prev, newInvObj];
+          safeSetStorage('techmaintain_inventory', nList);
+          return nList;
+      });
+      syncDocToCloud('inventory', newInvObj.id, newInvObj);
+  };
+
+  const saveLogData = async (logEntry) => {
+      setLogs(prev => {
+          const nList = prev.some(l => String(l.id) === String(logEntry.id))
+              ? prev.map(l => String(l.id) === String(logEntry.id) ? logEntry : l)
+              : [logEntry, ...prev];
+          safeSetStorage('techmaintain_logs', nList);
+          return nList;
+      });
+      syncDocToCloud('logs', String(logEntry.id), logEntry);
+  };
+
+  const handleDeleteLogApp = async (id) => {
+      setLogs(prev => {
+          const nList = prev.filter(l => String(l.id) !== String(id));
+          safeSetStorage('techmaintain_logs', nList);
+          return nList;
+      });
+      deleteDocFromCloud('logs', String(id));
+  };
+
+  const saveDailyTaskData = async (taskObj) => {
+      const cleanTask = sanitizeForFirestore(taskObj);
+      deletedDailyTaskIdsRef.current.delete(String(cleanTask.id));
+      setDailyTasks(prev => {
+          const exists = prev.some(t => String(t.id) === String(cleanTask.id));
+          const nList = exists
+              ? prev.map(t => String(t.id) === String(cleanTask.id) ? cleanTask : t)
+              : [cleanTask, ...prev];
+          safeSetStorage('techmaintain_daily', nList);
+          return nList;
+      });
+      syncDocToCloud('daily_tasks', String(cleanTask.id), cleanTask);
+  };
+
   const handleDeleteDailyTaskApp = async (id) => { 
-      if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'daily_tasks', String(id))); 
-      else { const nList = dailyTasks.filter(t => t.id !== id); setDailyTasks(nList); localStorage.setItem('techmaintain_daily', JSON.stringify(nList)); } 
+      deletedDailyTaskIdsRef.current.add(String(id));
+      setDailyTasks(prev => {
+          const nList = prev.filter(t => String(t.id) !== String(id));
+          safeSetStorage('techmaintain_daily', nList);
+          return nList;
+      });
+      deleteDocFromCloud('daily_tasks', String(id));
       if (googleSheetUrl) {
           pushToGoogleSheet({
               action: 'delete_daily_task',
@@ -2988,28 +3398,36 @@ export default function App() {
           });
       }
   };
-  const saveUtilityLogData = async (logObj) => { if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(logObj.id)), logObj); else { const nList = [logObj, ...utilityLogs]; setUtilityLogs(nList); localStorage.setItem('techmaintain_utility', JSON.stringify(nList)); } };
+
+  const saveUtilityLogData = async (logObj) => {
+      setUtilityLogs(prev => {
+          const nList = prev.some(l => String(l.id) === String(logObj.id))
+              ? prev.map(l => String(l.id) === String(logObj.id) ? logObj : l)
+              : [logObj, ...prev];
+          safeSetStorage('techmaintain_utility', nList);
+          return nList;
+      });
+      syncDocToCloud('utility_logs', String(logObj.id), logObj);
+  };
 
   const saveSettings = async (url, newSysSettings) => {
-      if (db && fbUser) {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), { gs_url: url, sysSettings: newSysSettings }, { merge: true });
-      } else {
-          localStorage.setItem('gs_url', url);
-          localStorage.setItem('techmaintain_sysSettings', JSON.stringify(newSysSettings));
-      }
+      safeSetStorage('gs_url', url);
+      safeSetStorage('techmaintain_sysSettings', newSysSettings);
       setGoogleSheetUrl(url);
       setSysSettings(newSysSettings);
+      syncDocToCloud('settings', 'general', { gs_url: url, sysSettings: newSysSettings }, { merge: true });
   };
 
   const saveCategoryListData = async (newList) => { 
-      if (db && fbUser) await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'categories'), { list: newList }); 
-      else { setCategoryList(newList); localStorage.setItem('techmaintain_categories', JSON.stringify(newList)); } 
+      setCategoryList(newList);
+      safeSetStorage('techmaintain_categories', newList);
+      syncDocToCloud('settings', 'categories', { list: newList });
   };
 
   const handleLogin = (username, password) => {
-    const foundUser = usersList.find(u => u.username === username && u.password === password);
+    const foundUser = usersList.find(u => u && u.username === username && u.password === password);
     if (foundUser) { 
-        localStorage.setItem('techmaintain_active_session', JSON.stringify(foundUser));
+        safeSetStorage('techmaintain_active_session', foundUser);
         setUser(foundUser); 
         showNotification(`Đăng nhập thành công!`);
         setView(foundUser.role === 'admin' ? 'dashboard' : 'home', true);
@@ -3018,7 +3436,7 @@ export default function App() {
   };
 
   const handleLogout = () => { 
-      localStorage.removeItem('techmaintain_active_session');
+      try { localStorage.removeItem('techmaintain_active_session'); } catch (e) {}
       setUser(null); 
       setView('login', true); 
       setSelectedMachine(null); 
@@ -3072,7 +3490,8 @@ export default function App() {
       }
       try {
           showNotification('Đang đồng bộ toàn bộ Sổ công việc lên Google Sheet...');
-          const sorted = [...tasksToSync].sort((a, b) => {
+          const unmergedTasks = expandMergedTaskEntries(tasksToSync);
+          const sorted = [...unmergedTasks].sort((a, b) => {
               if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
               return (b.startTime || '').localeCompare(a.startTime || '');
           });
@@ -3090,40 +3509,63 @@ export default function App() {
   };
   
   const handleSaveDailyTask = async (newLog, isEditingRecord = false) => { 
-      const entryId = isEditingRecord && editTaskData ? editTaskData.id : newLog.id; 
-      const entry = { ...newLog, id: entryId, formType: 'daily_task' }; 
-      await saveDailyTaskData(entry); 
-      
-      if (!isEditingRecord) { 
-          // Tự động Đóng (Hoàn thành) phiếu cũ nếu đây là phiếu được "Tiếp tục" để tránh dồn ứ Việc tồn đọng
-          if (initialTaskData && initialTaskData.status !== 'Hoàn thành') {
-             const updatedOldTask = { ...initialTaskData, status: 'Hoàn thành' };
-             await saveDailyTaskData(updatedOldTask);
-             if (googleSheetUrl) {
-                 pushToGoogleSheet({
-                     action: 'upsert_daily_task',
-                     formType: 'daily_task',
-                     ...enrichTaskForSheet(updatedOldTask)
+      try {
+          const isEditingSplitSubTask = isEditingRecord && editTaskData && editTaskData.originalTaskId;
+          const entryId = isEditingRecord && editTaskData && !isEditingSplitSubTask
+              ? editTaskData.id
+              : `DT-${Date.now()}-${Math.floor(Math.random() * 1000)}`; 
+          const entry = sanitizeForFirestore({ ...newLog, id: entryId, formType: 'daily_task' });
+          delete entry.originalTaskId;
+
+          await saveDailyTaskData(entry); 
+          
+          if (!isEditingRecord) { 
+              // Tự động Đóng (chuyển trạng thái thành Hoàn thành) phiếu cũ khi nhấn "Tiếp"
+              if (initialTaskData) {
+                 const oldId = initialTaskData.originalTaskId || initialTaskData.id;
+                 const originalTaskObj = dailyTasks.find(t => String(t.id) === String(oldId)) || initialTaskData;
+                 const cleanedOldNote = String(originalTaskObj.note || '').split(/\n*---\s*\[\d{4}-\d{2}-\d{2}\]/i)[0].trim();
+                 const updatedOldTask = sanitizeForFirestore({ 
+                     ...originalTaskObj, 
+                     id: oldId,
+                     note: cleanedOldNote || originalTaskObj.note,
+                     status: 'Hoàn thành' 
                  });
-             }
-          }
+                 delete updatedOldTask.originalTaskId;
+                 await saveDailyTaskData(updatedOldTask);
+                 if (googleSheetUrl) {
+                     pushToGoogleSheet({
+                         action: 'upsert_daily_task',
+                         formType: 'daily_task',
+                         ...enrichTaskForSheet(updatedOldTask)
+                     });
+                 }
+              }
 
-          for (const usedPart of entry.parts || []) { 
-              const foundPart = inventory.find(i => i.name === usedPart.name); 
-              if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+              for (const usedPart of entry.parts || []) { 
+                  const foundPart = inventory.find(i => i.name === usedPart.name); 
+                  if (foundPart) await saveInventoryData({ ...foundPart, quantity: Math.max(0, foundPart.quantity - Number(usedPart.quantity)) }); 
+              } 
           } 
-      } 
 
-      if (googleSheetUrl) {
-          pushToGoogleSheet({
-              action: 'upsert_daily_task',
-              formType: 'daily_task',
-              ...enrichTaskForSheet(entry)
-          });
+          if (googleSheetUrl) {
+              pushToGoogleSheet({
+                  action: 'upsert_daily_task',
+                  formType: 'daily_task',
+                  ...enrichTaskForSheet(entry)
+              });
+          }
+          
+          const wasContinuing = !!initialTaskData;
+          setInitialTaskData(null); 
+          setEditTaskData(null);
+          showNotification(isEditingRecord ? 'Đã lưu cập nhật báo cáo!' : (wasContinuing ? 'Đã đóng phiếu cũ và tạo phiếu mới thành công!' : 'Đã lưu báo cáo hằng ngày thành công!')); 
+          setTaskFilter('all');
+          setView('daily_task_history'); 
+      } catch (err) {
+          console.error("Lỗi khi lưu báo cáo hằng ngày:", err);
+          showNotification('Có lỗi xảy ra khi lưu báo cáo, vui lòng thử lại!', 'error');
       }
-      
-      showNotification(isEditingRecord ? 'Đã lưu và cập nhật lên Sheet!' : 'Đã tạo báo cáo mới thành công!'); 
-      setView(user.role === 'admin' ? 'daily_task_history' : 'home'); 
   };
   
   const handleSaveUtilityLog = async (data, mode) => { 
@@ -3151,8 +3593,11 @@ export default function App() {
           }
 
           if (utilityEditItem) {
-               if (db && fbUser) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(utilityEditItem.id)));
-               else setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
+               setUtilityLogs(prev => prev.filter(l => l.id !== utilityEditItem.id));
+               if (canUseCloud) {
+                   try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'utility_logs', String(utilityEditItem.id))); }
+                   catch (e) { setPermissionError(true); }
+               }
           }
       }
 
@@ -3359,5 +3804,13 @@ export default function App() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AppErrorBoundary>
+      <MainApp />
+    </AppErrorBoundary>
   );
 }
