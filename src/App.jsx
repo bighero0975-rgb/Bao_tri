@@ -3105,6 +3105,16 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       setFormData({...formData, images: newImages});
   };
 
+  const parseTimeToMinutes = (tStr) => {
+      if (!tStr || typeof tStr !== 'string' || !tStr.includes(':')) return NaN;
+      const [h, m] = tStr.split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return NaN;
+      return h * 60 + m;
+  };
+  const startMins = parseTimeToMinutes(formData.startTime);
+  const endMins = parseTimeToMinutes(formData.endTime);
+  const isInvalidTimeRange = isNaN(startMins) || isNaN(endMins) || endMins <= startMins;
+
   const actualMins = getActualWorkMinutes(formData.startTime, formData.endTime);
   let maxMinutes = 0;
   if (formData.errorLevel === '1') maxMinutes = (sysSettings?.error_times?.level1 || 1.5) * 60;
@@ -3113,6 +3123,9 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const isKpiPassed = actualMins <= maxMinutes;
 
   const submitForm = () => {
+      if (isInvalidTimeRange) {
+          return showNotification('Giờ kết thúc phải lớn hơn giờ bắt đầu!', 'error');
+      }
       const trimmedTaskName = (formData.taskName || '').trim();
       const trimmedNote = (formData.note || '').trim();
       if (!trimmedTaskName && !trimmedNote) {
@@ -3163,14 +3176,15 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                       <div>
                           <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label>
-                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Chế tạo máy</option>
                                 <option>Sửa chữa đột xuất</option>
                           </select>
                       </div>
                   </div>
-                  <div className="bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100 space-y-3">
+
+                  <div className={`p-4 md:p-6 rounded-3xl border space-y-3 transition-colors ${isInvalidTimeRange ? 'bg-red-50/70 border-red-300' : 'bg-purple-50 border-purple-100'}`}>
                       <div className="grid grid-cols-2 gap-3 md:gap-6">
                           <EasyTimePicker
                               label="Giờ Bắt đầu"
@@ -3187,12 +3201,19 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                               quickTimes={['11:30', '17:00', '20:00', '21:00']}
                           />
                       </div>
-                      <div className="flex items-center justify-between bg-white/80 px-3.5 py-2 rounded-xl border border-purple-200/70 text-xs md:text-sm">
-                          <span className="text-purple-700 font-medium">Thời gian thực làm (đã trừ giờ nghỉ):</span>
-                          <span className="font-black text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-lg">
-                              {formatDurationMinutes(actualMins)}
-                          </span>
-                      </div>
+                      {isInvalidTimeRange ? (
+                          <div className="flex items-center gap-2 bg-red-100 text-red-700 px-3.5 py-2.5 rounded-xl border border-red-200 text-xs md:text-sm font-bold">
+                              <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                              <span>Lỗi: Giờ kết thúc ({formData.endTime}) phải lớn hơn giờ bắt đầu ({formData.startTime})!</span>
+                          </div>
+                      ) : (
+                          <div className="flex items-center justify-between bg-white/80 px-3.5 py-2 rounded-xl border border-purple-200/70 text-xs md:text-sm">
+                              <span className="text-purple-700 font-medium">Thời gian thực làm (đã trừ giờ nghỉ):</span>
+                              <span className="font-black text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-lg">
+                                  {formatDurationMinutes(actualMins)}
+                              </span>
+                          </div>
+                      )}
                   </div>
 
                   {formData.type === 'Sửa chữa đột xuất' && (
@@ -3647,8 +3668,11 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
     return [0, 1, 2, 3].map(wIdx => {
       const autoW = autoWeeks[wIdx];
       const savedW = empSavedWeeks[wIdx] || {};
+      const legacyErrors = savedW.errors !== undefined
+        ? Number(savedW.errors)
+        : (savedW.deduct !== undefined ? Number(savedW.deduct) : 0);
       return {
-        deduct: savedW.deduct !== undefined ? Number(savedW.deduct) : 0,
+        errors: legacyErrors,
         pmPlan: savedW.pmPlan !== undefined ? Number(savedW.pmPlan) : autoW.pmPlan,
         pmPostponed: savedW.pmPostponed !== undefined ? Number(savedW.pmPostponed) : 0,
         pmDone: savedW.pmDone !== undefined ? Number(savedW.pmDone) : autoW.pmDone,
@@ -3661,20 +3685,21 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   // Cộng dồn 4 tuần thành số liệu tháng
   const getAggregatedMonthlyMetrics = (weeks) => {
     return weeks.reduce((acc, w) => {
-      acc.deduct += (w.deduct || 0);
+      acc.errors += (w.errors || 0);
       acc.pmPlan += (w.pmPlan || 0);
       acc.pmPostponed += (w.pmPostponed || 0);
       acc.pmDone += (w.pmDone || 0);
       acc.cmTotal += (w.cmTotal || 0);
       acc.cmDone += (w.cmDone || 0);
       return acc;
-    }, { deduct: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0 });
+    }, { errors: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0 });
   };
 
   // Công thức tính điểm KPI chuẩn theo bảng mẫu (20% Kỷ luật & 5S | 70% PM >95% | 10% CM SLA 90%)
   const computeMetricsKPI = (metrics) => {
-    // 1. Mục I: Kỷ luật & 5S (20%)
-    const scoreI = Math.max(0, Math.min(100, 100 - (metrics.deduct || 0)));
+    // 1. Mục I: Kỷ luật & 5S (20%) - Bị từ 1 lỗi trở lên sẽ mất toàn bộ 20% điểm
+    const errorCount = Number(metrics.errors || 0);
+    const scoreI = errorCount >= 1 ? 0 : 100;
     const rateI = scoreI / 100;
 
     // 2. Mục II.1: Bảo dưỡng định kỳ PM (70%, mục tiêu >= 95%)
@@ -3788,14 +3813,14 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   };
 
   // Đồng bộ lại các chỉ số PM / CM từ Sổ Ghi Công Việc (giữ nguyên Điểm trừ, Điểm cộng, Hoãn)
-  // Đồng bộ lại các chỉ số PM / CM từ Sổ Ghi Công Việc (giữ nguyên Điểm trừ, Hoãn)
+  // Đồng bộ lại các chỉ số PM / CM từ Sổ Ghi Công Việc (giữ nguyên Số lỗi, Hoãn)
   const handleSyncFromDailyTasks = () => {
     const updatedMonthMap = { ...savedMonthData };
     visibleUsers.forEach(emp => {
       const autoWeeks = getAutoWeeklyMetricsFromTasks(emp);
       const currentWeeks = getEmployeeWeeks(emp);
       const mergedWeeks = [0, 1, 2, 3].map(wIdx => ({
-        deduct: currentWeeks[wIdx].deduct,
+        errors: currentWeeks[wIdx].errors,
         pmPostponed: currentWeeks[wIdx].pmPostponed,
         pmPlan: autoWeeks[wIdx].pmPlan,
         pmDone: autoWeeks[wIdx].pmDone,
@@ -3885,7 +3910,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       headerRow.height = 34;
       const headers = [
         'STT', 'Mã NV', 'Họ và Tên',
-        'Tổng Trừ (I)', '% Mục I (20%)',
+        'Số Lỗi (I)', '% Mục I (20%)',
         'Tổng KH PM (B)', 'Tổng Hoãn (C)', 'Tổng Đạt PM (A)', '% PM Tháng (70%)',
         'Tổng Sự Cố (ΣK)', 'Tổng CM Đạt (K)', '% CM Tháng (10%)',
         'Tổng Điểm KPI Tháng', 'Xếp Loại',
@@ -3920,7 +3945,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
           idx + 1,
           r.emp.employeeId || r.emp.id || '',
           r.emp.name || '',
-          res.deduct,
+          res.errors,
           `${res.scoreI}%`,
           res.pmPlan,
           res.pmPostponed,
@@ -4177,8 +4202,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th className="p-2 border-r border-slate-200 min-w-[140px]">Họ và Tên</th>
 
                         {/* KPI I */}
-                        <th className="p-2 border-r border-slate-200 w-20 text-rose-600" title="Tổng điểm trừ vi phạm">Điểm Trừ</th>
-                        <th className="p-2 border-r border-slate-200 w-20 bg-amber-50 font-black" title="Điểm Tiêu chí 1: 100 - Trừ">% Mục I</th>
+                        <th className="p-2 border-r border-slate-200 w-20 text-rose-600" title="Số lỗi vi phạm kỷ luật & 5S (≥ 1 lỗi = mất 20% điểm cả tháng)">Số Lỗi</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-amber-50 font-black" title="Đạt 100% nếu 0 lỗi; Mất 20% điểm (0%) nếu ≥ 1 lỗi">% Mục I</th>
 
                         {/* KPI II.1 */}
                         <th className="p-2 border-r border-slate-200 w-16" title="Tổng số việc giao theo lịch">K/Hoạch (B)</th>
@@ -4214,8 +4239,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                               {isMonthly ? (
                                 <>
                                   {/* MỤC I (AGGREGATED) */}
-                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Bấm để xem/sửa chi tiết 4 tuần" className="p-2 border-r border-slate-200 text-rose-600 font-bold cursor-pointer hover:bg-purple-50/60">{activeMetrics.deduct}</td>
-                                  <td className="p-2 border-r border-slate-200 font-black bg-amber-50/70 text-amber-900">{activeResult.scoreI}%</td>
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng số lỗi 4 tuần (≥ 1 lỗi = mất 20% điểm tháng)" className={`p-2 border-r border-slate-200 font-bold cursor-pointer hover:bg-purple-50/60 ${activeMetrics.errors >= 1 ? 'text-rose-600 bg-rose-50/50' : 'text-slate-700'}`}>{activeMetrics.errors}</td>
+                                  <td className={`p-2 border-r border-slate-200 font-black ${activeMetrics.errors >= 1 ? 'bg-rose-100/70 text-rose-700' : 'bg-amber-50/70 text-amber-900'}`}>{activeResult.scoreI}%</td>
 
                                   {/* MỤC II.1 (AGGREGATED) */}
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch 4 tuần (Bấm để sửa từng tuần)" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPlan}</td>
@@ -4232,9 +4257,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                 <>
                                   {/* MỤC I (WEEKLY INPUT) */}
                                   <td className="p-1 border-r border-slate-200">
-                                    <input disabled={!isAdmin} type="number" min="0" max="100" value={activeMetrics.deduct} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'deduct', e.target.value)} className="w-full text-center text-rose-600 font-bold bg-white border border-slate-200 focus:ring-1 focus:ring-rose-500 rounded py-1 disabled:bg-slate-100" />
+                                    <input disabled={!isAdmin} type="number" min="0" max="100" value={activeMetrics.errors} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'errors', e.target.value)} className={`w-full text-center font-bold bg-white border border-slate-200 focus:ring-1 focus:ring-rose-500 rounded py-1 disabled:bg-slate-100 ${activeMetrics.errors >= 1 ? 'text-rose-600' : 'text-slate-700'}`} />
                                   </td>
-                                  <td className="p-2 border-r border-slate-200 font-black bg-amber-50/70 text-amber-900">{activeResult.scoreI}%</td>
+                                  <td className={`p-2 border-r border-slate-200 font-black ${activeMetrics.errors >= 1 ? 'bg-rose-100/70 text-rose-700' : 'bg-amber-50/70 text-amber-900'}`}>{activeResult.scoreI}%</td>
 
                                   {/* MỤC II.1 (WEEKLY INPUT) */}
                                   <td className="p-1 border-r border-slate-200">
@@ -4425,15 +4450,18 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
                             - Giờ giấc chấm công, tuân thủ an toàn (BHLĐ, LOTO, PCCC).<br />
                             - Ý thức 5S, bảo quản trang thiết bị, tủ công cụ.<br />
-                            - Tinh thần trách nhiệm, sẵn sàng nhận điều động khẩn cấp.
+                            - Tinh thần trách nhiệm, sẵn sàng nhận điều động khẩn cấp.<br />
+                            - Quy định đánh giá: 0 lỗi đạt 100% (20đ); phát sinh từ 1 lỗi trở lên trong tháng tính 0% (mất 20% điểm).
                           </p>
                         </td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300">20%</td>
                         <td className="p-2.5 text-center border-r border-slate-300">100%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{singleSelectedRow.monthlyResult.scoreI}%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedI * 100).toFixed(1)}%</td>
-                        <td className="p-2 text-[11px] text-slate-500">
-                          Tổng 4 tuần: Trừ -{singleSelectedRow.monthlyResult.deduct}đ
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : 'text-blue-700'}`}>{singleSelectedRow.monthlyResult.scoreI}%</td>
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : ''}`}>{(singleSelectedRow.monthlyResult.weightedI * 100).toFixed(1)}%</td>
+                        <td className="p-2 text-[11px] text-slate-600">
+                          {singleSelectedRow.monthlyResult.errors >= 1
+                            ? `Vi phạm ${singleSelectedRow.monthlyResult.errors} lỗi trong tháng (Mất 20% điểm)`
+                            : 'Không vi phạm lỗi (Đạt tối đa 20%)'}
                         </td>
                       </tr>
 
@@ -4505,7 +4533,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <thead>
                       <tr className="bg-slate-100 font-bold text-slate-700 border-b border-slate-300">
                         <th className="p-1.5 border-r border-slate-300">Thời gian</th>
-                        <th className="p-1.5 border-r border-slate-300">Điểm Trừ (Mục I)</th>
+                        <th className="p-1.5 border-r border-slate-300">Số Lỗi (Mục I)</th>
                         <th className="p-1.5 border-r border-slate-300">Điểm Mục I</th>
                         <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH - Hoãn)</th>
                         <th className="p-1.5 border-r border-slate-300">% Đạt PM</th>
@@ -4524,7 +4552,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                             <td className="p-1.5 border-r border-slate-300 font-semibold">
                               Tuần {wIdx + 1} {wMeta ? <span className="text-[10px] text-slate-500 font-normal">({wMeta.shortRange})</span> : ''}
                             </td>
-                            <td className="p-1.5 border-r border-slate-300">-{w.deduct}đ</td>
+                            <td className={`p-1.5 border-r border-slate-300 ${w.errors >= 1 ? 'text-rose-600 font-bold' : ''}`}>{w.errors} lỗi</td>
                             <td className="p-1.5 border-r border-slate-300 font-semibold">{wRes.scoreI}%</td>
                             <td className="p-1.5 border-r border-slate-300">
                               {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}-{w.pmPostponed})</span>
@@ -4611,14 +4639,14 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-black">1</span>
-                    Tiêu chí I: Kỷ luật & Thái độ (20%)
+                    Tiêu chí I: Kỷ luật &amp; 5S (20% - Bị ≥1 lỗi mất 20%)
                   </h4>
-                  <p className="text-xs text-slate-600">Giả sử ô <code>C5</code> là Điểm trừ:</p>
+                  <p className="text-xs text-slate-600">Giả sử ô <code>C5</code> là Số lỗi vi phạm trong tháng:</p>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
-                    <code className="overflow-x-auto">=MAX(0, MIN(100, 100 - C5))</code>
-                    <button onClick={() => copyFormulaText('=MAX(0, MIN(100, 100 - C5))')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                    <code className="overflow-x-auto">=IF(C5&gt;=1, 0, 100)</code>
+                    <button onClick={() => copyFormulaText('=IF(C5>=1, 0, 100)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
-                  <p className="text-[11px] text-slate-500 italic">Hàm chặn trần tối đa 100 điểm và sàn tối thiểu 0 điểm.</p>
+                  <p className="text-[11px] text-slate-500 italic">Nếu bị từ 1 lỗi trở lên trong tháng sẽ tính 0% (mất toàn bộ 20% điểm KPI Mục I).</p>
                 </div>
 
                 {/* KPI 2.1 */}
@@ -4700,7 +4728,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 <thead>
                   <tr className="bg-slate-100 font-bold text-slate-700 border-b border-slate-300">
                     <th className="p-2 border-r border-slate-200">Tuần</th>
-                    <th className="p-2 border-r border-slate-200 text-rose-600">Điểm Trừ</th>
+                    <th className="p-2 border-r border-slate-200 text-rose-600">Số Lỗi</th>
                     <th className="p-2 border-r border-slate-200 bg-amber-50">% Mục I</th>
                     <th className="p-2 border-r border-slate-200">KH PM (B)</th>
                     <th className="p-2 border-r border-slate-200">Hoãn (C)</th>
@@ -4721,8 +4749,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <td className="p-2 border-r border-slate-200 font-bold bg-slate-50 whitespace-nowrap">
                           Tuần {wIdx + 1} {wMeta && <span className="block text-[10px] font-normal text-slate-500">{wMeta.shortRange}</span>}
                         </td>
-                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" max="100" value={w.deduct} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'deduct', e.target.value)} className="w-14 text-center text-rose-600 font-bold border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
-                        <td className="p-2 border-r border-slate-200 font-bold bg-amber-50/70 text-amber-900">{wRes.scoreI}%</td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" max="100" value={w.errors} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'errors', e.target.value)} className={`w-14 text-center font-bold border border-slate-200 rounded py-1 disabled:bg-slate-100 ${w.errors >= 1 ? 'text-rose-600' : 'text-slate-700'}`} /></td>
+                        <td className={`p-2 border-r border-slate-200 font-bold ${w.errors >= 1 ? 'bg-rose-100/70 text-rose-700' : 'bg-amber-50/70 text-amber-900'}`}>{wRes.scoreI}%</td>
                         <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmPlan} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmPlan', e.target.value)} className="w-14 text-center border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
                         <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmPostponed} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmPostponed', e.target.value)} className="w-14 text-center border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
                         <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmDone} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmDone', e.target.value)} className="w-14 text-center font-bold text-blue-700 border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
@@ -4738,8 +4766,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                   {/* TOTAL MONTHLY ROW */}
                   <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
                     <td className="p-2 border-r border-slate-200 text-purple-900">TỔNG THÁNG</td>
-                    <td className="p-2 border-r border-slate-200 text-rose-600">{modalEmpRow.monthlyResult.deduct}</td>
-                    <td className="p-2 border-r border-slate-200 bg-amber-100 text-amber-950">{modalEmpRow.monthlyResult.scoreI}%</td>
+                    <td className={`p-2 border-r border-slate-200 ${modalEmpRow.monthlyResult.errors >= 1 ? 'text-rose-600' : 'text-slate-700'}`}>{modalEmpRow.monthlyResult.errors} lỗi</td>
+                    <td className={`p-2 border-r border-slate-200 ${modalEmpRow.monthlyResult.errors >= 1 ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-950'}`}>{modalEmpRow.monthlyResult.scoreI}%</td>
                     <td className="p-2 border-r border-slate-200">{modalEmpRow.monthlyResult.pmPlan}</td>
                     <td className="p-2 border-r border-slate-200">{modalEmpRow.monthlyResult.pmPostponed}</td>
                     <td className="p-2 border-r border-slate-200 text-blue-700">{modalEmpRow.monthlyResult.pmDone}</td>
