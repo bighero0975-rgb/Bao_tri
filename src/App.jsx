@@ -108,6 +108,12 @@ const injectStyles = () => {
       @keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
       .animate-bounce-in { animation: bounce-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
       @keyframes scan { 0% { transform: translateY(0); } 50% { transform: translateY(1000%); } 100% { transform: translateY(0); } }
+      @media print {
+        body, html { background: #fff !important; overflow: visible !important; height: auto !important; }
+        .no-print { display: none !important; }
+        .print-container-reset { position: static !important; overflow: visible !important; height: auto !important; max-width: 100% !important; box-shadow: none !important; border: none !important; background: #fff !important; }
+        #printableSheet { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 auto !important; max-width: 100% !important; }
+      }
     `;
     document.head.appendChild(style);
   } catch (e) {}
@@ -198,6 +204,127 @@ const getFirstDayOfMonthStr = () => {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, '0');
   return `${y}-${m}-01`;
+};
+
+const formatDateVi = (isoDateStr) => {
+  if (!isoDateStr || typeof isoDateStr !== 'string') return '';
+  const parts = isoDateStr.split('-');
+  if (parts.length !== 3) return isoDateStr;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+};
+
+const toIsoDateLocal = (dateObj) => {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const getActiveReportMonth = (sysSettings) => {
+  const monthCfg = sysSettings?.month_config || {};
+  const startDay = Math.min(28, Math.max(1, Number(monthCfg.startDay) || 16));
+  if (monthCfg.autoDetectMonth === false && monthCfg.defaultMonth) {
+    return monthCfg.defaultMonth;
+  }
+  const now = new Date();
+  let y = now.getFullYear();
+  let m = now.getMonth() + 1;
+  const d = now.getDate();
+
+  // Nếu ngày hiện tại >= ngày chốt đầu kỳ (mặc định ngày 16) -> thuộc kỳ báo cáo của tháng kế tiếp
+  if (startDay > 1 && d >= startDay) {
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+  return `${y}-${String(m).padStart(2, '0')}`;
+};
+
+const getMonthCycleRange = (monthStr, customStartDay = 16) => {
+  const safeMonth = (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) ? monthStr : new Date().toISOString().slice(0, 7);
+  const [year, month] = safeMonth.split('-').map(Number);
+  const startDay = Math.min(28, Math.max(1, Number(customStartDay) || 16));
+
+  let startDateObj;
+  let endDateObj;
+
+  if (startDay === 1) {
+    startDateObj = new Date(year, month - 1, 1);
+    endDateObj = new Date(year, month, 0);
+  } else {
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevMonthLastDay = new Date(prevYear, prevMonth, 0).getDate();
+    const actualStartDay = Math.min(startDay, prevMonthLastDay);
+
+    const currMonthLastDay = new Date(year, month, 0).getDate();
+    const actualEndDay = Math.min(startDay - 1, currMonthLastDay);
+
+    startDateObj = new Date(prevYear, prevMonth - 1, actualStartDay);
+    endDateObj = new Date(year, month - 1, actualEndDay);
+  }
+
+  const startDate = toIsoDateLocal(startDateObj);
+  const endDate = toIsoDateLocal(endDateObj);
+
+  // Chia khoảng thời gian chu kỳ thành 4 tuần liên tiếp
+  const weeks = [];
+  if (startDay === 16) {
+    const prevYear = month === 1 ? year - 1 : year;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevMM = String(prevMonth).padStart(2, '0');
+    const currMM = String(month).padStart(2, '0');
+    const prevLastDay = new Date(prevYear, prevMonth, 0).getDate();
+
+    const ranges = [
+      { s: `${prevYear}-${prevMM}-16`, e: `${prevYear}-${prevMM}-22` },
+      { s: `${prevYear}-${prevMM}-23`, e: `${prevYear}-${prevMM}-${String(prevLastDay).padStart(2, '0')}` },
+      { s: `${year}-${currMM}-01`, e: `${year}-${currMM}-07` },
+      { s: `${year}-${currMM}-08`, e: `${year}-${currMM}-15` }
+    ];
+    ranges.forEach((r, idx) => {
+      weeks.push({
+        index: idx,
+        label: `Tuần ${idx + 1}`,
+        shortRange: `${r.s.slice(8, 10)}/${r.s.slice(5, 7)} - ${r.e.slice(8, 10)}/${r.e.slice(5, 7)}`,
+        startDate: r.s,
+        endDate: r.e
+      });
+    });
+  } else {
+    const allDays = [];
+    const cursor = new Date(startDateObj);
+    while (cursor <= endDateObj) {
+      allDays.push(toIsoDateLocal(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    const splitPoints = [0, 7, 14, 21, allDays.length];
+    for (let idx = 0; idx < 4; idx++) {
+      const sIdx = Math.min(splitPoints[idx], Math.max(0, allDays.length - 1));
+      const eIdx = Math.min(splitPoints[idx + 1] - 1, Math.max(0, allDays.length - 1));
+      const s = allDays[sIdx] || startDate;
+      const e = allDays[Math.max(sIdx, eIdx)] || endDate;
+      weeks.push({
+        index: idx,
+        label: `Tuần ${idx + 1}`,
+        shortRange: `${s.slice(8, 10)}/${s.slice(5, 7)} - ${e.slice(8, 10)}/${e.slice(5, 7)}`,
+        startDate: s,
+        endDate: e
+      });
+    }
+  }
+
+  return {
+    monthStr: safeMonth,
+    monthLabel: `Tháng ${String(month).padStart(2, '0')}/${year}`,
+    shortMonthYear: `${String(month).padStart(2, '0')}/${year}`,
+    startDate,
+    endDate,
+    rangeText: `${formatDateVi(startDate)} - ${formatDateVi(endDate)}`,
+    weeks
+  };
 };
 
 const getTargetSlaMinutes = (task, sysSettings) => {
@@ -575,6 +702,193 @@ const ImageZoomModal = ({ imageUrl, onClose }) => {
   );
 };
 
+const EasyTimePicker = ({ label, value, onChange, theme = 'purple', quickTimes = [] }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const safeVal = value && typeof value === 'string' && value.includes(':') ? value : '07:30';
+  const [rawH, rawM] = safeVal.split(':');
+  const currentH = String(Math.min(23, Math.max(0, parseInt(rawH, 10) || 0))).padStart(2, '0');
+  const currentM = String(Math.min(59, Math.max(0, parseInt(rawM, 10) || 0))).padStart(2, '0');
+
+  const hoursList = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const commonMinutes = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+
+  const handleSelectHour = (h) => {
+    onChange(`${h}:${currentM}`);
+  };
+
+  const handleSelectMinute = (m) => {
+    onChange(`${currentH}:${m}`);
+  };
+
+  const handleSetNow = () => {
+    const now = new Date().toTimeString().slice(0, 5);
+    onChange(now);
+    setIsOpen(false);
+  };
+
+  const isPurple = theme === 'purple';
+  const accentBg = isPurple ? 'bg-purple-600 hover:bg-purple-700' : 'bg-blue-600 hover:bg-blue-700';
+  const accentLightBg = isPurple ? 'bg-purple-50 border-purple-200 text-purple-900' : 'bg-blue-50 border-blue-200 text-blue-900';
+  const accentText = isPurple ? 'text-purple-800' : 'text-blue-800';
+  const activeBtn = isPurple ? 'bg-purple-600 text-white border-purple-600 shadow-md scale-[1.03]' : 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.03]';
+
+  return (
+    <div className="flex flex-col">
+      <label className={`text-xs md:text-sm font-bold ${accentText} flex items-center mb-1.5`}>
+        <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 mr-1.5 shrink-0" /> {label}
+      </label>
+
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className={`w-full py-3 px-3 md:p-4 rounded-2xl border-2 ${isPurple ? 'border-purple-200 hover:border-purple-400' : 'border-blue-200 hover:border-blue-400'} bg-white shadow-sm flex items-center justify-between transition-all active:scale-95`}
+      >
+        <div className="flex items-baseline gap-0.5 mx-auto">
+          <span className="text-xl md:text-2xl font-black font-mono text-slate-800 tracking-wider">{currentH}</span>
+          <span className={`text-lg md:text-xl font-black font-mono ${isPurple ? 'text-purple-500' : 'text-blue-500'} mx-0.5`}>:</span>
+          <span className="text-xl md:text-2xl font-black font-mono text-slate-800 tracking-wider">{currentM}</span>
+        </div>
+        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+      </button>
+
+      {quickTimes.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {quickTimes.map((qt) => (
+            <button
+              key={qt}
+              type="button"
+              onClick={() => onChange(qt)}
+              className={`text-[11px] md:text-xs px-2 py-1 rounded-lg font-bold border transition-all active:scale-95 ${
+                safeVal === qt
+                  ? (isPurple ? 'bg-purple-600 text-white border-purple-600 shadow-sm' : 'bg-blue-600 text-white border-blue-600 shadow-sm')
+                  : 'bg-white/90 text-slate-600 border-slate-200 hover:bg-white'
+              }`}
+            >
+              {qt}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {isOpen && (
+        <div className="fixed inset-0 z-[220] bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in" onClick={() => setIsOpen(false)}>
+          <div
+            className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 md:p-6 shadow-2xl border border-slate-100 flex flex-col max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+              <div>
+                <h3 className="font-black text-slate-800 text-base md:text-lg flex items-center">
+                  <Clock className={`w-5 h-5 mr-2 ${isPurple ? 'text-purple-600' : 'text-blue-600'}`} />
+                  Chọn {label}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">Chạm chọn Giờ và Phút bên dưới (Định dạng 24h)</p>
+              </div>
+              <button type="button" onClick={() => setIsOpen(false)} className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className={`p-3 rounded-2xl border ${accentLightBg} flex items-center justify-between mb-4`}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider opacity-75">Đang chọn:</span>
+                <span className="text-2xl md:text-3xl font-black font-mono tracking-wider">{currentH}:{currentM}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSetNow}
+                className="px-3 py-1.5 bg-white rounded-xl text-xs font-bold shadow-sm border border-slate-200 text-slate-700 active:scale-95"
+              >
+                Lấy giờ hiện tại
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-1 custom-scrollbar">
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black uppercase text-slate-500 tracking-wider">1. Chọn Giờ (00h - 23h)</span>
+                  <span className="text-[11px] font-bold text-slate-400">Ca ngày: 07h - 17h | Tăng ca: 17h - 21h</span>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {hoursList.map((h) => {
+                    const isWorkHour = parseInt(h, 10) >= 7 && parseInt(h, 10) <= 20;
+                    const isSelected = h === currentH;
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => handleSelectHour(h)}
+                        className={`py-2.5 rounded-xl font-mono text-sm font-black border transition-all ${
+                          isSelected
+                            ? activeBtn
+                            : isWorkHour
+                            ? 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                            : 'bg-white text-slate-400 border-slate-100 hover:bg-slate-50'
+                        }`}
+                      >
+                        {h}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black uppercase text-slate-500 tracking-wider">2. Chọn Phút</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500 font-medium">Nhập phút lẻ:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={parseInt(currentM, 10)}
+                      onChange={(e) => {
+                        const val = Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0));
+                        handleSelectMinute(String(val).padStart(2, '0'));
+                      }}
+                      className="w-14 py-1 px-2 text-center font-mono font-black text-sm border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {commonMinutes.map((m) => {
+                    const isSelected = m === currentM;
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => handleSelectMinute(m)}
+                        className={`py-2.5 rounded-xl font-mono text-sm font-black border transition-all ${
+                          isSelected
+                            ? activeBtn
+                            : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        :{m}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 mt-4 border-t border-slate-100 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className={`w-full py-3.5 rounded-2xl text-white font-black text-base shadow-lg transition-all active:scale-95 ${accentBg}`}
+              >
+                Xác nhận ({currentH}:{currentM})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPart, setTempPart, theme = 'blue' }) => {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -808,6 +1122,10 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
                   <div className="bg-pink-100 p-4 md:p-5 rounded-2xl text-pink-600 mr-4 md:mr-5 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
                   <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử & Xuất KPI</p></div>
                </button>
+               <button onClick={() => setView('kpi_report')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-violet-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-violet-100 p-4 md:p-5 rounded-2xl text-violet-600 mr-4 md:mr-5 group-hover:bg-violet-600 group-hover:text-white transition-colors"><BarChart3 className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Báo Cáo KPI Bảo Trì</p><p className="text-xs md:text-sm text-slate-500 mt-1">Đánh giá PM, CM SLA & MTTR</p></div>
+               </button>
                <button onClick={() => setView('utility_history')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-cyan-300 transition-all active:scale-95 text-left group">
                   <div className="bg-cyan-100 p-4 md:p-5 rounded-2xl text-cyan-600 mr-4 md:mr-5 group-hover:bg-cyan-500 group-hover:text-white transition-colors"><Droplets className="w-6 h-6 md:w-8 md:h-8" /></div>
                   <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Điện Nước</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử chỉ số</p></div>
@@ -891,6 +1209,11 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
                  <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-slate-400 transition-all active:scale-95 group">
                      <div className="bg-slate-100 p-3.5 md:p-4 rounded-2xl group-hover:bg-slate-600 transition-colors"><History className="w-6 h-6 md:w-8 md:h-8 text-slate-600 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-slate-800">Sổ Lịch Sử</p><p className="text-[10px] md:text-xs text-slate-500 mt-1">Xem lại việc đã làm</p></div>
+                 </button>
+
+                 <button onClick={() => setView('kpi_report')} className="bg-violet-50 p-5 md:p-6 rounded-3xl border border-violet-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:bg-violet-100 hover:border-violet-300 transition-all active:scale-95 group">
+                     <div className="bg-violet-200 p-3.5 md:p-4 rounded-2xl group-hover:bg-violet-600 transition-colors"><BarChart3 className="w-6 h-6 md:w-8 md:h-8 text-violet-700 group-hover:text-white"/></div>
+                     <div className="text-left"><p className="font-bold text-sm md:text-lg text-violet-900">Báo Cáo KPI</p><p className="text-[10px] md:text-xs text-violet-600 mt-1">Xem điểm hiệu suất tháng</p></div>
                  </button>
 
                  <button onClick={() => setView('meter_menu')} className="col-span-2 sm:col-span-3 lg:col-span-4 xl:col-span-1 bg-gradient-to-r from-cyan-50 to-blue-50 p-5 md:p-6 rounded-3xl border border-cyan-100 shadow-sm flex items-center xl:flex-col xl:items-start justify-between xl:justify-start gap-3 hover:shadow-md transition-all active:scale-[0.98]">
@@ -1873,9 +2196,24 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, saveSettings }) => {
     const [url, setUrl] = useState(googleSheetUrl);
     const [errTimes, setErrTimes] = useState(sysSettings?.error_times || { level1: 1.5, level2: 4, level3: 24 });
+    const [monthConfig, setMonthConfig] = useState(() => ({
+        startDay: sysSettings?.month_config?.startDay ?? 16,
+        autoDetectMonth: sysSettings?.month_config?.autoDetectMonth !== false,
+        defaultMonth: sysSettings?.month_config?.defaultMonth || getActiveReportMonth(sysSettings)
+    }));
+
+    const previewMonth = monthConfig.autoDetectMonth
+        ? getActiveReportMonth({ ...sysSettings, month_config: monthConfig })
+        : (monthConfig.defaultMonth || getActiveReportMonth(sysSettings));
+    const previewCycle = getMonthCycleRange(previewMonth, monthConfig.startDay);
 
     const handleSave = () => {
-        saveSettings(url, { ...sysSettings, error_times: errTimes });
+        const cleanMonthConfig = {
+            startDay: Math.min(28, Math.max(1, Number(monthConfig.startDay) || 16)),
+            autoDetectMonth: Boolean(monthConfig.autoDetectMonth),
+            defaultMonth: monthConfig.defaultMonth || previewMonth
+        };
+        saveSettings(url, { ...sysSettings, error_times: errTimes, month_config: cleanMonthConfig });
         showNotification('Đã lưu cấu hình!');
         setView('dashboard');
     };
@@ -1884,6 +2222,66 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
       <div className="flex flex-col h-full bg-slate-50 animate-fade-in">
         <div className="p-4 md:p-6 border-b border-slate-200 bg-white flex items-center space-x-3 shrink-0"><button onClick={() => setView('dashboard')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl">Cài đặt Hệ thống</h2></div>
         <div className="p-4 md:p-8 space-y-6 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><CalendarClock className="w-6 h-6 mr-2 text-purple-600"/> Cài đặt Kỳ Tổng Hợp Tháng</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Ngày bắt đầu chu kỳ tháng</label>
+                      <input
+                          type="number"
+                          min="1"
+                          max="28"
+                          value={monthConfig.startDay}
+                          onChange={(e) => setMonthConfig({ ...monthConfig, startDay: parseInt(e.target.value, 10) || 1 })}
+                          className="w-full p-4 border border-slate-300 rounded-xl text-base font-bold focus:ring-2 focus:ring-purple-500 outline-none bg-slate-50"
+                      />
+                      <p className="text-xs text-slate-500 mt-1.5">
+                          {Number(monthConfig.startDay) === 1
+                              ? 'Tính từ ngày 01 đến ngày cuối cùng của tháng.'
+                              : `Tính từ ngày ${monthConfig.startDay} tháng trước đến ngày ${Number(monthConfig.startDay) - 1} tháng này.`}
+                      </p>
+                  </div>
+                  <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">Xác định tháng báo cáo mặc định</label>
+                      <select
+                          value={monthConfig.autoDetectMonth ? 'auto' : 'fixed'}
+                          onChange={(e) => setMonthConfig({ ...monthConfig, autoDetectMonth: e.target.value === 'auto' })}
+                          className="w-full p-4 border border-slate-300 rounded-xl text-base font-bold focus:ring-2 focus:ring-purple-500 outline-none bg-slate-50"
+                      >
+                          <option value="auto">Tự động theo ngày hiện tại</option>
+                          <option value="fixed">Cố định tháng báo cáo</option>
+                      </select>
+                      {!monthConfig.autoDetectMonth && (
+                          <div className="mt-2.5">
+                              <input
+                                  type="month"
+                                  value={monthConfig.defaultMonth}
+                                  onChange={(e) => setMonthConfig({ ...monthConfig, defaultMonth: e.target.value })}
+                                  className="w-full p-3 border border-purple-300 rounded-xl text-sm font-bold bg-purple-50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-500"
+                              />
+                          </div>
+                      )}
+                  </div>
+              </div>
+
+              <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-bold uppercase tracking-wider text-purple-700">Xem trước kỳ tổng hợp hiện hành:</span>
+                      <span className="text-xs font-black bg-purple-600 text-white px-3 py-1 rounded-lg">
+                          {previewCycle.monthLabel} ({previewCycle.rangeText})
+                      </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {previewCycle.weeks.map((w) => (
+                          <div key={w.index} className="bg-white border border-purple-100 rounded-xl p-2 text-center">
+                              <p className="text-[11px] font-black text-purple-900">{w.label}</p>
+                              <p className="text-[11px] font-mono text-slate-600 mt-0.5">{w.shortRange}</p>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+
           <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
               <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><FileSpreadsheet className="w-6 h-6 mr-2 text-green-600"/> Xuất Báo Cáo Google Sheet</h3>
               <div className="mb-6"><label className="block text-sm font-bold text-slate-700 mb-2">Google Apps Script URL (Web App URL)</label><input type="text" value={url} onChange={(e) => setUrl(e.target.value)} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50" placeholder="https://script.google.com/macros/s/..." /></div>
@@ -1907,7 +2305,7 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
               </div>
           </div>
           
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto pb-8">
               <button onClick={handleSave} className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl text-lg font-bold shadow-md transition-colors flex justify-center items-center gap-2"><Save className="w-5 h-5"/> Lưu Cấu Hình</button>
           </div>
         </div>
@@ -1916,16 +2314,29 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
 };
 
 const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter, setInitialTaskData, setEditTaskData, handleDeleteDailyTaskApp, showNotification, setZoomedImage, sysSettings, handleSyncAllDailyTasksToSheet }) => {
+  const monthStartDay = sysSettings?.month_config?.startDay ?? 16;
+  const initialActiveMonth = getActiveReportMonth(sysSettings);
+  const initialCycle = getMonthCycleRange(initialActiveMonth, monthStartDay);
+
   const [filterTech, setFilterTech] = useState(user.role === 'admin' ? 'all' : user.username);
   const [filterType, setFilterType] = useState('all');
-  const [startDate, setStartDate] = useState(() => getFirstDayOfMonthStr());
-  const [endDate, setEndDate] = useState(() => getTodayDateStr());
+  const [selectedReportMonth, setSelectedReportMonth] = useState(initialActiveMonth);
+  const [startDate, setStartDate] = useState(initialCycle.startDate);
+  const [endDate, setEndDate] = useState(initialCycle.endDate);
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
   const [isExporting, setIsExporting] = useState(false);
   const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
   const [selectedKpiUsers, setSelectedKpiUsers] = useState([]);
 
   const techUsers = usersList.filter(u => u.role !== 'admin');
+
+  const handleSelectMonthPeriod = (monthVal) => {
+      if (!monthVal) return;
+      setSelectedReportMonth(monthVal);
+      const cycle = getMonthCycleRange(monthVal, monthStartDay);
+      setStartDate(cycle.startDate);
+      setEndDate(cycle.endDate);
+  };
 
   useEffect(() => { 
       if(taskFilter === 'pending') {
@@ -2036,11 +2447,11 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
       sheet.mergeCells('C1:J2');
       const titleCell = sheet.getCell('C1');
-      titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${currentMonthStr}`;
-      titleCell.font = { name: fontName, size: 16, bold: true };
-      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
-      sheet.getRow(1).height = 22;
-      sheet.getRow(2).height = 22;
+      titleCell.value = `PHIẾU GIAO VIỆC THÁNG ${currentMonthStr}\n(Kỳ tính: ${formatDateVi(startDate)} - ${formatDateVi(endDate)})`;
+      titleCell.font = { name: fontName, size: 14, bold: true };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      sheet.getRow(1).height = 24;
+      sheet.getRow(2).height = 24;
 
       // --- 2. MỤC A: THÔNG TIN NHÂN SỰ ---
       sheet.mergeCells('A3:J3');
@@ -2242,8 +2653,8 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               extension: 'png',
           });
 
-          const now = new Date();
-          const currentMonthStr = String(now.getMonth() + 1).padStart(2, '0') + '/' + now.getFullYear();
+          const cycleInfo = getMonthCycleRange(selectedReportMonth, monthStartDay);
+          const currentMonthStr = cycleInfo.shortMonthYear;
 
           const usedSheetNames = new Set();
 
@@ -2485,10 +2896,17 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                        </select>
                    </div>
                    {taskFilter !== 'pending' && (
-                       <div className="flex items-center gap-1 md:gap-2 shrink-0">
-                           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                       <div className="flex items-center gap-1.5 shrink-0">
+                           <input
+                               type="month"
+                               value={selectedReportMonth}
+                               onChange={e => handleSelectMonthPeriod(e.target.value)}
+                               title={`Chọn nhanh kỳ tháng (Từ ngày ${monthStartDay} tháng trước đến ngày ${Number(monthStartDay) === 1 ? 'cuối tháng' : Number(monthStartDay) - 1 + ' tháng này'})`}
+                               className="px-2.5 py-2 md:py-3 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold"
+                           />
+                           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[125px] md:w-[145px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                            <span className="text-slate-400">-</span>
-                           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[130px] md:w-[150px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[125px] md:w-[145px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                        </div>
                    )}
                    {taskFilter !== 'pending' && (
@@ -2752,9 +3170,29 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                           </select>
                       </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4 md:gap-6 bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100">
-                      <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
-                      <div><label className="text-sm font-bold text-purple-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-purple-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-purple-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
+                  <div className="bg-purple-50 p-4 md:p-6 rounded-3xl border border-purple-100 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 md:gap-6">
+                          <EasyTimePicker
+                              label="Giờ Bắt đầu"
+                              value={formData.startTime}
+                              onChange={(val) => setFormData({ ...formData, startTime: val })}
+                              theme="purple"
+                              quickTimes={['07:30', '08:00', '13:00', '17:30']}
+                          />
+                          <EasyTimePicker
+                              label="Giờ Kết thúc"
+                              value={formData.endTime}
+                              onChange={(val) => setFormData({ ...formData, endTime: val })}
+                              theme="purple"
+                              quickTimes={['11:30', '17:00', '20:00', '21:00']}
+                          />
+                      </div>
+                      <div className="flex items-center justify-between bg-white/80 px-3.5 py-2 rounded-xl border border-purple-200/70 text-xs md:text-sm">
+                          <span className="text-purple-700 font-medium">Thời gian thực làm (đã trừ giờ nghỉ):</span>
+                          <span className="font-black text-purple-900 bg-purple-100 px-2.5 py-0.5 rounded-lg">
+                              {formatDurationMinutes(actualMins)}
+                          </span>
+                      </div>
                   </div>
 
                   {formData.type === 'Sửa chữa đột xuất' && (
@@ -2951,9 +3389,29 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
                       </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 md:gap-6 bg-blue-50 p-4 md:p-6 rounded-3xl border border-blue-100">
-                      <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Bắt đầu</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.startTime} onChange={e => setFormData({...formData, startTime: e.target.value})} /></div>
-                      <div><label className="text-sm font-bold text-blue-800 flex items-center mb-2"><Clock className="w-4 h-4 mr-1.5"/> Giờ Kết thúc</label><input type="time" className="w-full p-3 md:p-4 rounded-2xl border border-blue-200 text-base md:text-lg text-center font-black font-mono outline-none focus:ring-2 focus:ring-blue-400 bg-white transition-all" value={formData.endTime} onChange={e => setFormData({...formData, endTime: e.target.value})} /></div>
+                  <div className="bg-blue-50 p-4 md:p-6 rounded-3xl border border-blue-100 space-y-3">
+                      <div className="grid grid-cols-2 gap-3 md:gap-6">
+                          <EasyTimePicker
+                              label="Giờ Bắt đầu"
+                              value={formData.startTime}
+                              onChange={(val) => setFormData({ ...formData, startTime: val })}
+                              theme="blue"
+                              quickTimes={['07:30', '08:00', '13:00', '17:30']}
+                          />
+                          <EasyTimePicker
+                              label="Giờ Kết thúc"
+                              value={formData.endTime}
+                              onChange={(val) => setFormData({ ...formData, endTime: val })}
+                              theme="blue"
+                              quickTimes={['11:30', '17:00', '20:00', '21:00']}
+                          />
+                      </div>
+                      <div className="flex items-center justify-between bg-white/80 px-3.5 py-2 rounded-xl border border-blue-200/70 text-xs md:text-sm">
+                          <span className="text-blue-700 font-medium">Thời gian thực làm (đã trừ giờ nghỉ):</span>
+                          <span className="font-black text-blue-900 bg-blue-100 px-2.5 py-0.5 rounded-lg">
+                              {formatDurationMinutes(actualMins)}
+                          </span>
+                      </div>
                   </div>
 
                   {formData.type === 'Sửa chữa đột xuất' && (
@@ -3087,6 +3545,1305 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
   );
 };
 
+const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, saveSettings, googleSheetUrl, setView, showNotification }) => {
+  const monthStartDay = Math.min(28, Math.max(1, Number(sysSettings?.month_config?.startDay) || 16));
+  const [activeTab, setActiveTab] = useState('sheet'); // 'sheet' | 'single' | 'formula'
+  const [selectedMonth, setSelectedMonth] = useState(() => getActiveReportMonth(sysSettings)); // YYYY-MM
+  const [currentPeriod, setCurrentPeriod] = useState('month'); // 'month' | 0 | 1 | 2 | 3
+  const [selectedEmpUsername, setSelectedEmpUsername] = useState('');
+  const [weeklyModalEmpUsername, setWeeklyModalEmpUsername] = useState(null);
+  const [isMonthConfigOpen, setIsMonthConfigOpen] = useState(false);
+  const [tempStartDay, setTempStartDay] = useState(monthStartDay);
+  const [tempAutoDetect, setTempAutoDetect] = useState(sysSettings?.month_config?.autoDetectMonth !== false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const isAdmin = user.role === 'admin';
+  const techUsers = (Array.isArray(usersList) ? usersList : []).filter(u => u && u.role !== 'admin');
+  const visibleUsers = isAdmin ? techUsers : techUsers.filter(u => u.username === user.username);
+
+  useEffect(() => {
+    if (!selectedEmpUsername || !visibleUsers.some(u => u.username === selectedEmpUsername)) {
+      if (visibleUsers.length > 0) {
+        setSelectedEmpUsername(visibleUsers[0].username);
+      }
+    }
+  }, [visibleUsers, selectedEmpUsername]);
+
+  // Tính khoảng thời gian chu kỳ tháng (mặc định từ ngày 16 tháng trước đến 15 tháng này)
+  const cycleInfo = getMonthCycleRange(selectedMonth, monthStartDay);
+
+  // Tách các công việc trong sổ công việc nằm trong chu kỳ [cycleInfo.startDate -> cycleInfo.endDate]
+  const unmergedTasks = expandMergedTaskEntries(dailyTasks);
+  const monthTasks = unmergedTasks.filter(t => {
+    if (!t || !t.date) return false;
+    const dStr = String(t.date);
+    return dStr >= cycleInfo.startDate && dStr <= cycleInfo.endDate;
+  });
+
+  // Dữ liệu tuần đã lưu/tùy chỉnh cho tháng đang chọn
+  const savedMonthData = sysSettings?.kpi_weekly_data?.[selectedMonth] || {};
+
+  // Hàm lấy chỉ số tự động từ Sổ Ghi Công Việc chia theo 4 tuần của chu kỳ tháng
+  const getAutoWeeklyMetricsFromTasks = (emp) => {
+    const weeks = [
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 }
+    ];
+
+    const empTasks = monthTasks.filter(t =>
+      t.username === emp.username || t.technicianName === emp.name || t.technicianName === emp.username
+    );
+
+    empTasks.forEach(t => {
+      const dStr = String(t.date || '');
+      let wIdx = 0;
+      for (let i = 0; i < cycleInfo.weeks.length; i++) {
+        if (dStr >= cycleInfo.weeks[i].startDate && dStr <= cycleInfo.weeks[i].endDate) {
+          wIdx = i;
+          break;
+        }
+      }
+
+      const isCM = !!getNormalizedErrorLevel(t);
+      if (isCM) {
+        weeks[wIdx].cmTotal += 1;
+        if (evaluateTaskKpiStatus(t, sysSettings) === 'Đạt') {
+          weeks[wIdx].cmDone += 1;
+        }
+      } else {
+        weeks[wIdx].pmPlan += 1;
+        if (t.status === 'Hoàn thành') {
+          weeks[wIdx].pmDone += 1;
+        }
+      }
+    });
+
+    return weeks;
+  };
+
+  const handleSaveQuickMonthConfig = () => {
+    const cleanDay = Math.min(28, Math.max(1, Number(tempStartDay) || 16));
+    const nextMonthCfg = {
+      startDay: cleanDay,
+      autoDetectMonth: Boolean(tempAutoDetect),
+      defaultMonth: selectedMonth
+    };
+    const nextSys = { ...sysSettings, month_config: nextMonthCfg };
+    saveSettings(googleSheetUrl, nextSys);
+    if (!tempAutoDetect && selectedMonth) {
+      setSelectedMonth(selectedMonth);
+    }
+    setIsMonthConfigOpen(false);
+    showNotification(`Đã cập nhật cài đặt tháng (Ngày bắt đầu: ${cleanDay})!`);
+  };
+
+  // Hợp nhất dữ liệu tự động từ Sổ Công Việc với các hiệu chỉnh của Admin
+  const getEmployeeWeeks = (emp) => {
+    const autoWeeks = getAutoWeeklyMetricsFromTasks(emp);
+    const empSavedWeeks = savedMonthData[emp.username]?.weeks || [];
+
+    return [0, 1, 2, 3].map(wIdx => {
+      const autoW = autoWeeks[wIdx];
+      const savedW = empSavedWeeks[wIdx] || {};
+      return {
+        deduct: savedW.deduct !== undefined ? Number(savedW.deduct) : 0,
+        pmPlan: savedW.pmPlan !== undefined ? Number(savedW.pmPlan) : autoW.pmPlan,
+        pmPostponed: savedW.pmPostponed !== undefined ? Number(savedW.pmPostponed) : 0,
+        pmDone: savedW.pmDone !== undefined ? Number(savedW.pmDone) : autoW.pmDone,
+        cmTotal: savedW.cmTotal !== undefined ? Number(savedW.cmTotal) : autoW.cmTotal,
+        cmDone: savedW.cmDone !== undefined ? Number(savedW.cmDone) : autoW.cmDone
+      };
+    });
+  };
+
+  // Cộng dồn 4 tuần thành số liệu tháng
+  const getAggregatedMonthlyMetrics = (weeks) => {
+    return weeks.reduce((acc, w) => {
+      acc.deduct += (w.deduct || 0);
+      acc.pmPlan += (w.pmPlan || 0);
+      acc.pmPostponed += (w.pmPostponed || 0);
+      acc.pmDone += (w.pmDone || 0);
+      acc.cmTotal += (w.cmTotal || 0);
+      acc.cmDone += (w.cmDone || 0);
+      return acc;
+    }, { deduct: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0 });
+  };
+
+  // Công thức tính điểm KPI chuẩn theo bảng mẫu (20% Kỷ luật & 5S | 70% PM >95% | 10% CM SLA 90%)
+  const computeMetricsKPI = (metrics) => {
+    // 1. Mục I: Kỷ luật & 5S (20%)
+    const scoreI = Math.max(0, Math.min(100, 100 - (metrics.deduct || 0)));
+    const rateI = scoreI / 100;
+
+    // 2. Mục II.1: Bảo dưỡng định kỳ PM (70%, mục tiêu >= 95%)
+    const effectivePM = Math.max(0, (metrics.pmPlan || 0) - (metrics.pmPostponed || 0));
+    let t1 = 1.0;
+    if (effectivePM > 0) {
+      t1 = (metrics.pmDone || 0) / effectivePM;
+    }
+    const scorePM = t1 >= 0.95 ? 1.0 : (t1 / 0.95);
+
+    // 3. Mục II.2: Sự cố đột xuất CM (10%, mục tiêu >= 90%)
+    let t2 = 1.0;
+    if ((metrics.cmTotal || 0) > 0) {
+      t2 = (metrics.cmDone || 0) / metrics.cmTotal;
+    }
+    const scoreCM = t2 >= 0.90 ? 1.0 : (t2 / 0.90);
+
+    // 4. Điểm quy đổi theo trọng số
+    const weightedI = rateI * 0.20;
+    const weightedPM = scorePM * 0.70;
+    const weightedCM = scoreCM * 0.10;
+    const totalScore = weightedI + weightedPM + weightedCM;
+
+    // 5. Xếp loại A, B, C, D
+    let rank = 'Loại D';
+    let rankClass = 'bg-rose-100 text-rose-800 border-rose-200';
+    let salaryPct = '0 - 70%';
+
+    if (totalScore >= 0.95) {
+      rank = 'Loại A';
+      rankClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      salaryPct = '100% + Thưởng';
+    } else if (totalScore >= 0.85) {
+      rank = 'Loại B';
+      rankClass = 'bg-blue-100 text-blue-800 border-blue-200';
+      salaryPct = '100%';
+    } else if (totalScore >= 0.70) {
+      rank = 'Loại C';
+      rankClass = 'bg-amber-100 text-amber-800 border-amber-200';
+      salaryPct = '80%';
+    }
+
+    return {
+      ...metrics,
+      scoreI,
+      rateI,
+      effectivePM,
+      t1,
+      scorePM,
+      t2,
+      scoreCM,
+      weightedI,
+      weightedPM,
+      weightedCM,
+      totalScore,
+      rank,
+      rankClass,
+      salaryPct
+    };
+  };
+
+  // Lưu thay đổi của 1 tuần cho 1 nhân viên
+  const handleUpdateEmpWeek = (emp, weekIndex, field, rawVal) => {
+    if (!isAdmin) return;
+    const numVal = Math.max(0, parseInt(rawVal, 10) || 0);
+    const currentWeeks = getEmployeeWeeks(emp);
+    const updatedWeeks = currentWeeks.map((w, idx) =>
+      idx === weekIndex ? { ...w, [field]: numVal } : w
+    );
+    const prevEmpRecord = savedMonthData[emp.username] || {};
+
+    const updatedSettings = {
+      ...sysSettings,
+      kpi_weekly_data: {
+        ...(sysSettings?.kpi_weekly_data || {}),
+        [selectedMonth]: {
+          ...savedMonthData,
+          [emp.username]: {
+            ...prevEmpRecord,
+            weeks: updatedWeeks
+          }
+        }
+      }
+    };
+    saveSettings(googleSheetUrl, updatedSettings);
+  };
+
+  // Lưu nhận xét quản lý cho nhân viên trên phiếu in
+  const handleUpdateManagerNote = (empUsername, noteText) => {
+    if (!isAdmin) return;
+    const empObj = visibleUsers.find(u => u.username === empUsername);
+    if (!empObj) return;
+    const currentWeeks = getEmployeeWeeks(empObj);
+    const prevEmpRecord = savedMonthData[empUsername] || {};
+
+    const updatedSettings = {
+      ...sysSettings,
+      kpi_weekly_data: {
+        ...(sysSettings?.kpi_weekly_data || {}),
+        [selectedMonth]: {
+          ...savedMonthData,
+          [empUsername]: {
+            ...prevEmpRecord,
+            weeks: currentWeeks,
+            managerNote: noteText
+          }
+        }
+      }
+    };
+    saveSettings(googleSheetUrl, updatedSettings);
+  };
+
+  // Đồng bộ lại các chỉ số PM / CM từ Sổ Ghi Công Việc (giữ nguyên Điểm trừ, Điểm cộng, Hoãn)
+  // Đồng bộ lại các chỉ số PM / CM từ Sổ Ghi Công Việc (giữ nguyên Điểm trừ, Hoãn)
+  const handleSyncFromDailyTasks = () => {
+    const updatedMonthMap = { ...savedMonthData };
+    visibleUsers.forEach(emp => {
+      const autoWeeks = getAutoWeeklyMetricsFromTasks(emp);
+      const currentWeeks = getEmployeeWeeks(emp);
+      const mergedWeeks = [0, 1, 2, 3].map(wIdx => ({
+        deduct: currentWeeks[wIdx].deduct,
+        pmPostponed: currentWeeks[wIdx].pmPostponed,
+        pmPlan: autoWeeks[wIdx].pmPlan,
+        pmDone: autoWeeks[wIdx].pmDone,
+        cmTotal: autoWeeks[wIdx].cmTotal,
+        cmDone: autoWeeks[wIdx].cmDone
+      }));
+      updatedMonthMap[emp.username] = {
+        ...(updatedMonthMap[emp.username] || {}),
+        weeks: mergedWeeks
+      };
+    });
+
+    saveSettings(googleSheetUrl, {
+      ...sysSettings,
+      kpi_weekly_data: {
+        ...(sysSettings?.kpi_weekly_data || {}),
+        [selectedMonth]: updatedMonthMap
+      }
+    });
+    showNotification(`Đã đồng bộ số liệu PM & CM tháng ${selectedMonth.split('-').reverse().join('/')} từ Sổ công việc!`);
+  };
+
+  // Tính toán danh sách hiển thị cho bảng tổng hợp
+  const computedRows = visibleUsers.map(emp => {
+    const weeks = getEmployeeWeeks(emp);
+    const monthlyMetrics = getAggregatedMonthlyMetrics(weeks);
+    const monthlyResult = computeMetricsKPI(monthlyMetrics);
+    const activeMetrics = currentPeriod === 'month' ? monthlyMetrics : weeks[currentPeriod];
+    const activeResult = computeMetricsKPI(activeMetrics);
+    const managerNote = savedMonthData[emp.username]?.managerNote || '';
+
+    return {
+      emp,
+      weeks,
+      monthlyResult,
+      activeMetrics,
+      activeResult,
+      managerNote
+    };
+  });
+
+  // Thống kê 4 thẻ Overview
+  const empCount = computedRows.length;
+  const avgScorePct = empCount > 0
+    ? ((computedRows.reduce((s, r) => s + r.activeResult.totalScore, 0) / empCount) * 100).toFixed(1)
+    : '0.0';
+  const avgPmPct = empCount > 0
+    ? ((computedRows.reduce((s, r) => s + r.activeResult.t1, 0) / empCount) * 100).toFixed(1)
+    : '0.0';
+  const gradeACount = computedRows.filter(r => r.activeResult.rank === 'Loại A').length;
+
+  const [reportYear, reportMonthNum] = selectedMonth.split('-');
+  const formattedMonthLabel = `${cycleInfo.monthLabel} (${cycleInfo.rangeText})`;
+
+  // Xuất file Excel Tổng Hợp Tháng & 4 Tuần
+  const handleExportExcelReport = async () => {
+    try {
+      setIsExporting(true);
+      const ExcelJS = await loadExcelJS();
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet(`KPI_${selectedMonth}`);
+
+      sheet.pageSetup = {
+        paperSize: 9,
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0
+      };
+
+      const logoBase64 = getMartechLogoBase64();
+      const logoId = workbook.addImage({ base64: logoBase64, extension: 'png' });
+      sheet.mergeCells('A1:B2');
+      sheet.addImage(logoId, { tl: { col: 0.1, row: 0.1 }, ext: { width: 165, height: 50 } });
+
+      sheet.mergeCells('C1:R2');
+      const titleCell = sheet.getCell('C1');
+      titleCell.value = `BẢNG TÍNH & BÁO CÁO ĐÁNH GIÁ KPI KỸ THUẬT BẢO TRÌ - ${cycleInfo.monthLabel.toUpperCase()}\n(Kỳ tính: ${cycleInfo.rangeText})`;
+      titleCell.font = { name: 'Arial', size: 13, bold: true };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      sheet.getRow(1).height = 24;
+      sheet.getRow(2).height = 24;
+
+      const thinBorder = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+      const headerRow = sheet.getRow(4);
+      headerRow.height = 34;
+      const headers = [
+        'STT', 'Mã NV', 'Họ và Tên',
+        'Tổng Trừ (I)', '% Mục I (20%)',
+        'Tổng KH PM (B)', 'Tổng Hoãn (C)', 'Tổng Đạt PM (A)', '% PM Tháng (70%)',
+        'Tổng Sự Cố (ΣK)', 'Tổng CM Đạt (K)', '% CM Tháng (10%)',
+        'Tổng Điểm KPI Tháng', 'Xếp Loại',
+        `Tuần 1 (${cycleInfo.weeks[0]?.shortRange || ''})`,
+        `Tuần 2 (${cycleInfo.weeks[1]?.shortRange || ''})`,
+        `Tuần 3 (${cycleInfo.weeks[2]?.shortRange || ''})`,
+        `Tuần 4 (${cycleInfo.weeks[3]?.shortRange || ''})`
+      ];
+
+      headers.forEach((h, idx) => {
+        const c = headerRow.getCell(idx + 1);
+        c.value = h;
+        c.font = { name: 'Arial', size: 10, bold: true };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+        c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        c.border = thinBorder;
+      });
+
+      sheet.columns = [
+        { width: 6 }, { width: 12 }, { width: 22 },
+        { width: 12 }, { width: 14 },
+        { width: 12 }, { width: 11 }, { width: 12 }, { width: 14 },
+        { width: 12 }, { width: 12 }, { width: 14 },
+        { width: 16 }, { width: 12 },
+        { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }
+      ];
+
+      computedRows.forEach((r, idx) => {
+        const res = r.monthlyResult;
+        const wScores = r.weeks.map(w => `${(computeMetricsKPI(w).totalScore * 100).toFixed(1)}%`);
+        const row = sheet.addRow([
+          idx + 1,
+          r.emp.employeeId || r.emp.id || '',
+          r.emp.name || '',
+          res.deduct,
+          `${res.scoreI}%`,
+          res.pmPlan,
+          res.pmPostponed,
+          res.pmDone,
+          `${(res.t1 * 100).toFixed(1)}%`,
+          res.cmTotal,
+          res.cmDone,
+          `${(res.t2 * 100).toFixed(1)}%`,
+          `${(res.totalScore * 100).toFixed(1)}%`,
+          res.rank,
+          ...wScores
+        ]);
+        row.height = 24;
+        row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+          cell.font = { name: 'Arial', size: 10, bold: colNum === 13 || colNum === 14 };
+          cell.border = thinBorder;
+          cell.alignment = { vertical: 'middle', horizontal: colNum === 3 ? 'left' : 'center' };
+        });
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Bao_Cao_KPI_Tuan_Va_Thang_${selectedMonth}.xlsx`;
+      link.click();
+      showNotification('Đã xuất file Excel Báo cáo KPI Tuần & Tháng thành công!');
+    } catch (err) {
+      console.error(err);
+      showNotification('Lỗi khi xuất file Excel!', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Nhân viên đang chọn cho Tab Phiếu In Ký Chuẩn
+  const singleSelectedRow = computedRows.find(r => r.emp.username === selectedEmpUsername) || computedRows[0];
+  // Nhân viên đang mở Modal 4 Tuần
+  const modalEmpRow = weeklyModalEmpUsername ? computedRows.find(r => r.emp.username === weeklyModalEmpUsername) : null;
+
+  const copyFormulaText = (text) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      showNotification('Đã sao chép công thức Excel!');
+    } catch (e) {
+      showNotification('Không thể sao chép tự động!', 'error');
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in print-container-reset">
+      {/* TOP NAVIGATION BAR */}
+      <div className="bg-slate-900 text-white shadow-md shrink-0 z-20 no-print">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap justify-between items-center gap-3">
+          <div className="flex items-center space-x-3">
+            <button onClick={() => setView(isAdmin ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-800 rounded-full transition-colors text-slate-300 hover:text-white">
+              <ArrowLeft className="w-6 h-6" />
+            </button>
+            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm">
+              <Calculator className="w-5 h-5 md:w-6 md:h-6" />
+            </div>
+            <div>
+              <h1 className="font-bold text-sm md:text-lg leading-tight uppercase">Hệ Thống Tính & Báo Cáo KPI Bảo Trì</h1>
+              <p className="text-[11px] md:text-xs text-slate-400">Bộ phận Quản lý Thiết bị (QLTB) • Kỳ đánh giá {reportYear}</p>
+            </div>
+          </div>
+
+          {/* TAB NAVIGATION BUTTONS */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveTab('sheet')}
+              className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center gap-1.5 ${activeTab === 'sheet' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+            >
+              <BarChart3 className="w-4 h-4" /> Bảng Tính Tổng Hợp
+            </button>
+            <button
+              onClick={() => setActiveTab('single')}
+              className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center gap-1.5 ${activeTab === 'single' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+            >
+              <FileSpreadsheet className="w-4 h-4" /> Phiếu In Ký Chuẩn
+            </button>
+            <button
+              onClick={() => setActiveTab('formula')}
+              className={`px-3 py-1.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center gap-1.5 ${activeTab === 'formula' ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+            >
+              <Calculator className="w-4 h-4" /> Công Thức Excel
+            </button>
+            <button
+              disabled={isExporting}
+              onClick={handleExportExcelReport}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs md:text-sm font-bold flex items-center gap-1.5 transition shadow-sm disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" /> Xuất Excel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* MAIN SCROLLABLE CONTENT */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar print-container-reset">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 pb-20 print-container-reset">
+
+          {/* ===================================================================== */}
+          {/* TAB 1: BẢNG TÍNH TỔNG HỢP (THÁNG & 4 TUẦN)                            */}
+          {/* ===================================================================== */}
+          {activeTab === 'sheet' && (
+            <div className="space-y-6 animate-fade-in">
+              {/* 4 STATS OVERVIEW CARDS */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 no-print">
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng nhân sự</p>
+                    <h3 className="text-2xl font-black text-slate-800 mt-1">{empCount}</h3>
+                    <span className="text-xs text-blue-600 font-semibold">Nhân viên kỹ thuật</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <User className="w-6 h-6" />
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Điểm KPI Trung bình</p>
+                    <h3 className="text-2xl font-black text-emerald-600 mt-1">{avgScorePct}%</h3>
+                    <span className="text-xs text-slate-500">Toàn tổ bảo trì</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <BarChart3 className="w-6 h-6" />
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tỷ lệ hoàn thành PM (70%)</p>
+                    <h3 className="text-2xl font-black text-indigo-600 mt-1">{avgPmPct}%</h3>
+                    <span className="text-xs text-slate-500">Mục tiêu: &gt;95%</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Wrench className="w-6 h-6" />
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Phân loại Xuất sắc (A)</p>
+                    <h3 className="text-2xl font-black text-amber-500 mt-1">{gradeACount}</h3>
+                    <span className="text-xs text-amber-600 font-semibold">Hưởng 100% lương KPI + Thưởng</span>
+                  </div>
+                  <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center">
+                    <CheckCircle className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+
+              {/* SPREADSHEET CARD */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                {/* WEEK / MONTH SELECTOR BAR */}
+                <div className="p-3.5 bg-slate-100 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPeriod('month')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${currentPeriod === 'month' ? 'bg-purple-700 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-300 hover:bg-purple-50'}`}
+                    >
+                      <PieChart className="w-3.5 h-3.5" /> Tổng Hợp Tháng (Tự động)
+                    </button>
+                    <div className="h-5 w-[1px] bg-slate-300 mx-1 hidden sm:block"></div>
+                    {cycleInfo.weeks.map((wObj) => (
+                      <button
+                        key={wObj.index}
+                        onClick={() => setCurrentPeriod(wObj.index)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${currentPeriod === wObj.index ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-300 hover:bg-blue-50'}`}
+                      >
+                        {wObj.label} <span className="opacity-80 font-normal">({wObj.shortRange})</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setTempStartDay(monthStartDay);
+                            setTempAutoDetect(sysSettings?.month_config?.autoDetectMonth !== false);
+                            setIsMonthConfigOpen(true);
+                          }}
+                          className="px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                          title="Cài đặt ngày bắt đầu kỳ tháng và tháng mặc định"
+                        >
+                          <Settings className="w-3.5 h-3.5" /> Cài đặt tháng
+                        </button>
+                        <button
+                          onClick={handleSyncFromDailyTasks}
+                          className="px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                          title="Cập nhật lại số liệu PM & CM theo dữ liệu Sổ Ghi Công Việc của kỳ tháng này"
+                        >
+                          <History className="w-3.5 h-3.5" /> Đồng bộ Sổ CV
+                        </button>
+                      </>
+                    )}
+                    <span className="text-xs font-bold text-slate-600">Tháng báo cáo:</span>
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value || getActiveReportMonth(sysSettings))}
+                      className="border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                    <span className="text-[11px] font-bold text-purple-800 bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg">
+                      {cycleInfo.rangeText}
+                    </span>
+                  </div>
+                </div>
+
+                {/* TABLE SUBHEADER */}
+                <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                  <div>
+                    <h2 className="text-sm md:text-base font-black text-slate-800 flex items-center gap-2">
+                      {currentPeriod === 'month' ? (
+                        <><BarChart3 className="w-5 h-5 text-purple-600" /> BẢNG TỔNG HỢP {cycleInfo.monthLabel.toUpperCase()} ({cycleInfo.rangeText})</>
+                      ) : (
+                        <><CalendarClock className="w-5 h-5 text-blue-600" /> NHẬP LIỆU CHI TIẾT KPI - {cycleInfo.weeks[currentPeriod]?.label.toUpperCase()} ({cycleInfo.weeks[currentPeriod]?.shortRange})</>
+                      )}
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {currentPeriod === 'month'
+                        ? `Dữ liệu tháng được tính từ ngày ${formatDateVi(cycleInfo.startDate)} đến ngày ${formatDateVi(cycleInfo.endDate)} (cộng dồn 4 tuần từ Sổ Ghi Công Việc). Chọn từng Tuần 1 → Tuần 4 ở thanh trên hoặc bấm biểu tượng Lịch tuần ở từng dòng để chỉnh sửa chi tiết.`
+                        : `Bạn đang xem/nhập số liệu phát sinh trong ${cycleInfo.weeks[currentPeriod]?.label} (${cycleInfo.weeks[currentPeriod]?.shortRange}). Mọi thay đổi sẽ tự động cộng dồn vào Tổng Hợp Tháng.`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* RESPONSIVE TABLE */}
+                <div className="overflow-x-auto custom-scrollbar">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      {/* GROUP HEADERS */}
+                      <tr className="bg-slate-100 text-slate-700 border-b border-slate-300 text-center font-bold">
+                        <th rowSpan="2" className="p-2 border-r border-slate-200 w-10">STT</th>
+                        <th colSpan="2" className="p-2 border-r border-slate-200 bg-slate-200/60">THÔNG TIN NHÂN SỰ</th>
+                        <th colSpan="2" className="p-2 border-r border-slate-200 bg-amber-50 text-amber-900">MỤC I: KỶ LUẬT &amp; 5S (20%)</th>
+                        <th colSpan="4" className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MỤC II.1: BẢO DƯỠNG ĐỊNH KỲ - PM (70%)</th>
+                        <th colSpan="3" className="p-2 border-r border-slate-200 bg-emerald-50 text-emerald-900">MỤC II.2: SỰ CỐ ĐỘT XUẤT - CM (10%)</th>
+                        <th className="p-2 bg-purple-50 text-purple-900">TỔNG HỢP</th>
+                        <th rowSpan="2" className="p-2 border-l border-slate-200 w-20 no-print">Tác vụ</th>
+                      </tr>
+                      {/* SUB HEADERS */}
+                      <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-center text-[11px] font-bold">
+                        <th className="p-2 border-r border-slate-200 w-24">Mã NV</th>
+                        <th className="p-2 border-r border-slate-200 min-w-[140px]">Họ và Tên</th>
+
+                        {/* KPI I */}
+                        <th className="p-2 border-r border-slate-200 w-20 text-rose-600" title="Tổng điểm trừ vi phạm">Điểm Trừ</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-amber-50 font-black" title="Điểm Tiêu chí 1: 100 - Trừ">% Mục I</th>
+
+                        {/* KPI II.1 */}
+                        <th className="p-2 border-r border-slate-200 w-16" title="Tổng số việc giao theo lịch">K/Hoạch (B)</th>
+                        <th className="p-2 border-r border-slate-200 w-16" title="Số việc hoãn hợp lệ do khách quan">Hoãn (C)</th>
+                        <th className="p-2 border-r border-slate-200 w-16" title="Số việc hoàn thành đúng hạn và nghiệm thu">Đạt (A)</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-blue-50 font-black" title="Tỷ lệ A / (B - C)">% Đạt (T1)</th>
+
+                        {/* KPI II.2 */}
+                        <th className="p-2 border-r border-slate-200 w-16" title="Tổng số ca sự cố phát sinh">Tổng (ΣK)</th>
+                        <th className="p-2 border-r border-slate-200 w-16" title="Số ca sửa đúng hạn cam kết SLA">Đạt (K)</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-emerald-50 font-black" title="Tỷ lệ K / ΣK">% Kịp (T2)</th>
+
+                        {/* SUMMARY */}
+                        <th className="p-2 w-24 font-black text-slate-900 bg-purple-100/70">Tổng Điểm</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {computedRows.length === 0 ? (
+                        <tr>
+                          <td colSpan="14" className="p-8 text-center text-slate-400">Chưa có dữ liệu nhân sự kỹ thuật.</td>
+                        </tr>
+                      ) : (
+                        computedRows.map((row, idx) => {
+                          const { emp, activeMetrics, activeResult } = row;
+                          const isMonthly = currentPeriod === 'month';
+
+                          return (
+                            <tr key={emp.id} className="hover:bg-slate-50/90 transition text-center">
+                              <td className="p-2 border-r border-slate-200 text-slate-500 font-semibold">{idx + 1}</td>
+                              <td className="p-2 border-r border-slate-200 font-mono font-bold text-slate-700">{emp.employeeId || emp.id}</td>
+                              <td className="p-2 border-r border-slate-200 text-left font-bold text-slate-800">{emp.name}</td>
+
+                              {isMonthly ? (
+                                <>
+                                  {/* MỤC I (AGGREGATED) */}
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Bấm để xem/sửa chi tiết 4 tuần" className="p-2 border-r border-slate-200 text-rose-600 font-bold cursor-pointer hover:bg-purple-50/60">{activeMetrics.deduct}</td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-amber-50/70 text-amber-900">{activeResult.scoreI}%</td>
+
+                                  {/* MỤC II.1 (AGGREGATED) */}
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch 4 tuần (Bấm để sửa từng tuần)" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPlan}</td>
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoãn hợp lệ 4 tuần" className="p-2 border-r border-slate-200 text-slate-500 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPostponed}</td>
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoàn thành 4 tuần" className="p-2 border-r border-slate-200 font-bold text-blue-700 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmDone}</td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-blue-50/70 text-blue-900">{(activeResult.t1 * 100).toFixed(1)}%</td>
+
+                                  {/* MỤC II.2 (AGGREGATED) */}
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng sự cố 4 tuần" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">{activeMetrics.cmTotal}</td>
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng xử lý đạt SLA 4 tuần" className="p-2 border-r border-slate-200 font-bold text-emerald-700 cursor-pointer hover:bg-purple-50/60">{activeMetrics.cmDone}</td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-emerald-50/70 text-emerald-900">{(activeResult.t2 * 100).toFixed(1)}%</td>
+                                </>
+                              ) : (
+                                <>
+                                  {/* MỤC I (WEEKLY INPUT) */}
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" max="100" value={activeMetrics.deduct} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'deduct', e.target.value)} className="w-full text-center text-rose-600 font-bold bg-white border border-slate-200 focus:ring-1 focus:ring-rose-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-amber-50/70 text-amber-900">{activeResult.scoreI}%</td>
+
+                                  {/* MỤC II.1 (WEEKLY INPUT) */}
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmPlan} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmPlan', e.target.value)} className="w-full text-center bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmPostponed} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmPostponed', e.target.value)} className="w-full text-center text-slate-500 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmDone} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmDone', e.target.value)} className="w-full text-center font-bold text-blue-700 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-blue-50/70 text-blue-900">{(activeResult.t1 * 100).toFixed(1)}%</td>
+
+                                  {/* MỤC II.2 (WEEKLY INPUT) */}
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.cmTotal} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'cmTotal', e.target.value)} className="w-full text-center bg-white border border-slate-200 focus:ring-1 focus:ring-emerald-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-1 border-r border-slate-200">
+                                    <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.cmDone} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'cmDone', e.target.value)} className="w-full text-center font-bold text-emerald-700 bg-white border border-slate-200 focus:ring-1 focus:ring-emerald-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td className="p-2 border-r border-slate-200 font-black bg-emerald-50/70 text-emerald-900">{(activeResult.t2 * 100).toFixed(1)}%</td>
+                                </>
+                              )}
+
+                              {/* SUMMARY */}
+                              <td className="p-2 font-black text-slate-900 bg-purple-50 text-xs">
+                                {(activeResult.totalScore * 100).toFixed(1)}%
+                              </td>
+
+                              {/* ACTIONS */}
+                              <td className="p-2 border-l border-slate-200 no-print">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => setWeeklyModalEmpUsername(emp.username)}
+                                    title="Xem & Sửa chi tiết 4 tuần"
+                                    className="text-purple-600 hover:text-purple-800 hover:bg-purple-50 p-1.5 rounded-lg transition-colors"
+                                  >
+                                    <CalendarClock className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedEmpUsername(emp.username);
+                                      setActiveTab('single');
+                                    }}
+                                    title="Xem & In phiếu ký chuẩn"
+                                    className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
+                                  >
+                                    <FileSpreadsheet className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* FOOTER LEGEND */}
+                <div className="p-3.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex flex-wrap justify-between items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> <b>≥95%:</b> Xuất sắc</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> <b>85 - 94%:</b> Đạt / Tốt</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> <b>70 - 84%:</b> Cải thiện</span>
+                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> <b>&lt;70%:</b> Không đạt</span>
+                  </div>
+                  <span className="italic text-[11px] text-slate-500">* Số liệu PM &amp; CM tự động lấy từ Sổ Ghi Công Việc; các hiệu chỉnh tuần tự động lưu và cộng dồn sang tháng.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================== */}
+          {/* TAB 2: PHIẾU ĐÁNH GIÁ CÁ NHÂN CHUẨN IN KHỔ A4                         */}
+          {/* ===================================================================== */}
+          {activeTab === 'single' && singleSelectedRow && (
+            <div className="space-y-6 animate-fade-in print-container-reset">
+              {/* CONTROLS */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3 no-print">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-600" /> Chọn nhân viên xuất phiếu:
+                  </label>
+                  <select
+                    disabled={!isAdmin}
+                    value={singleSelectedRow.emp.username}
+                    onChange={(e) => setSelectedEmpUsername(e.target.value)}
+                    className="border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-75"
+                  >
+                    {visibleUsers.map(u => (
+                      <option key={u.id} value={u.username}>
+                        {(u.employeeId || u.id)} - {u.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value || '2026-09')}
+                    className="border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition shadow-sm"
+                  >
+                    <Printer className="w-4 h-4" /> In Phiếu (Khổ A4)
+                  </button>
+                </div>
+              </div>
+
+              {/* FORM SHEET CONTAINER (STANDARDIZED A4 FORMAT) */}
+              <div id="printableSheet" className="bg-white p-6 sm:p-12 max-w-4xl mx-auto rounded-2xl shadow-lg border border-slate-200">
+                {/* HEADER */}
+                <div className="border-b-2 border-slate-800 pb-4 mb-6">
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-center gap-3">
+                      <img src={getMartechLogoBase64()} alt="Martech Boiler" className="h-11 w-auto object-contain" />
+                      <div>
+                        <h3 className="text-xs uppercase font-bold tracking-wider text-slate-600">CÔNG TY MARTECH BOILER</h3>
+                        <p className="text-xs font-black text-slate-800">BỘ PHẬN: QUẢN LÝ THIẾT BỊ (QLTB)</p>
+                      </div>
+                    </div>
+                    <div className="text-right text-xs text-slate-500">
+                      <p>Mẫu số: <b>02/KPI-QLTB</b></p>
+                      <p>Áp dụng: Năm {reportYear}</p>
+                    </div>
+                  </div>
+                  <div className="text-center mt-4">
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-wide uppercase">BẢNG ĐÁNH GIÁ KẾT QUẢ HOÀN THÀNH CÔNG VIỆC</h2>
+                    <p className="text-sm font-bold text-slate-600 mt-1">Kỳ đánh giá: <span>{formattedMonthLabel}</span></p>
+                  </div>
+                </div>
+
+                {/* PART A: EMPLOYEE INFO */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase mb-2 flex items-center gap-2">
+                    <span>A. THÔNG TIN NHÂN SỰ:</span>
+                  </h4>
+                  <table className="w-full text-xs border border-slate-300">
+                    <tbody>
+                      <tr>
+                        <td className="bg-slate-100 font-bold p-2.5 w-1/6 border-r border-b border-slate-300">Mã NV:</td>
+                        <td className="p-2.5 w-2/6 border-r border-b border-slate-300 font-semibold">{singleSelectedRow.emp.employeeId || singleSelectedRow.emp.id}</td>
+                        <td className="bg-slate-100 font-bold p-2.5 w-1/6 border-r border-b border-slate-300">Chức vụ:</td>
+                        <td className="p-2.5 w-2/6 border-b border-slate-300 font-semibold">{singleSelectedRow.emp.position || 'Nhân viên kỹ thuật bảo trì'}</td>
+                      </tr>
+                      <tr>
+                        <td className="bg-slate-100 font-bold p-2.5 border-r border-slate-300">Họ và tên:</td>
+                        <td className="p-2.5 border-r border-slate-300 font-bold text-blue-900 text-sm">{singleSelectedRow.emp.name}</td>
+                        <td className="bg-slate-100 font-bold p-2.5 border-r border-slate-300">Đơn vị:</td>
+                        <td className="p-2.5 font-semibold">{singleSelectedRow.emp.department || 'Bộ phận QLTB'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* PART B: EVALUATION TABLE */}
+                <div className="mb-6">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase mb-2">
+                    <span>B. NỘI DUNG ĐÁNH GIÁ:</span>
+                  </h4>
+                  <table className="w-full text-xs border border-slate-300 text-left">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-800 font-bold text-center border-b border-slate-300">
+                        <th className="p-2 border-r border-slate-300 w-10">STT<br /><span className="font-normal text-[10px]">(1)</span></th>
+                        <th className="p-2 border-r border-slate-300">Tiêu chí đánh giá<br /><span className="font-normal text-[10px]">(2)</span></th>
+                        <th className="p-2 border-r border-slate-300 w-20">Trọng số (%)<br /><span className="font-normal text-[10px]">(3)</span></th>
+                        <th className="p-2 border-r border-slate-300 w-20">Mục tiêu<br /><span className="font-normal text-[10px]">(4)</span></th>
+                        <th className="p-2 border-r border-slate-300 w-28">Kết quả hoàn thành (%)<br /><span className="font-normal text-[10px]">(5)</span></th>
+                        <th className="p-2 border-r border-slate-300 w-28">Điểm quy đổi (%)<br /><span className="font-normal text-[10px]">(6 = 3 × 5)</span></th>
+                        <th className="p-2 w-36">Ghi chú<br /><span className="font-normal text-[10px]">(7)</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* Row I */}
+                      <tr className="border-b border-slate-300 bg-slate-50">
+                        <td className="p-2.5 font-bold text-center border-r border-slate-300">I</td>
+                        <td className="p-2.5 font-bold border-r border-slate-300" colSpan="6">KPI ĐỊNH TÍNH</td>
+                      </tr>
+                      <tr className="border-b border-slate-300">
+                        <td className="p-2.5 text-center border-r border-slate-300">1</td>
+                        <td className="p-2.5 border-r border-slate-300">
+                          <p className="font-bold text-slate-800">Tinh thần thái độ công tác và chấp hành nội quy</p>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            - Giờ giấc chấm công, tuân thủ an toàn (BHLĐ, LOTO, PCCC).<br />
+                            - Ý thức 5S, bảo quản trang thiết bị, tủ công cụ.<br />
+                            - Tinh thần trách nhiệm, sẵn sàng nhận điều động khẩn cấp.
+                          </p>
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">20%</td>
+                        <td className="p-2.5 text-center border-r border-slate-300">100%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{singleSelectedRow.monthlyResult.scoreI}%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedI * 100).toFixed(1)}%</td>
+                        <td className="p-2 text-[11px] text-slate-500">
+                          Tổng 4 tuần: Trừ -{singleSelectedRow.monthlyResult.deduct}đ
+                        </td>
+                      </tr>
+
+                      {/* Row II */}
+                      <tr className="border-b border-slate-300 bg-slate-50">
+                        <td className="p-2.5 font-bold text-center border-r border-slate-300">II</td>
+                        <td className="p-2.5 font-bold border-r border-slate-300" colSpan="6">KPI ĐỊNH LƯỢNG (KẾT QUẢ CÔNG VIỆC KỸ THUẬT)</td>
+                      </tr>
+                      <tr className="border-b border-slate-300">
+                        <td className="p-2.5 text-center border-r border-slate-300">1</td>
+                        <td className="p-2.5 border-r border-slate-300">
+                          <p className="font-bold text-slate-800">Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì định kỳ (PM)</p>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Đo lường mức độ hoàn thành phiếu kiểm tra định kỳ (Master PM).<br />
+                            <span className="text-blue-600 font-mono text-[10px]">
+                              (Tổng tháng: {singleSelectedRow.monthlyResult.pmDone} đạt / [{singleSelectedRow.monthlyResult.pmPlan} kế hoạch - {singleSelectedRow.monthlyResult.pmPostponed} hoãn] = {(singleSelectedRow.monthlyResult.t1 * 100).toFixed(1)}%)
+                            </span>
+                          </p>
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">70%</td>
+                        <td className="p-2.5 text-center font-semibold border-r border-slate-300">&gt; 95%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{(singleSelectedRow.monthlyResult.scorePM * 100).toFixed(1)}%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedPM * 100).toFixed(1)}%</td>
+                        <td className="p-2 text-[11px] text-slate-500">Nghiệm thu theo Phiếu bảo trì</td>
+                      </tr>
+                      <tr className="border-b border-slate-300">
+                        <td className="p-2.5 text-center border-r border-slate-300">2</td>
+                        <td className="p-2.5 border-r border-slate-300">
+                          <p className="font-bold text-slate-800">Phản hồi và khắc phục sự cố kỹ thuật đột xuất kịp thời (CM)</p>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Có mặt ≤ 10 phút &amp; sửa hoàn thành đúng định mức SLA.<br />
+                            <span className="text-blue-600 font-mono text-[10px]">
+                              {singleSelectedRow.monthlyResult.cmTotal > 0
+                                ? `(Tổng tháng: ${singleSelectedRow.monthlyResult.cmDone} đạt / ${singleSelectedRow.monthlyResult.cmTotal} ca = ${(singleSelectedRow.monthlyResult.t2 * 100).toFixed(1)}%)`
+                                : '(Tổng tháng: Chuyền chạy ổn định, không có ca hư hỏng phát sinh = 100%)'}
+                            </span>
+                          </p>
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">10%</td>
+                        <td className="p-2.5 text-center font-semibold border-r border-slate-300">90%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{(singleSelectedRow.monthlyResult.scoreCM * 100).toFixed(1)}%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedCM * 100).toFixed(1)}%</td>
+                        <td className="p-2 text-[11px] text-slate-500">Phiếu sửa chữa đột xuất</td>
+                      </tr>
+
+                      {/* TOTAL ROW */}
+                      <tr className="bg-slate-50 font-bold border-b border-slate-400">
+                        <td className="p-3 text-center border-r border-slate-300" colSpan="2">CỘNG TỔNG ĐIỂM ĐÁNH GIÁ THÁNG</td>
+                        <td className="p-3 text-center border-r border-slate-300">100%</td>
+                        <td className="p-3 text-center border-r border-slate-300">-</td>
+                        <td className="p-3 text-center border-r border-slate-300">-</td>
+                        <td className="p-3 text-center text-sm font-black text-blue-900 border-r border-slate-300 bg-blue-50">
+                          {(singleSelectedRow.monthlyResult.totalScore * 100).toFixed(1)}%
+                        </td>
+                        <td className="p-3 text-center text-[11px] font-bold text-slate-700">
+                          {singleSelectedRow.monthlyResult.rank} ({singleSelectedRow.monthlyResult.salaryPct})
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* WEEKLY BREAKDOWN SUB-TABLE ON PRINT SHEET */}
+                <div className="mb-6">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase mb-1.5">
+                    <span>C. BẢNG THEO DÕI CHI TIẾT THEO TUẦN (CĂN CỨ TỔNG HỢP THÁNG):</span>
+                  </h4>
+                  <table className="w-full text-[11px] border border-slate-300 text-center">
+                    <thead>
+                      <tr className="bg-slate-100 font-bold text-slate-700 border-b border-slate-300">
+                        <th className="p-1.5 border-r border-slate-300">Thời gian</th>
+                        <th className="p-1.5 border-r border-slate-300">Điểm Trừ (Mục I)</th>
+                        <th className="p-1.5 border-r border-slate-300">Điểm Mục I</th>
+                        <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH - Hoãn)</th>
+                        <th className="p-1.5 border-r border-slate-300">% Đạt PM</th>
+                        <th className="p-1.5 border-r border-slate-300">CM: Đạt / Tổng ca</th>
+                        <th className="p-1.5 border-r border-slate-300">% Kịp CM</th>
+                        <th className="p-1.5 bg-slate-200/60">Điểm KPI Tuần</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-300">
+                      {singleSelectedRow.weeks.map((w, wIdx) => {
+                        const wRes = computeMetricsKPI(w);
+                        const effPM = Math.max(0, (w.pmPlan || 0) - (w.pmPostponed || 0));
+                        const wMeta = cycleInfo.weeks[wIdx];
+                        return (
+                          <tr key={wIdx}>
+                            <td className="p-1.5 border-r border-slate-300 font-semibold">
+                              Tuần {wIdx + 1} {wMeta ? <span className="text-[10px] text-slate-500 font-normal">({wMeta.shortRange})</span> : ''}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-300">-{w.deduct}đ</td>
+                            <td className="p-1.5 border-r border-slate-300 font-semibold">{wRes.scoreI}%</td>
+                            <td className="p-1.5 border-r border-slate-300">
+                              {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}-{w.pmPostponed})</span>
+                            </td>
+                            <td className="p-1.5 border-r border-slate-300 font-semibold">{(wRes.t1 * 100).toFixed(1)}%</td>
+                            <td className="p-1.5 border-r border-slate-300">
+                              {w.cmTotal > 0 ? `${w.cmDone} / ${w.cmTotal}` : 'Không có sự cố'}
+                            </td>
+                            <td className="p-1.5 border-r border-slate-300 font-semibold">{(wRes.t2 * 100).toFixed(1)}%</td>
+                            <td className="p-1.5 font-bold bg-slate-50">{(wRes.totalScore * 100).toFixed(1)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* SUMMARY & REMARKS */}
+                <div className="mb-8 border border-slate-300 p-3 rounded text-xs">
+                  <p className="font-bold text-slate-800 mb-1">Ý KIẾN / NHẬN XÉT CỦA QUẢN LÝ TRỰC TIẾP:</p>
+                  {isAdmin ? (
+                    <>
+                      <textarea
+                        rows="2"
+                        placeholder="Nhập nhận xét của quản lý trực tiếp..."
+                        value={singleSelectedRow.managerNote}
+                        onChange={(e) => handleUpdateManagerNote(singleSelectedRow.emp.username, e.target.value)}
+                        className="w-full text-slate-700 italic leading-relaxed bg-slate-50 border border-dashed border-slate-300 rounded p-2 outline-none focus:bg-white focus:border-blue-400 resize-none no-print"
+                      />
+                      <p className="hidden print:block text-slate-700 italic leading-relaxed">
+                        {singleSelectedRow.managerNote || 'Tuân thủ tốt quy trình bảo dưỡng phòng ngừa, chủ động phối hợp xử lý kịp thời các sự cố phát sinh tại dây chuyền sản xuất.'}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-slate-600 italic leading-relaxed">
+                      {singleSelectedRow.managerNote || 'Tuân thủ tốt quy trình bảo dưỡng phòng ngừa, chủ động phối hợp xử lý kịp thời các sự cố phát sinh tại dây chuyền sản xuất.'}
+                    </p>
+                  )}
+                </div>
+
+                {/* SIGNATURE SECTION */}
+                <div className="pt-2">
+                  <div className="grid grid-cols-3 text-center text-xs">
+                    <div>
+                      <p className="font-bold uppercase text-slate-900">Nhân viên đánh giá</p>
+                      <p className="italic text-[11px] text-slate-500 mb-16">(Ký, ghi rõ họ tên)</p>
+                      <p className="font-bold text-slate-800">{singleSelectedRow.emp.name}</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Ngày: ..... / ..... / {reportYear}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold uppercase text-slate-900">Quản lý trực tiếp</p>
+                      <p className="italic text-[11px] text-slate-500 mb-16">(Ký, ghi rõ họ tên)</p>
+                      <p className="font-bold text-slate-800">Tổ trưởng / Trưởng ca</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Ngày: ..... / ..... / {reportYear}</p>
+                    </div>
+                    <div>
+                      <p className="font-bold uppercase text-slate-900">Ban Lãnh Đạo Phê Duyệt</p>
+                      <p className="italic text-[11px] text-slate-500 mb-16">(Ký, phê duyệt)</p>
+                      <p className="font-bold text-slate-800">Trưởng phòng QLTB</p>
+                      <p className="text-[11px] text-slate-400 mt-1">Ngày: ..... / ..... / {reportYear}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ===================================================================== */}
+          {/* TAB 3: HƯỚNG DẪN CÔNG THỨC EXCEL                                      */}
+          {/* ===================================================================== */}
+          {activeTab === 'formula' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 animate-fade-in">
+              <div>
+                <h3 className="text-base md:text-lg font-black text-slate-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-600" /> HƯỚNG DẪN THIẾT LẬP CÔNG THỨC TRÊN EXCEL / GOOGLE SHEETS
+                </h3>
+                <p className="text-xs md:text-sm text-slate-600 mt-1">
+                  Bộ công thức chuẩn hóa áp dụng cho bảng đánh giá KPI Bảo trì (20% Kỷ luật & 5S • 70% Bảo dưỡng PM • 10% Sự cố đột xuất CM):
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* KPI 1 */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-black">1</span>
+                    Tiêu chí I: Kỷ luật & Thái độ (20%)
+                  </h4>
+                  <p className="text-xs text-slate-600">Giả sử ô <code>C5</code> là Điểm trừ:</p>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=MAX(0, MIN(100, 100 - C5))</code>
+                    <button onClick={() => copyFormulaText('=MAX(0, MIN(100, 100 - C5))')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                  <p className="text-[11px] text-slate-500 italic">Hàm chặn trần tối đa 100 điểm và sàn tối thiểu 0 điểm.</p>
+                </div>
+
+                {/* KPI 2.1 */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-black">2</span>
+                    Tiêu chí II.1: Bảo dưỡng định kỳ PM (70%)
+                  </h4>
+                  <p className="text-xs text-slate-600">Ô <code>F5</code> là Kế hoạch (B), <code>G5</code> là Hoãn (C), <code>H5</code> là Đạt (A):</p>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF((F5 - G5) &gt; 0, H5 / (F5 - G5), 1)</code>
+                    <button onClick={() => copyFormulaText('=IF((F5 - G5) > 0, H5 / (F5 - G5), 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF(T1 &gt;= 0.95, 1, T1 / 0.95)</code>
+                    <button onClick={() => copyFormulaText('=IF(T1 >= 0.95, 1, T1 / 0.95)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                </div>
+
+                {/* KPI 2.2 */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">3</span>
+                    Tiêu chí II.2: Sự cố đột xuất CM (10%)
+                  </h4>
+                  <p className="text-xs text-slate-600">Ô <code>J5</code> là Tổng sự cố (ΣK), <code>K5</code> là Số ca đạt SLA (K):</p>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF(J5 &gt; 0, K5 / J5, 1)</code>
+                    <button onClick={() => copyFormulaText('=IF(J5 > 0, K5 / J5, 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF(T2 &gt;= 0.9, 1, T2 / 0.9)</code>
+                    <button onClick={() => copyFormulaText('=IF(T2 >= 0.9, 1, T2 / 0.9)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                </div>
+
+                {/* TOTAL & RANK */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-black">4</span>
+                    Tổng điểm KPI & Xếp loại (A, B, C, D)
+                  </h4>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=(KQ_I * 20%) + (KQ_PM * 70%) + (KQ_CM * 10%)</code>
+                    <button onClick={() => copyFormulaText('=(KQ_I * 20%) + (KQ_PM * 70%) + (KQ_CM * 10%)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF(Total&gt;=0.95,"Loại A",IF(Total&gt;=0.85,"Loại B",IF(Total&gt;=0.7,"Loại C","Loại D")))</code>
+                    <button onClick={() => copyFormulaText('=IF(Total>=0.95,"Loại A",IF(Total>=0.85,"Loại B",IF(Total>=0.7,"Loại C","Loại D")))')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* WEEKLY DETAIL MODAL (QUICK VIEW & EDIT 4 WEEKS) */}
+      {modalEmpRow && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 no-print animate-fade-in" onClick={() => setWeeklyModalEmpUsername(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-4xl w-full overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 md:p-5 bg-slate-900 text-white flex justify-between items-center">
+              <div>
+                <h3 className="font-black text-sm md:text-base uppercase">
+                  Chi tiết KPI 4 Tuần: {modalEmpRow.emp.name} ({modalEmpRow.emp.employeeId || modalEmpRow.emp.id})
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {isAdmin ? 'Chỉnh sửa trực tiếp từng tuần, số liệu tháng sẽ tự động cập nhật' : 'Bảng theo dõi chi tiết 4 tuần trong tháng'}
+                </p>
+              </div>
+              <button onClick={() => setWeeklyModalEmpUsername(null)} className="text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-slate-800">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 md:p-6 overflow-x-auto custom-scrollbar">
+              <table className="w-full text-xs border-collapse border border-slate-200 text-center">
+                <thead>
+                  <tr className="bg-slate-100 font-bold text-slate-700 border-b border-slate-300">
+                    <th className="p-2 border-r border-slate-200">Tuần</th>
+                    <th className="p-2 border-r border-slate-200 text-rose-600">Điểm Trừ</th>
+                    <th className="p-2 border-r border-slate-200 bg-amber-50">% Mục I</th>
+                    <th className="p-2 border-r border-slate-200">KH PM (B)</th>
+                    <th className="p-2 border-r border-slate-200">Hoãn (C)</th>
+                    <th className="p-2 border-r border-slate-200">Đạt PM (A)</th>
+                    <th className="p-2 border-r border-slate-200 bg-blue-50">% PM</th>
+                    <th className="p-2 border-r border-slate-200">Sự cố (ΣK)</th>
+                    <th className="p-2 border-r border-slate-200">Đạt CM (K)</th>
+                    <th className="p-2 border-r border-slate-200 bg-emerald-50">% CM</th>
+                    <th className="p-2 bg-purple-50 font-bold">Tổng Tuần</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {modalEmpRow.weeks.map((w, wIdx) => {
+                    const wRes = computeMetricsKPI(w);
+                    const wMeta = cycleInfo.weeks[wIdx];
+                    return (
+                      <tr key={wIdx}>
+                        <td className="p-2 border-r border-slate-200 font-bold bg-slate-50 whitespace-nowrap">
+                          Tuần {wIdx + 1} {wMeta && <span className="block text-[10px] font-normal text-slate-500">{wMeta.shortRange}</span>}
+                        </td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" max="100" value={w.deduct} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'deduct', e.target.value)} className="w-14 text-center text-rose-600 font-bold border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-2 border-r border-slate-200 font-bold bg-amber-50/70 text-amber-900">{wRes.scoreI}%</td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmPlan} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmPlan', e.target.value)} className="w-14 text-center border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmPostponed} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmPostponed', e.target.value)} className="w-14 text-center border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.pmDone} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'pmDone', e.target.value)} className="w-14 text-center font-bold text-blue-700 border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-2 border-r border-slate-200 font-bold bg-blue-50/70 text-blue-900">{(wRes.t1 * 100).toFixed(1)}%</td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.cmTotal} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'cmTotal', e.target.value)} className="w-14 text-center border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-1 border-r border-slate-200"><input disabled={!isAdmin} type="number" min="0" value={w.cmDone} onChange={(e) => handleUpdateEmpWeek(modalEmpRow.emp, wIdx, 'cmDone', e.target.value)} className="w-14 text-center font-bold text-emerald-700 border border-slate-200 rounded py-1 disabled:bg-slate-100" /></td>
+                        <td className="p-2 border-r border-slate-200 font-bold bg-emerald-50/70 text-emerald-900">{(wRes.t2 * 100).toFixed(1)}%</td>
+                        <td className="p-2 font-black bg-purple-50 text-purple-900">{(wRes.totalScore * 100).toFixed(1)}%</td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* TOTAL MONTHLY ROW */}
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">
+                    <td className="p-2 border-r border-slate-200 text-purple-900">TỔNG THÁNG</td>
+                    <td className="p-2 border-r border-slate-200 text-rose-600">{modalEmpRow.monthlyResult.deduct}</td>
+                    <td className="p-2 border-r border-slate-200 bg-amber-100 text-amber-950">{modalEmpRow.monthlyResult.scoreI}%</td>
+                    <td className="p-2 border-r border-slate-200">{modalEmpRow.monthlyResult.pmPlan}</td>
+                    <td className="p-2 border-r border-slate-200">{modalEmpRow.monthlyResult.pmPostponed}</td>
+                    <td className="p-2 border-r border-slate-200 text-blue-700">{modalEmpRow.monthlyResult.pmDone}</td>
+                    <td className="p-2 border-r border-slate-200 bg-blue-100 text-blue-950">{(modalEmpRow.monthlyResult.t1 * 100).toFixed(1)}%</td>
+                    <td className="p-2 border-r border-slate-200">{modalEmpRow.monthlyResult.cmTotal}</td>
+                    <td className="p-2 border-r border-slate-200 text-emerald-700">{modalEmpRow.monthlyResult.cmDone}</td>
+                    <td className="p-2 border-r border-slate-200 bg-emerald-100 text-emerald-950">{(modalEmpRow.monthlyResult.t2 * 100).toFixed(1)}%</td>
+                    <td className="p-2 font-black bg-purple-200 text-purple-950">{(modalEmpRow.monthlyResult.totalScore * 100).toFixed(1)}%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button onClick={() => setWeeklyModalEmpUsername(null)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-sm">
+                Hoàn tất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CÀI ĐẶT THÁNG NHANH */}
+      {isMonthConfigOpen && isAdmin && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[210] flex items-center justify-center p-4 no-print animate-fade-in" onClick={() => setIsMonthConfigOpen(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full p-6 space-y-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-purple-100 text-purple-600 p-2.5 rounded-xl"><CalendarClock className="w-5 h-5" /></div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-base md:text-lg">Cài Đặt Kỳ Tổng Hợp Tháng</h3>
+                  <p className="text-xs text-slate-500">Thiết lập ngày chốt chu kỳ báo cáo tháng</p>
+                </div>
+              </div>
+              <button onClick={() => setIsMonthConfigOpen(false)} className="p-1.5 text-slate-400 hover:text-red-500 rounded-full hover:bg-slate-100">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5">Ngày bắt đầu chu kỳ tháng (1 - 28)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="28"
+                  value={tempStartDay}
+                  onChange={(e) => setTempStartDay(parseInt(e.target.value, 10) || 1)}
+                  className="w-full p-3 border border-slate-300 rounded-xl text-base font-black text-slate-800 focus:ring-2 focus:ring-purple-500 outline-none bg-slate-50"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {Number(tempStartDay) === 1
+                    ? 'Tính từ ngày 01 đến ngày cuối tháng.'
+                    : `Tính từ ngày ${tempStartDay} tháng trước đến ngày ${Number(tempStartDay) - 1} tháng này.`}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5">Tháng báo cáo mặc định khi mở ứng dụng</label>
+                <select
+                  value={tempAutoDetect ? 'auto' : 'fixed'}
+                  onChange={(e) => setTempAutoDetect(e.target.value === 'auto')}
+                  className="w-full p-3 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 outline-none bg-slate-50"
+                >
+                  <option value="auto">Tự động nhận diện theo ngày hiện tại</option>
+                  <option value="fixed">Đặt cố định tháng đang chọn ({selectedMonth.split('-').reverse().join('/')})</option>
+                </select>
+              </div>
+
+              {(() => {
+                const preview = getMonthCycleRange(selectedMonth, tempStartDay);
+                return (
+                  <div className="bg-purple-50 border border-purple-200 rounded-2xl p-3.5 space-y-2">
+                    <p className="text-xs font-bold text-purple-900">
+                      Áp dụng cho {preview.monthLabel}: <span className="font-black text-purple-700">{preview.rangeText}</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {preview.weeks.map(w => (
+                        <div key={w.index} className="bg-white px-2.5 py-1.5 rounded-lg border border-purple-100 text-[11px] flex justify-between">
+                          <span className="font-bold text-slate-700">{w.label}:</span>
+                          <span className="font-mono text-purple-700 font-semibold">{w.shortRange}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button onClick={() => setIsMonthConfigOpen(false)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-bold">
+                Hủy
+              </button>
+              <button onClick={handleSaveQuickMonthConfig} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-md flex items-center gap-1.5">
+                <Save className="w-4 h-4" /> Lưu Cài Đặt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 function MainApp() {
   const initialUser = safeGetStorage('techmaintain_active_session', null);
   const validInitialUser = initialUser && typeof initialUser === 'object' && initialUser.username ? initialUser : null;
@@ -3136,8 +4893,20 @@ function MainApp() {
   });
   
   const [sysSettings, setSysSettings] = useState(() => {
-    const saved = safeGetStorage('techmaintain_sysSettings', { error_times: { level1: 1.5, level2: 4, level3: 24 } });
-    return saved && typeof saved === 'object' ? saved : { error_times: { level1: 1.5, level2: 4, level3: 24 } };
+    const saved = safeGetStorage('techmaintain_sysSettings', {
+      error_times: { level1: 1.5, level2: 4, level3: 24 },
+      month_config: { startDay: 16, autoDetectMonth: true, defaultMonth: '' }
+    });
+    return saved && typeof saved === 'object'
+      ? {
+          error_times: { level1: 1.5, level2: 4, level3: 24 },
+          month_config: { startDay: 16, autoDetectMonth: true, defaultMonth: '' },
+          ...saved
+        }
+      : {
+          error_times: { level1: 1.5, level2: 4, level3: 24 },
+          month_config: { startDay: 16, autoDetectMonth: true, defaultMonth: '' }
+        };
   });
 
   const [categoryList, setCategoryList] = useState(() => { 
@@ -3693,10 +5462,10 @@ function MainApp() {
   );
 
   return (
-    <div className="fixed inset-0 bg-slate-200 flex justify-center overflow-hidden font-sans text-slate-800">
-      <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300">
-        <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50"></div>
-        <div className="flex-1 overflow-hidden relative flex flex-col">
+    <div className="fixed inset-0 bg-slate-200 flex justify-center overflow-hidden font-sans text-slate-800 print-container-reset">
+      <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300 print-container-reset">
+        <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50 no-print"></div>
+        <div className="flex-1 overflow-hidden relative flex flex-col print-container-reset">
           {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
           {view === 'machines' && <MachineManagementView machines={machines} logs={logs} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
@@ -3705,6 +5474,7 @@ function MainApp() {
           {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings}/>}
           {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} sysSettings={sysSettings} handleSyncAllDailyTasksToSheet={handleSyncAllDailyTasksToSheet} />}
+          {view === 'kpi_report' && <KpiReportView user={user} usersList={usersList} dailyTasks={dailyTasks} machines={machines} sysSettings={sysSettings} saveSettings={saveSettings} googleSheetUrl={googleSheetUrl} setView={setView} showNotification={showNotification} />}
           {view === 'meter_menu' && <MeterMenuView setView={setView} user={user} setUtilityMode={setUtilityMode} />}
           {view === 'utility_form' && <UtilityFormView user={user} setView={setView} showNotification={showNotification} handleSaveUtilityLog={handleSaveUtilityLog} editData={utilityEditItem} setEditData={setUtilityEditItem} utilityLogs={utilityLogs} mode={utilityMode} />}
           {view === 'utility_history' && <UtilityHistoryView utilityLogs={utilityLogs} usersList={usersList} setView={setView} user={user} setEditData={setUtilityEditItem} setUtilityMode={setUtilityMode} setZoomedImage={setZoomedImage} />}
