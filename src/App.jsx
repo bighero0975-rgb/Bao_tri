@@ -276,10 +276,12 @@ const analyzeEmployeeAttendanceInRange = (emp, allUnmergedTasks, startDateStr, e
 
   const missingDates = [];
   const leaveDates = [];
+  let workingDaysCount = 0;
 
   while (cursor <= endObj) {
     // Trừ ngày Chủ nhật (getDay() === 0)
     if (cursor.getDay() !== 0) {
+      workingDaysCount += 1;
       const iso = toIsoDateLocal(cursor);
       if (workDateSet.has(iso)) {
         // Đã có báo cáo công việc trong ngày
@@ -295,7 +297,8 @@ const analyzeEmployeeAttendanceInRange = (emp, allUnmergedTasks, startDateStr, e
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  return { missingDates, leaveDates };
+  const requiredReportDays = Math.max(0, workingDaysCount - leaveDates.length);
+  return { missingDates, leaveDates, workingDaysCount, requiredReportDays };
 };
 
 const getActiveReportMonth = (sysSettings) => {
@@ -647,6 +650,98 @@ const getMartechLogoBase64 = () => {
   ctx.fillText('Energy Solutions', 188, 102);
 
   return canvas.toDataURL('image/png');
+};
+
+const getMartechSquareIconBase64 = (size = 512) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // Nền bo góc xanh dương đặc trưng Martech
+  const radius = size * 0.22;
+  ctx.fillStyle = '#0066b3';
+  ctx.beginPath();
+  ctx.moveTo(radius, 0);
+  ctx.lineTo(size - radius, 0);
+  ctx.quadraticCurveTo(size, 0, size, radius);
+  ctx.lineTo(size, size - radius);
+  ctx.quadraticCurveTo(size, size, size - radius, size);
+  ctx.lineTo(radius, size);
+  ctx.quadraticCurveTo(0, size, 0, size - radius);
+  ctx.lineTo(0, radius);
+  ctx.quadraticCurveTo(0, 0, radius, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // Vòng tròn trắng biểu tượng Martech
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = size * 0.042;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.34, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Tam giác trắng bên trong vòng tròn
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * 0.31);
+  ctx.lineTo(cx - size * 0.27, cy + size * 0.19);
+  ctx.lineTo(cx + size * 0.27, cy + size * 0.19);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Chữ M đậm ở tâm
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `900 ${Math.round(size * 0.26)}px Arial, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('M', cx, cy + size * 0.16);
+
+  return canvas.toDataURL('image/png');
+};
+
+const applyAppBrandingIcons = (customIconDataUrl) => {
+  if (typeof document === 'undefined') return;
+  try {
+    const icon192 = customIconDataUrl || getMartechSquareIconBase64(192);
+    const icon512 = customIconDataUrl || getMartechSquareIconBase64(512);
+
+    document.title = 'Martech Boiler - Quản Lý Bảo Trì';
+
+    const upsertLink = (rel, attrs = {}) => {
+      let link = document.querySelector(`link[rel="${rel}"]`);
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = rel;
+        document.head.appendChild(link);
+      }
+      Object.entries(attrs).forEach(([k, v]) => link.setAttribute(k, v));
+    };
+
+    upsertLink('icon', { type: 'image/png', href: icon192 });
+    upsertLink('shortcut icon', { type: 'image/png', href: icon192 });
+    upsertLink('apple-touch-icon', { sizes: '180x180', href: icon192 });
+
+    const manifestObj = {
+      name: 'Hệ thống Quản lý Bảo trì - Martech Boiler',
+      short_name: 'Martech Bảo Trì',
+      start_url: '.',
+      display: 'standalone',
+      background_color: '#0f172a',
+      theme_color: '#0066b3',
+      icons: [
+        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+      ]
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+    const manifestUrl = URL.createObjectURL(manifestBlob);
+    upsertLink('manifest', { href: manifestUrl });
+  } catch (e) {
+    console.warn('Không thể cập nhật biểu tượng ứng dụng:', e);
+  }
 };
 
 const loadXLSX = async () => {
@@ -2570,6 +2665,7 @@ const InventoryView = ({ inventory, setView, showNotification, saveInventoryData
 const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, saveSettings }) => {
     const [url, setUrl] = useState(googleSheetUrl);
     const [errTimes, setErrTimes] = useState(sysSettings?.error_times || { level1: 1.5, level2: 4, level3: 24 });
+    const [appIcon, setAppIcon] = useState(sysSettings?.app_icon || '');
     const [monthConfig, setMonthConfig] = useState(() => ({
         startDay: sysSettings?.month_config?.startDay ?? 16,
         autoDetectMonth: sysSettings?.month_config?.autoDetectMonth !== false,
@@ -2581,13 +2677,41 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
         : (monthConfig.defaultMonth || getActiveReportMonth(sysSettings));
     const previewCycle = getMonthCycleRange(previewMonth, monthConfig.startDay);
 
+    const handleAppIconUpload = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, 256, 256);
+                const scale = Math.min(256 / img.width, 256 / img.height);
+                const w = img.width * scale;
+                const h = img.height * scale;
+                ctx.drawImage(img, (256 - w) / 2, (256 - h) / 2, w, h);
+                const dataUrl = canvas.toDataURL('image/png');
+                setAppIcon(dataUrl);
+                applyAppBrandingIcons(dataUrl);
+                showNotification('Đã tải ảnh logo ứng dụng! Nhấn "Lưu Cấu Hình" để áp dụng.');
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = null;
+    };
+
     const handleSave = () => {
         const cleanMonthConfig = {
             startDay: Math.min(28, Math.max(1, Number(monthConfig.startDay) || 16)),
             autoDetectMonth: Boolean(monthConfig.autoDetectMonth),
             defaultMonth: monthConfig.defaultMonth || previewMonth
         };
-        saveSettings(url, { ...sysSettings, error_times: errTimes, month_config: cleanMonthConfig });
+        saveSettings(url, { ...sysSettings, error_times: errTimes, month_config: cleanMonthConfig, app_icon: appIcon });
+        applyAppBrandingIcons(appIcon);
         showNotification('Đã lưu cấu hình!');
         setView('dashboard');
     };
@@ -2674,6 +2798,41 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
                   <div>
                       <label className="block text-sm font-bold text-slate-700 mb-2">Lỗi Mức 3 mặc định (Giờ)</label>
                       <input type="number" step="1" value={errTimes.level3} onChange={(e) => setErrTimes({...errTimes, level3: parseFloat(e.target.value) || 0})} className="w-full p-4 border border-slate-300 rounded-xl text-base focus:ring-2 focus:ring-red-500 outline-none bg-slate-50" />
+                  </div>
+              </div>
+          </div>
+
+          <div className="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-3xl border border-slate-200 shadow-sm">
+              <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 border-b pb-4 flex items-center"><ImageIcon className="w-6 h-6 mr-2 text-blue-600"/> Biểu tượng &amp; Logo Ứng Dụng (App Icon)</h3>
+              <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <img
+                      src={appIcon || getMartechSquareIconBase64(192)}
+                      alt="App Icon Preview"
+                      className="w-20 h-20 rounded-2xl border-2 border-slate-200 shadow-md object-contain bg-white shrink-0"
+                  />
+                  <div className="flex-1 space-y-3 text-center sm:text-left">
+                      <p className="text-xs md:text-sm text-slate-600 leading-relaxed">
+                          Biểu tượng này hiển thị trên tab trình duyệt và khi cài đặt ứng dụng ra màn hình chính (Windows Desktop / Điện thoại).
+                      </p>
+                      <div className="flex flex-wrap justify-center sm:justify-start gap-2.5">
+                          <label className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold cursor-pointer transition-colors shadow-sm inline-flex items-center gap-2">
+                              <Upload className="w-4 h-4" /> Tải ảnh logo mới (.png / .jpg)
+                              <input type="file" accept="image/*" onChange={handleAppIconUpload} className="hidden" />
+                          </label>
+                          {appIcon && (
+                              <button
+                                  type="button"
+                                  onClick={() => {
+                                      setAppIcon('');
+                                      applyAppBrandingIcons('');
+                                      showNotification('Đã khôi phục logo mặc định Martech Boiler');
+                                  }}
+                                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-bold transition-colors"
+                              >
+                                  Dùng logo mặc định
+                              </button>
+                          )}
+                      </div>
                   </div>
               </div>
           </div>
@@ -4145,12 +4304,32 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
 
   // Hàm lấy chỉ số tự động từ Sổ Ghi Công Việc chia theo 4 tuần của chu kỳ tháng
   const getAutoWeeklyMetricsFromTasks = (emp) => {
-    const weeks = [
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 }
-    ];
+    const yesterdayStr = getYesterdayDateStr();
+    const weeks = cycleInfo.weeks.map((wMeta) => {
+      const wStart = wMeta.startDate;
+      const wEnd = wMeta.endDate <= yesterdayStr ? wMeta.endDate : yesterdayStr;
+      let wWorkingDays = 0;
+      if (wStart && wEnd && wStart <= wEnd) {
+        const [sy, sm, sd] = wStart.split('-').map(Number);
+        const [ey, em, ed] = wEnd.split('-').map(Number);
+        const cur = new Date(sy, sm - 1, sd);
+        const endD = new Date(ey, em - 1, ed);
+        while (cur <= endD) {
+          if (cur.getDay() !== 0) wWorkingDays += 1;
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      return {
+        pmPlan: 0,
+        pmDone: 0,
+        cmTotal: 0,
+        cmDone: 0,
+        missingDays: 0,
+        leaveDays: 0,
+        workingDays: wWorkingDays,
+        requiredReportDays: wWorkingDays
+      };
+    });
 
     const empTasks = monthTasks.filter(t =>
       t.username === emp.username || t.technicianName === emp.name || t.technicianName === emp.username
@@ -4199,6 +4378,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       for (let i = 0; i < cycleInfo.weeks.length; i++) {
         if (lObj.date >= cycleInfo.weeks[i].startDate && lObj.date <= cycleInfo.weeks[i].endDate) {
           weeks[i].leaveDays += 1;
+          weeks[i].requiredReportDays = Math.max(0, weeks[i].workingDays - weeks[i].leaveDays);
           break;
         }
       }
@@ -4242,7 +4422,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
         cmTotal: savedW.cmTotal !== undefined ? Number(savedW.cmTotal) : autoW.cmTotal,
         cmDone: savedW.cmDone !== undefined ? Number(savedW.cmDone) : autoW.cmDone,
         missingDays: autoW.missingDays,
-        leaveDays: autoW.leaveDays
+        leaveDays: autoW.leaveDays,
+        workingDays: autoW.workingDays,
+        requiredReportDays: autoW.requiredReportDays
       };
     });
   };
@@ -4258,56 +4440,68 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       acc.cmDone += (w.cmDone || 0);
       acc.missingDays += (w.missingDays || 0);
       acc.leaveDays += (w.leaveDays || 0);
+      acc.workingDays += (w.workingDays || 0);
+      acc.requiredReportDays += (w.requiredReportDays || 0);
       return acc;
-    }, { errors: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 });
+    }, { errors: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0, workingDays: 0, requiredReportDays: 0 });
   };
 
-  // Công thức tính điểm KPI chuẩn theo bảng mẫu (20% Kỷ luật & 5S | 70% PM >95% | 10% CM SLA 90%)
+  // Công thức tính điểm KPI chuẩn (20% Kỷ luật & 5S | 50% PM >95% | 20% CM SLA 90% | Khấu trừ thiếu báo cáo ngày trong Mục II)
   const computeMetricsKPI = (metrics) => {
     // 1. Mục I: Kỷ luật & 5S (20%) - Bị từ 1 lỗi trở lên sẽ mất toàn bộ 20% điểm
     const errorCount = Number(metrics.errors || 0);
     const scoreI = errorCount >= 1 ? 0 : 100;
     const rateI = scoreI / 100;
 
-    // 2. Mục II.1: Bảo dưỡng định kỳ PM (70%, mục tiêu >= 95%)
-    // Mỗi ngày nhập thiếu (trừ Chủ nhật & Nghỉ phép) được đánh giá Không hoàn thành (+1 vào mẫu số Kế hoạch B, +0 vào Đạt A)
-    const missingDays = Number(metrics.missingDays || 0);
-    const leaveDays = Number(metrics.leaveDays || 0);
-    const effectiveTotalPlan = (metrics.pmPlan || 0) + missingDays;
-    const effectivePM = Math.max(0, effectiveTotalPlan - (metrics.pmPostponed || 0));
+    // 2. Mục II.1: Bảo dưỡng định kỳ PM (50%, mục tiêu >= 95%)
+    const effectivePM = Math.max(0, (metrics.pmPlan || 0) - (metrics.pmPostponed || 0));
     let t1 = 1.0;
     if (effectivePM > 0) {
       t1 = (metrics.pmDone || 0) / effectivePM;
     }
     const scorePM = t1 >= 0.95 ? 1.0 : (t1 / 0.95);
 
-    // 3. Mục II.2: Sự cố đột xuất CM (10%, mục tiêu >= 90%)
+    // 3. Mục II.2: Sự cố đột xuất CM (30%, mục tiêu >= 90%)
     let t2 = 1.0;
     if ((metrics.cmTotal || 0) > 0) {
       t2 = (metrics.cmDone || 0) / metrics.cmTotal;
     }
     const scoreCM = t2 >= 0.90 ? 1.0 : (t2 / 0.90);
 
-    // 4. Điểm quy đổi theo trọng số
+    // 4. Điểm quy đổi theo trọng số (Mục I: 20% | Mục II.1: 50% | Mục II.2: 30%)
     const weightedI = rateI * 0.20;
-    const weightedPM = scorePM * 0.70;
-    const weightedCM = scoreCM * 0.10;
-    const totalScore = weightedI + weightedPM + weightedCM;
+    const weightedPM = scorePM * 0.50;
+    const weightedCM = scoreCM * 0.30;
 
-    // 5. Xếp loại A, B, C, D
+    // Lỗi không nhập báo cáo ngày (trừ Chủ nhật & Nghỉ phép) trừ KPI trực tiếp trong tổng điểm 80% của Mục II (II.1 + II.2)
+    const missingDays = Number(metrics.missingDays || 0);
+    const leaveDays = Number(metrics.leaveDays || 0);
+    const requiredReportDays = Number(metrics.requiredReportDays || 0);
+    const rawSection2Score = weightedPM + weightedCM;
+    const reportComplianceRate = requiredReportDays > 0
+      ? Math.max(0, (requiredReportDays - missingDays) / requiredReportDays)
+      : (missingDays > 0 ? 0 : 1.0);
+    const finalSection2Score = rawSection2Score * reportComplianceRate;
+    const missingDayDeduction = rawSection2Score - finalSection2Score;
+
+    const totalScore = weightedI + finalSection2Score;
+
+    // 5. Xếp loại A, B, C, D trên tổng trọng số 100% (20% + 50% + 30%)
+    const maxPossibleWeight = 1.00;
+    const achievementRatio = totalScore / maxPossibleWeight;
     let rank = 'Loại D';
     let rankClass = 'bg-rose-100 text-rose-800 border-rose-200';
     let salaryPct = '0 - 70%';
 
-    if (totalScore >= 0.95) {
+    if (achievementRatio >= 0.95) {
       rank = 'Loại A';
       rankClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
       salaryPct = '100% + Thưởng';
-    } else if (totalScore >= 0.85) {
+    } else if (achievementRatio >= 0.85) {
       rank = 'Loại B';
       rankClass = 'bg-blue-100 text-blue-800 border-blue-200';
       salaryPct = '100%';
-    } else if (totalScore >= 0.70) {
+    } else if (achievementRatio >= 0.70) {
       rank = 'Loại C';
       rankClass = 'bg-amber-100 text-amber-800 border-amber-200';
       salaryPct = '80%';
@@ -4317,7 +4511,11 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       ...metrics,
       missingDays,
       leaveDays,
-      effectiveTotalPlan,
+      requiredReportDays,
+      reportComplianceRate,
+      rawSection2Score,
+      finalSection2Score,
+      missingDayDeduction,
       scoreI,
       rateI,
       effectivePM,
@@ -4487,9 +4685,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       const headers = [
         'STT', 'Mã NV', 'Họ và Tên',
         'Số Lỗi (I)', '% Mục I (20%)',
-        'Tổng KH PM (B)', 'Hoãn (C)', 'Nghỉ phép', 'Thiếu ngày', 'Tổng Đạt PM (A)', '% PM Tháng (70%)',
-        'Tổng Sự Cố (ΣK)', 'Tổng CM Đạt (K)', '% CM Tháng (10%)',
-        'Tổng Điểm KPI Tháng', 'Xếp Loại',
+        'Tổng KH PM (B)', 'Hoãn (C)', 'Tổng Đạt PM (A)', '% PM Tháng (50%)',
+        'Tổng Sự Cố (ΣK)', 'Tổng CM Đạt (K)', '% CM Tháng (30%)',
+        'Thiếu ngày', 'Trừ Thiếu Ngày (Mục II)', 'Tổng Điểm KPI Tháng', 'Xếp Loại',
         `Tuần 1 (${cycleInfo.weeks[0]?.shortRange || ''})`,
         `Tuần 2 (${cycleInfo.weeks[1]?.shortRange || ''})`,
         `Tuần 3 (${cycleInfo.weeks[2]?.shortRange || ''})`,
@@ -4508,9 +4706,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       sheet.columns = [
         { width: 6 }, { width: 12 }, { width: 22 },
         { width: 11 }, { width: 13 },
-        { width: 13 }, { width: 10 }, { width: 11 }, { width: 11 }, { width: 13 }, { width: 14 },
+        { width: 13 }, { width: 10 }, { width: 13 }, { width: 14 },
         { width: 12 }, { width: 12 }, { width: 14 },
-        { width: 16 }, { width: 12 },
+        { width: 12 }, { width: 15 }, { width: 16 }, { width: 12 },
         { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }
       ];
 
@@ -4523,15 +4721,15 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
           r.emp.name || '',
           res.errors,
           `${res.scoreI}%`,
-          res.effectiveTotalPlan,
+          res.pmPlan,
           res.pmPostponed,
-          res.leaveDays,
-          res.missingDays,
           res.pmDone,
           `${(res.t1 * 100).toFixed(1)}%`,
           res.cmTotal,
           res.cmDone,
           `${(res.t2 * 100).toFixed(1)}%`,
+          res.missingDays,
+          res.missingDayDeduction > 0 ? `-${(res.missingDayDeduction * 100).toFixed(1)}%` : '0.0%',
           `${(res.totalScore * 100).toFixed(1)}%`,
           res.rank,
           ...wScores
@@ -4664,7 +4862,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
 
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tỷ lệ hoàn thành PM (70%)</p>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tỷ lệ hoàn thành PM (50%)</p>
                     <h3 className="text-2xl font-black text-indigo-600 mt-1">{avgPmPct}%</h3>
                     <span className="text-xs text-slate-500">Mục tiêu: &gt;95%</span>
                   </div>
@@ -4770,8 +4968,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th rowSpan="2" className="p-2 border-r border-slate-200 w-10">STT</th>
                         <th colSpan="2" className="p-2 border-r border-slate-200 bg-slate-200/60">THÔNG TIN NHÂN SỰ</th>
                         <th colSpan="2" className="p-2 border-r border-slate-200 bg-amber-50 text-amber-900">MỤC I: KỶ LUẬT &amp; 5S (20%)</th>
-                        <th colSpan="6" className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MỤC II.1: BẢO DƯỠNG ĐỊNH KỲ - PM (70%)</th>
-                        <th colSpan="3" className="p-2 border-r border-slate-200 bg-emerald-50 text-emerald-900">MỤC II.2: SỰ CỐ ĐỘT XUẤT - CM (10%)</th>
+                        <th colSpan="4" className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MỤC II.1: BẢO DƯỠNG ĐỊNH KỲ - PM (50%)</th>
+                        <th colSpan="3" className="p-2 border-r border-slate-200 bg-emerald-50 text-emerald-900">MỤC II.2: SỰ CỐ ĐỘT XUẤT - CM (30%)</th>
+                        <th rowSpan="2" className="p-2 border-r border-slate-200 w-20 bg-rose-50 text-rose-700" title="Số ngày nhập thiếu báo cáo (trừ Chủ nhật &amp; Nghỉ phép) -&gt; Trừ trực tiếp vào tổng 80% KPI của Mục II (II.1 + II.2)">Thiếu ngày</th>
                         <th className="p-2 bg-purple-50 text-purple-900">TỔNG HỢP</th>
                         <th rowSpan="2" className="p-2 border-l border-slate-200 w-24 no-print">Tác vụ</th>
                       </tr>
@@ -4785,12 +4984,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th className="p-2 border-r border-slate-200 w-20 bg-amber-50 font-black" title="Đạt 100% nếu 0 lỗi; Mất 20% điểm (0%) nếu ≥ 1 lỗi">% Mục I</th>
 
                         {/* KPI II.1 */}
-                        <th className="p-2 border-r border-slate-200 w-20" title="Tổng số việc giao theo lịch (+ Số ngày nhập thiếu)">K/Hoạch (B)</th>
+                        <th className="p-2 border-r border-slate-200 w-20" title="Tổng số việc bảo dưỡng định kỳ giao theo lịch">K/Hoạch (B)</th>
                         <th className="p-2 border-r border-slate-200 w-14" title="Số việc hoãn hợp lệ do khách quan">Hoãn (C)</th>
-                        <th className="p-2 border-r border-slate-200 w-16 text-teal-700" title="Số ngày nghỉ phép hợp lệ (Không trừ KPI)">Nghỉ phép</th>
-                        <th className="p-2 border-r border-slate-200 w-16 text-rose-600" title="Số ngày nhập thiếu báo cáo (trừ Chủ nhật) -> Đánh giá Không hoàn thành & trừ % KPI">Thiếu ngày</th>
                         <th className="p-2 border-r border-slate-200 w-16" title="Số việc hoàn thành đúng hạn và nghiệm thu">Đạt (A)</th>
-                        <th className="p-2 border-r border-slate-200 w-20 bg-blue-50 font-black" title="Tỷ lệ A / (B + Thiếu ngày - C)">% Đạt (T1)</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-blue-50 font-black" title="Tỷ lệ A / (B - C)">% Đạt (T1)</th>
 
                         {/* KPI II.2 */}
                         <th className="p-2 border-r border-slate-200 w-16" title="Tổng số ca sự cố phát sinh">Tổng (ΣK)</th>
@@ -4804,7 +5001,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <tbody className="divide-y divide-slate-200">
                       {computedRows.length === 0 ? (
                         <tr>
-                          <td colSpan="16" className="p-8 text-center text-slate-400">Chưa có dữ liệu nhân sự kỹ thuật.</td>
+                          <td colSpan="15" className="p-8 text-center text-slate-400">Chưa có dữ liệu nhân sự kỹ thuật.</td>
                         </tr>
                       ) : (
                         computedRows.map((row, idx) => {
@@ -4824,25 +5021,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                   <td className={`p-2 border-r border-slate-200 font-black ${activeMetrics.errors >= 1 ? 'bg-rose-100/70 text-rose-700' : 'bg-amber-50/70 text-amber-900'}`}>{activeResult.scoreI}%</td>
 
                                   {/* MỤC II.1 (AGGREGATED) */}
-                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch (bao gồm ngày thiếu báo cáo)" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">
-                                    <div>{activeResult.effectiveTotalPlan}</div>
-                                    {activeResult.missingDays > 0 && (
-                                      <div className="text-[10px] font-normal text-rose-600">({activeMetrics.pmPlan}+{activeResult.missingDays} thiếu)</div>
-                                    )}
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch bảo dưỡng định kỳ 4 tuần" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">
+                                    {activeMetrics.pmPlan}
                                   </td>
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoãn hợp lệ 4 tuần" className="p-2 border-r border-slate-200 text-slate-500 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPostponed}</td>
-                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Xem/Duyệt ngày nghỉ phép (Không trừ KPI)" className="p-2 border-r border-slate-200 font-bold text-teal-700 cursor-pointer hover:bg-teal-50">
-                                    {activeResult.leaveDays > 0 ? <span className="bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">{activeResult.leaveDays}</span> : '0'}
-                                  </td>
-                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Bấm để xem chi tiết các ngày nhập thiếu hoặc duyệt Nghỉ phép" className="p-2 border-r border-slate-200 font-bold cursor-pointer hover:bg-rose-50">
-                                    {activeResult.missingDays > 0 ? (
-                                      <span className="bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-black">
-                                        {activeResult.missingDays}
-                                      </span>
-                                    ) : (
-                                      <span className="text-slate-400">0</span>
-                                    )}
-                                  </td>
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoàn thành 4 tuần" className="p-2 border-r border-slate-200 font-bold text-blue-700 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmDone}</td>
                                   <td className="p-2 border-r border-slate-200 font-black bg-blue-50/70 text-blue-900">{(activeResult.t1 * 100).toFixed(1)}%</td>
 
@@ -4850,6 +5032,22 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng sự cố 4 tuần" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">{activeMetrics.cmTotal}</td>
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng xử lý đạt SLA 4 tuần" className="p-2 border-r border-slate-200 font-bold text-emerald-700 cursor-pointer hover:bg-purple-50/60">{activeMetrics.cmDone}</td>
                                   <td className="p-2 border-r border-slate-200 font-black bg-emerald-50/70 text-emerald-900">{(activeResult.t2 * 100).toFixed(1)}%</td>
+
+                                  {/* CỘT ĐỘC LẬP: THIẾU NGÀY */}
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Bấm để xem chi tiết ngày thiếu báo cáo &amp; duyệt nghỉ phép" className="p-2 border-r border-slate-200 font-bold bg-rose-50/30 cursor-pointer hover:bg-rose-50">
+                                    {activeResult.missingDays > 0 ? (
+                                      <div className="flex flex-col items-center gap-0.5">
+                                        <span className="bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-black">
+                                          {activeResult.missingDays}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-rose-600">
+                                          -{(activeResult.missingDayDeduction * 100).toFixed(1)}%
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-400">0</span>
+                                    )}
+                                  </td>
                                 </>
                               ) : (
                                 <>
@@ -4866,12 +5064,6 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                   <td className="p-1 border-r border-slate-200">
                                     <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmPostponed} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmPostponed', e.target.value)} className="w-full text-center text-slate-500 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
                                   </td>
-                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} className="p-2 border-r border-slate-200 font-bold text-teal-700 cursor-pointer hover:bg-teal-50">
-                                    {activeResult.leaveDays}
-                                  </td>
-                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} className="p-2 border-r border-slate-200 font-bold cursor-pointer hover:bg-rose-50">
-                                    {activeResult.missingDays > 0 ? <span className="text-rose-600 font-black">{activeResult.missingDays}</span> : <span className="text-slate-400">0</span>}
-                                  </td>
                                   <td className="p-1 border-r border-slate-200">
                                     <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmDone} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmDone', e.target.value)} className="w-full text-center font-bold text-blue-700 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
                                   </td>
@@ -4885,6 +5077,11 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                     <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.cmDone} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'cmDone', e.target.value)} className="w-full text-center font-bold text-emerald-700 bg-white border border-slate-200 focus:ring-1 focus:ring-emerald-500 rounded py-1 disabled:bg-slate-100" />
                                   </td>
                                   <td className="p-2 border-r border-slate-200 font-black bg-emerald-50/70 text-emerald-900">{(activeResult.t2 * 100).toFixed(1)}%</td>
+
+                                  {/* CỘT ĐỘC LẬP: THIẾU NGÀY */}
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Bấm để xem chi tiết ngày thiếu báo cáo &amp; duyệt nghỉ phép" className="p-2 border-r border-slate-200 font-bold bg-rose-50/30 cursor-pointer hover:bg-rose-50">
+                                    {activeResult.missingDays > 0 ? <span className="text-rose-600 font-black">{activeResult.missingDays}</span> : <span className="text-slate-400">0</span>}
+                                  </td>
                                 </>
                               )}
 
@@ -4938,7 +5135,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> <b>70 - 84%:</b> Cải thiện</span>
                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> <b>&lt;70%:</b> Không đạt</span>
                   </div>
-                  <span className="italic text-[11px] text-slate-500">* Ngày nhập thiếu báo cáo (trừ Chủ nhật &amp; Nghỉ phép) tự động đánh giá Không hoàn thành (+1 vào Kế hoạch B) và trừ % KPI.</span>
+                  <span className="italic text-[11px] text-slate-500">* Lỗi không nhập báo cáo ngày (trừ Chủ nhật &amp; Nghỉ phép) tự động trừ % KPI trong tổng điểm của Mục II (II.1 + II.2), không ảnh hưởng Mục I (20%).</span>
                 </div>
               </div>
             </div>
@@ -5091,13 +5288,13 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <td className="p-2.5 border-r border-slate-300">
                           <p className="font-bold text-slate-800">Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì định kỳ (PM)</p>
                           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                            Đo lường mức độ hoàn thành phiếu kiểm tra định kỳ (Master PM) &amp; tuân thủ báo cáo ngày.<br />
+                            Đo lường mức độ hoàn thành phiếu kiểm tra định kỳ (Master PM).<br />
                             <span className="text-blue-600 font-mono text-[10px]">
-                              (Tổng tháng: {singleSelectedRow.monthlyResult.pmDone} đạt / [{singleSelectedRow.monthlyResult.pmPlan} kế hoạch{singleSelectedRow.monthlyResult.missingDays > 0 ? ` + ${singleSelectedRow.monthlyResult.missingDays} ngày thiếu` : ''} - {singleSelectedRow.monthlyResult.pmPostponed} hoãn] = {(singleSelectedRow.monthlyResult.t1 * 100).toFixed(1)}%{singleSelectedRow.monthlyResult.leaveDays > 0 ? ` | Nghỉ phép: ${singleSelectedRow.monthlyResult.leaveDays} ngày` : ''})
+                              (Tổng tháng: {singleSelectedRow.monthlyResult.pmDone} đạt / [{singleSelectedRow.monthlyResult.pmPlan} kế hoạch - {singleSelectedRow.monthlyResult.pmPostponed} hoãn] = {(singleSelectedRow.monthlyResult.t1 * 100).toFixed(1)}%)
                             </span>
                           </p>
                         </td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300">70%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">50%</td>
                         <td className="p-2.5 text-center font-semibold border-r border-slate-300">&gt; 95%</td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">
                           {(singleSelectedRow.monthlyResult.scorePM * 100).toFixed(1)}%
@@ -5120,7 +5317,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                             </span>
                           </p>
                         </td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300">10%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">20%</td>
                         <td className="p-2.5 text-center font-semibold border-r border-slate-300">90%</td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">
                           {(singleSelectedRow.monthlyResult.scoreCM * 100).toFixed(1)}%
@@ -5129,6 +5326,26 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                           {(singleSelectedRow.monthlyResult.weightedCM * 100).toFixed(1)}%
                         </td>
                         <td className="p-2 text-[11px] text-slate-500">Phiếu sửa chữa đột xuất</td>
+                      </tr>
+
+                      {/* Row II.3: Khấu trừ thiếu báo cáo ngày trong Mục II (II.1 + II.2) */}
+                      <tr className="border-b border-slate-300 bg-rose-50/40">
+                        <td className="p-2.5 text-center border-r border-slate-300">3</td>
+                        <td className="p-2.5 border-r border-slate-300">
+                          <p className="font-bold text-slate-800">Khấu trừ lỗi không nhập báo cáo ngày (Áp dụng trên tổng 80% của Mục II.1 &amp; II.2)</p>
+                          <p className="text-[11px] text-slate-600 mt-0.5">
+                            Thiếu <b>{singleSelectedRow.monthlyResult.missingDays}</b> / {singleSelectedRow.monthlyResult.requiredReportDays} ngày làm việc (đã trừ Chủ nhật &amp; ngày nghỉ phép).
+                          </p>
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">-</td>
+                        <td className="p-2.5 text-center border-r border-slate-300">0 ngày thiếu</td>
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.missingDays > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                          {(singleSelectedRow.monthlyResult.reportComplianceRate * 100).toFixed(1)}%
+                        </td>
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.missingDayDeduction > 0 ? 'text-rose-600' : 'text-slate-600'}`}>
+                          {singleSelectedRow.monthlyResult.missingDayDeduction > 0 ? `-${(singleSelectedRow.monthlyResult.missingDayDeduction * 100).toFixed(1)}%` : '0.0%'}
+                        </td>
+                        <td className="p-2 text-[11px] text-slate-500">Trừ trong tổng điểm Mục II</td>
                       </tr>
 
                       {/* TOTAL ROW */}
@@ -5159,7 +5376,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th className="p-1.5 border-r border-slate-300">Thời gian</th>
                         <th className="p-1.5 border-r border-slate-300">Số Lỗi (Mục I)</th>
                         <th className="p-1.5 border-r border-slate-300">Điểm Mục I</th>
-                        <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH + Thiếu - Hoãn)</th>
+                        <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH - Hoãn)</th>
                         <th className="p-1.5 border-r border-slate-300">Thiếu / Phép</th>
                         <th className="p-1.5 border-r border-slate-300">% Đạt PM</th>
                         <th className="p-1.5 border-r border-slate-300">CM: Đạt / Tổng ca</th>
@@ -5170,7 +5387,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <tbody className="divide-y divide-slate-300">
                       {singleSelectedRow.weeks.map((w, wIdx) => {
                         const wRes = computeMetricsKPI(w);
-                        const effPM = Math.max(0, (w.pmPlan || 0) + (w.missingDays || 0) - (w.pmPostponed || 0));
+                        const effPM = Math.max(0, (w.pmPlan || 0) - (w.pmPostponed || 0));
                         const wMeta = cycleInfo.weeks[wIdx];
                         return (
                           <tr key={wIdx}>
@@ -5180,7 +5397,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                             <td className={`p-1.5 border-r border-slate-300 ${w.errors >= 1 ? 'text-rose-600 font-bold' : ''}`}>{w.errors} lỗi</td>
                             <td className="p-1.5 border-r border-slate-300 font-semibold">{wRes.scoreI}%</td>
                             <td className="p-1.5 border-r border-slate-300">
-                              {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}+{w.missingDays || 0}-{w.pmPostponed})</span>
+                              {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}-{w.pmPostponed})</span>
                             </td>
                             <td className="p-1.5 border-r border-slate-300 text-[10px]">
                               <span className={w.missingDays > 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}>{w.missingDays || 0} thiếu</span> / <span className="text-teal-700 font-semibold">{w.leaveDays || 0} phép</span>
@@ -5258,7 +5475,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                   <FileSpreadsheet className="w-5 h-5 text-emerald-600" /> HƯỚNG DẪN THIẾT LẬP CÔNG THỨC TRÊN EXCEL / GOOGLE SHEETS
                 </h3>
                 <p className="text-xs md:text-sm text-slate-600 mt-1">
-                  Bộ công thức chuẩn hóa áp dụng cho bảng đánh giá KPI Bảo trì (20% Kỷ luật & 5S • 70% Bảo dưỡng PM • 10% Sự cố đột xuất CM):
+                  Bộ công thức chuẩn hóa áp dụng cho bảng đánh giá KPI Bảo trì (20% Kỷ luật &amp; 5S • 50% Bảo dưỡng PM • 30% Sự cố đột xuất CM):
                 </p>
               </div>
 
@@ -5281,25 +5498,24 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-black">2</span>
-                    Tiêu chí II.1: Bảo dưỡng định kỳ PM &amp; Chuyên cần ngày (70%)
+                    Tiêu chí II.1: Bảo dưỡng định kỳ PM (50%)
                   </h4>
-                  <p className="text-xs text-slate-600">Ô <code>F5</code> là Kế hoạch (B), <code>G5</code> là Hoãn (C), <code>H5</code> là Thiếu ngày (trừ CN &amp; Nghỉ phép), <code>I5</code> là Đạt (A):</p>
+                  <p className="text-xs text-slate-600">Ô <code>F5</code> là Kế hoạch (B), <code>G5</code> là Hoãn (C), <code>I5</code> là Đạt (A):</p>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
-                    <code className="overflow-x-auto">=IF((F5 + H5 - G5) &gt; 0, I5 / (F5 + H5 - G5), 1)</code>
-                    <button onClick={() => copyFormulaText('=IF((F5 + H5 - G5) > 0, I5 / (F5 + H5 - G5), 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                    <code className="overflow-x-auto">=IF((F5 - G5) &gt; 0, I5 / (F5 - G5), 1)</code>
+                    <button onClick={() => copyFormulaText('=IF((F5 - G5) > 0, I5 / (F5 - G5), 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
                     <code className="overflow-x-auto">=IF(T1 &gt;= 0.95, 1, T1 / 0.95)</code>
                     <button onClick={() => copyFormulaText('=IF(T1 >= 0.95, 1, T1 / 0.95)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
-                  <p className="text-[11px] text-slate-500 italic">Mỗi ngày nhập thiếu (trừ Chủ nhật) cộng thêm 1 vào mẫu số (đánh giá Không hoàn thành); ngày Nghỉ phép không cộng vào mẫu số nên không bị trừ KPI.</p>
                 </div>
 
                 {/* KPI 2.2 */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">3</span>
-                    Tiêu chí II.2: Sự cố đột xuất CM (10%)
+                    Tiêu chí II.2: Sự cố đột xuất CM (30%)
                   </h4>
                   <p className="text-xs text-slate-600">Ô <code>J5</code> là Tổng sự cố (ΣK), <code>K5</code> là Số ca đạt SLA (K):</p>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
@@ -5316,15 +5532,33 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-black">4</span>
-                    Tổng điểm KPI & Xếp loại (A, B, C, D)
+                    Khấu trừ thiếu báo cáo ngày trong Mục II (80%) &amp; Tổng điểm KPI
                   </h4>
+                  <p className="text-xs text-slate-600">Tỷ lệ chuyên cần báo cáo ngày <code>TyLe_BC = (NgayCong - ThieuNgay) / NgayCong</code>:</p>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
-                    <code className="overflow-x-auto">=(KQ_I * 20%) + (KQ_PM * 70%) + (KQ_CM * 10%)</code>
-                    <button onClick={() => copyFormulaText('=(KQ_I * 20%) + (KQ_PM * 70%) + (KQ_CM * 10%)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                    <code className="overflow-x-auto">=(KQ_I * 20%) + ((KQ_PM * 50% + KQ_CM * 30%) * TyLe_BC)</code>
+                    <button onClick={() => copyFormulaText('=(KQ_I * 20%) + ((KQ_PM * 50% + KQ_CM * 30%) * TyLe_BC)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
                     <code className="overflow-x-auto">=IF(Total&gt;=0.95,"Loại A",IF(Total&gt;=0.85,"Loại B",IF(Total&gt;=0.7,"Loại C","Loại D")))</code>
                     <button onClick={() => copyFormulaText('=IF(Total>=0.95,"Loại A",IF(Total>=0.85,"Loại B",IF(Total>=0.7,"Loại C","Loại D")))')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                </div>
+
+                {/* TOTAL & RANK */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center font-black">4</span>
+                    Khấu trừ thiếu báo cáo ngày trong Mục II &amp; Tổng điểm KPI
+                  </h4>
+                  <p className="text-xs text-slate-600">Tỷ lệ chuyên cần báo cáo ngày <code>TyLe_BC = (NgayCong - ThieuNgay) / NgayCong</code>:</p>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=(KQ_I * 20%) + ((KQ_PM * 50% + KQ_CM * 20%) * TyLe_BC)</code>
+                    <button onClick={() => copyFormulaText('=(KQ_I * 20%) + ((KQ_PM * 50% + KQ_CM * 20%) * TyLe_BC)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                  </div>
+                  <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
+                    <code className="overflow-x-auto">=IF((Total/0.9)&gt;=0.95,"Loại A",IF((Total/0.9)&gt;=0.85,"Loại B",IF((Total/0.9)&gt;=0.7,"Loại C","Loại D")))</code>
+                    <button onClick={() => copyFormulaText('=IF((Total/0.9)>=0.95,"Loại A",IF((Total/0.9)>=0.85,"Loại B",IF((Total/0.9)>=0.7,"Loại C","Loại D")))')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
                 </div>
               </div>
@@ -5714,6 +5948,10 @@ function MainApp() {
   const [isCloudSyncing, setIsCloudSyncing] = useState(!!db);
   const [permissionError, setPermissionError] = useState(false);
   const deletedDailyTaskIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    applyAppBrandingIcons(sysSettings?.app_icon || '');
+  }, [sysSettings?.app_icon]);
 
   const setView = (newView, replace = false) => {
     if (newView === view) return;
