@@ -3469,7 +3469,19 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
             <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                <div className="flex items-center space-x-3 shrink-0"><button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2></div>
+                <div className="flex items-center justify-between gap-3 shrink-0">
+                    <div className="flex items-center space-x-3">
+                        <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
+                        <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2>
+                    </div>
+                    <button
+                        onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                    >
+                        <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                        <span>Tạo báo cáo mới</span>
+                    </button>
+                </div>
                 <div className="flex-1 overflow-x-auto flex items-center gap-2 md:gap-3 xl:justify-end pb-2 xl:pb-0 custom-scrollbar">
                    {user.role === 'admin' && (
                       <div className="relative shrink-0">
@@ -5128,13 +5140,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 </div>
 
                 {/* FOOTER LEGEND */}
-                <div className="p-3.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex flex-wrap justify-between items-center gap-2">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> <b>≥95%:</b> Xuất sắc</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span> <b>85 - 94%:</b> Đạt / Tốt</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> <b>70 - 84%:</b> Cải thiện</span>
-                    <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> <b>&lt;70%:</b> Không đạt</span>
-                  </div>
+                <div className="p-3.5 bg-slate-50 border-t border-slate-200 text-xs text-slate-600 flex flex-wrap justify-end items-center gap-2">
                   <span className="italic text-[11px] text-slate-500">* Lỗi không nhập báo cáo ngày (trừ Chủ nhật &amp; Nghỉ phép) tự động trừ % KPI trong tổng điểm của Mục II (II.1 + II.2), không ảnh hưởng Mục I (20%).</span>
                 </div>
               </div>
