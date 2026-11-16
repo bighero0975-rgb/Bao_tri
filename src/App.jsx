@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff, CalendarClock, Clock, Filter, Zap, Droplets, ChevronDown, ChevronUp, AlertTriangle, Calculator, PlaySquare } from 'lucide-react';
+import { QrCode, Wrench, History, ArrowLeft, Save, CheckCircle, AlertCircle, User, Package, LogOut, FileSpreadsheet, Lock, PieChart, BarChart3, Settings, Printer, Plus, X, Camera, Search, MapPin, ListFilter, Image as ImageIcon, Trash2, Boxes, Edit, Download, Upload, Database, Cloud, CloudOff, CalendarClock, Clock, Filter, Zap, Droplets, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, AlertTriangle, Calculator, PlaySquare } from 'lucide-react';
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
@@ -199,6 +199,24 @@ const getTodayDateStr = () => {
   return `${y}-${m}-${d}`;
 };
 
+const getYesterdayDateStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getVietnameseDayName = (isoDateStr) => {
+  if (!isoDateStr || typeof isoDateStr !== 'string') return '';
+  const parts = isoDateStr.split('-').map(Number);
+  if (parts.length !== 3) return '';
+  const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
+  const days = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+  return days[dateObj.getDay()] || '';
+};
+
 const getFirstDayOfMonthStr = () => {
   const now = new Date();
   const y = now.getFullYear();
@@ -218,6 +236,66 @@ const toIsoDateLocal = (dateObj) => {
   const m = String(dateObj.getMonth() + 1).padStart(2, '0');
   const d = String(dateObj.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+};
+
+const analyzeEmployeeAttendanceInRange = (emp, allUnmergedTasks, startDateStr, endDateStr, sysSettings) => {
+  const yesterdayStr = getYesterdayDateStr();
+  const effectiveEnd = endDateStr && endDateStr <= yesterdayStr ? endDateStr : yesterdayStr;
+
+  if (!emp || !startDateStr || !effectiveEnd || startDateStr > effectiveEnd) {
+    return { missingDates: [], leaveDates: [] };
+  }
+
+  const empTasks = (Array.isArray(allUnmergedTasks) ? allUnmergedTasks : []).filter(
+    t => t && (t.username === emp.username || t.technicianName === emp.name || t.technicianName === emp.username)
+  );
+
+  const workDateSet = new Set();
+  const taskLeaveDateSet = new Set();
+
+  empTasks.forEach(t => {
+    const dStr = String(t.date || '');
+    if (!dStr) return;
+    const isLeave = String(t.type || '').trim().toLowerCase() === 'nghỉ phép';
+    if (isLeave) {
+      taskLeaveDateSet.add(dStr);
+    } else {
+      workDateSet.add(dStr);
+    }
+  });
+
+  const manualLeaveDates = Array.isArray(sysSettings?.kpi_leave_days?.[emp.username])
+    ? sysSettings.kpi_leave_days[emp.username]
+    : [];
+  const manualLeaveSet = new Set(manualLeaveDates);
+
+  const [sy, sm, sd] = startDateStr.split('-').map(Number);
+  const [ey, em, ed] = effectiveEnd.split('-').map(Number);
+  const cursor = new Date(sy, sm - 1, sd);
+  const endObj = new Date(ey, em - 1, ed);
+
+  const missingDates = [];
+  const leaveDates = [];
+
+  while (cursor <= endObj) {
+    // Trừ ngày Chủ nhật (getDay() === 0)
+    if (cursor.getDay() !== 0) {
+      const iso = toIsoDateLocal(cursor);
+      if (workDateSet.has(iso)) {
+        // Đã có báo cáo công việc trong ngày
+      } else if (taskLeaveDateSet.has(iso) || manualLeaveSet.has(iso)) {
+        leaveDates.push({
+          date: iso,
+          source: taskLeaveDateSet.has(iso) ? 'task' : 'admin'
+        });
+      } else {
+        missingDates.push(iso);
+      }
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return { missingDates, leaveDates };
 };
 
 const getActiveReportMonth = (sysSettings) => {
@@ -889,6 +967,131 @@ const EasyTimePicker = ({ label, value, onChange, theme = 'purple', quickTimes =
   );
 };
 
+const VietnameseMonthPicker = ({ value, onChange, className = '', title = 'Chọn tháng báo cáo' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [popupPos, setPopupPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
+
+  const fallbackYM = new Date().toISOString().slice(0, 7);
+  const safeVal = value && /^\d{4}-\d{2}$/.test(value) ? value : fallbackYM;
+  const [yearStr, monthStr] = safeVal.split('-');
+  const selectedYear = parseInt(yearStr, 10) || new Date().getFullYear();
+  const selectedMonth = parseInt(monthStr, 10) || (new Date().getMonth() + 1);
+
+  const [viewYear, setViewYear] = useState(selectedYear);
+
+  const openPicker = () => {
+    setViewYear(selectedYear);
+    if (btnRef.current && typeof window !== 'undefined') {
+      const rect = btnRef.current.getBoundingClientRect();
+      const popupWidth = 272;
+      const popupHeight = 290;
+      const top = Math.min(window.innerHeight - popupHeight - 12, Math.max(12, rect.bottom + 6));
+      const left = Math.min(window.innerWidth - popupWidth - 12, Math.max(12, rect.left));
+      setPopupPos({ top, left });
+    }
+    setIsOpen(true);
+  };
+
+  const handlePickMonth = (mNum) => {
+    const formatted = `${viewYear}-${String(mNum).padStart(2, '0')}`;
+    if (onChange) onChange(formatted);
+    setIsOpen(false);
+  };
+
+  const handleSelectCurrentMonth = () => {
+    const now = new Date();
+    const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    if (onChange) onChange(formatted);
+    setIsOpen(false);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        title={title}
+        onClick={openPicker}
+        className={`inline-flex items-center justify-between gap-2 whitespace-nowrap cursor-pointer transition-all ${className}`}
+      >
+        <span>Tháng {monthStr}/{yearStr}</span>
+        <CalendarClock className="w-4 h-4 opacity-75 shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-[240] bg-slate-900/20 backdrop-blur-[1px]"
+          onClick={() => setIsOpen(false)}
+        >
+          <div
+            style={{ top: `${popupPos.top}px`, left: `${popupPos.left}px`, width: '272px' }}
+            className="fixed z-[250] bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+              <button
+                type="button"
+                onClick={() => setViewYear((y) => y - 1)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                title="Năm trước"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="font-black text-sm text-slate-800">Năm {viewYear}</span>
+              <button
+                type="button"
+                onClick={() => setViewYear((y) => y + 1)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                title="Năm sau"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((mNum) => {
+                const isSelected = viewYear === selectedYear && mNum === selectedMonth;
+                return (
+                  <button
+                    key={mNum}
+                    type="button"
+                    onClick={() => handlePickMonth(mNum)}
+                    className={`py-2 px-1 rounded-xl text-xs font-bold transition-all ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'bg-slate-50 text-slate-700 hover:bg-purple-50 hover:text-purple-700 border border-slate-100'
+                    }`}
+                  >
+                    Tháng {mNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleSelectCurrentMonth}
+                className="text-xs font-bold text-purple-600 hover:text-purple-800 px-2 py-1 rounded-lg hover:bg-purple-50 transition-colors"
+              >
+                Tháng hiện tại
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-xs font-semibold text-slate-500 hover:text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 const SearchablePartSelect = ({ inventory, isCustomPart, setIsCustomPart, tempPart, setTempPart, theme = 'blue' }) => {
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
@@ -1017,7 +1220,7 @@ const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
         <div className="text-center space-y-3">
           <div className="bg-blue-600 p-5 rounded-3xl inline-block shadow-lg shadow-blue-500/30"><Wrench className="w-16 h-16 text-white" /></div>
           <h1 className="text-4xl font-black tracking-tight">Martech Boiler</h1>
-          <p className="text-slate-400 text-base">Hệ thống quản lý bảo trì & công việc</p>
+          <p className="text-slate-400 text-base">Hệ thống quản lý bảo trì &amp; công việc</p>
         </div>
         
         <div className="space-y-5 bg-slate-800 p-8 rounded-3xl border border-slate-700 shadow-2xl relative">
@@ -1038,25 +1241,46 @@ const LoginView = ({ handleLogin, isCloudSyncing, db, permissionError }) => {
             </div>
             <button onClick={() => handleLogin(username, password)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl text-lg transition-all active:scale-95 shadow-lg mt-4">Đăng Nhập</button>
         </div>
-        
-        <div className="flex flex-col items-center justify-center gap-2 mt-8 text-sm font-medium">
-           {isCloudSyncing ? (
-               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-blue-500 animate-pulse" /><span className="text-blue-400">Đang dò tìm kết nối...</span></div>
-           ) : db && !permissionError ? (
-               <div className="flex items-center gap-2"><Cloud className="w-5 h-5 text-green-500" /><span className="text-green-400">Đã kết nối dữ liệu Đám mây</span></div>
-           ) : (
-               <div className="flex items-center gap-2"><CloudOff className="w-5 h-5 text-yellow-500" /><span className="text-yellow-500">Chế độ Offline (Lưu cục bộ trên trình duyệt)</span></div>
-           )}
+
+        <div className="flex justify-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-800/80 border border-slate-700 text-xs text-slate-400">
+            {db && !permissionError ? (
+              <>
+                <Cloud className={`w-4 h-4 ${isCloudSyncing ? 'text-blue-400 animate-pulse' : 'text-emerald-400'}`} />
+                <span>{isCloudSyncing ? 'Đang đồng bộ đám mây...' : 'Đã kết nối dữ liệu đám mây'}</span>
+              </>
+            ) : (
+              <>
+                <CloudOff className="w-4 h-4 text-amber-400" />
+                <span>Chế độ lưu trữ cục bộ (Offline)</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db, setMachineFilter, setTaskFilter }) => {
+const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLogout, setView, db, setMachineFilter, setTaskFilter, sysSettings, usersList }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
   const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
+
+  const monthStartDay = Math.min(28, Math.max(1, Number(sysSettings?.month_config?.startDay) || 16));
+  const activeMonth = getActiveReportMonth(sysSettings);
+  const cycleInfo = getMonthCycleRange(activeMonth, monthStartDay);
+  const unmergedTasks = expandMergedTaskEntries(dailyTasks);
+  const techUsers = (Array.isArray(usersList) ? usersList : []).filter(u => u && u.role !== 'admin');
+
+  const techsWithMissingReports = techUsers
+    .map(tech => {
+      const { missingDates } = analyzeEmployeeAttendanceInRange(tech, unmergedTasks, cycleInfo.startDate, cycleInfo.endDate, sysSettings);
+      return { tech, missingDates };
+    })
+    .filter(item => item.missingDates.length > 0);
+
+  const totalMissingDaysAllTechs = techsWithMissingReports.reduce((sum, item) => sum + item.missingDates.length, 0);
 
   return (
     <div className="flex flex-col h-full bg-slate-50 overflow-hidden">
@@ -1071,7 +1295,7 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
         <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white rounded-3xl border border-slate-200 p-6 md:p-8 shadow-sm flex flex-col justify-center">
-              <h3 className="text-sm md:text-base font-bold text-slate-800 mb-4 flex items-center"><Database className="w-5 h-5 mr-2 text-blue-600"/> Máy móc & Thiết bị ({machines.length})</h3>
+              <h3 className="text-sm md:text-base font-bold text-slate-800 mb-4 flex items-center"><Database className="w-5 h-5 mr-2 text-blue-600"/> Máy móc &amp; Thiết bị ({machines.length})</h3>
               <div className="flex gap-4">
                  <div className="flex-1 bg-green-50 p-4 rounded-2xl border border-green-100 cursor-pointer transition-transform hover:shadow-md active:scale-95" onClick={() => { setMachineFilter('operational'); setView('machines'); }}>
                     <p className="text-green-600 text-[11px] md:text-xs uppercase font-bold flex items-center mb-2"><CheckCircle className="w-4 h-4 mr-1"/>Bình thường</p>
@@ -1102,41 +1326,79 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
                </div>
             </div>
           </div>
+
+          {techsWithMissingReports.length > 0 && (
+            <div className="bg-rose-50 border-2 border-rose-200 rounded-3xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in">
+              <div className="flex items-start gap-3.5">
+                <div className="bg-rose-600 text-white p-3 rounded-2xl shrink-0 shadow-sm">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-black text-rose-900 text-base md:text-lg">
+                    Cảnh báo thiếu báo cáo ngày ({cycleInfo.monthLabel}: {totalMissingDaysAllTechs} ngày thiếu)
+                  </h3>
+                  <p className="text-xs md:text-sm text-rose-700 mt-0.5">
+                    Có <b>{techsWithMissingReports.length}</b> kỹ thuật viên chưa nhập đủ báo cáo ngày (trừ Chủ nhật &amp; Nghỉ phép):
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2.5">
+                    {techsWithMissingReports.map(({ tech, missingDates }) => (
+                      <span key={tech.id} className="bg-white text-rose-800 border border-rose-200 px-3 py-1 rounded-xl text-xs font-bold shadow-xs">
+                        {tech.name}: <b className="text-rose-600">thiếu {missingDates.length} ngày</b>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setView('kpi_report')}
+                className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-5 py-3 rounded-2xl text-xs md:text-sm font-black shadow-md transition-all active:scale-95"
+              >
+                Kiểm tra &amp; Duyệt phép &rarr;
+              </button>
+            </div>
+          )}
           
           <div>
             <h3 className="font-bold text-slate-800 text-lg md:text-2xl mb-4 md:mb-6 flex items-center"><Settings className="w-6 h-6 md:w-8 md:h-8 mr-2 text-slate-600" /> Hệ thống tính năng</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
                <button onClick={() => setView('user_management')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-emerald-300 transition-all active:scale-95 text-left group">
                   <div className="bg-emerald-100 p-4 md:p-5 rounded-2xl text-emerald-600 mr-4 md:mr-5 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><User className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Tài khoản (KTV)</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý Nhân sự</p></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Quản lý Tài Khoản</p><p className="text-xs text-slate-500 mt-1">Tạo &amp; phân quyền KTV</p></div>
                </button>
-               <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-indigo-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-indigo-100 p-4 md:p-5 rounded-2xl text-indigo-600 mr-4 md:mr-5 group-hover:bg-indigo-500 group-hover:text-white transition-colors"><Database className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Thiết Bị</p><p className="text-xs md:text-sm text-slate-500 mt-1">Danh sách & Excel</p></div>
+
+               <button onClick={() => { setMachineFilter('all'); setView('machines'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-blue-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-blue-100 p-4 md:p-5 rounded-2xl text-blue-600 mr-4 md:mr-5 group-hover:bg-blue-500 group-hover:text-white transition-colors"><Database className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Quản lý Thiết Bị</p><p className="text-xs text-slate-500 mt-1">Danh sách máy &amp; trạng thái</p></div>
                </button>
+
                <button onClick={() => setView('inventory')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-orange-300 transition-all active:scale-95 text-left group">
                   <div className="bg-orange-100 p-4 md:p-5 rounded-2xl text-orange-600 mr-4 md:mr-5 group-hover:bg-orange-500 group-hover:text-white transition-colors"><Boxes className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Kho Vật Tư</p><p className="text-xs md:text-sm text-slate-500 mt-1">Quản lý tồn kho</p></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Kho Vật Tư</p><p className="text-xs text-slate-500 mt-1">Quản lý tồn kho linh kiện</p></div>
                </button>
-               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-pink-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-pink-100 p-4 md:p-5 rounded-2xl text-pink-600 mr-4 md:mr-5 group-hover:bg-pink-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử & Xuất KPI</p></div>
+
+               <button onClick={() => { setTaskFilter('all'); setView('daily_task_history'); }} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-purple-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-purple-100 p-4 md:p-5 rounded-2xl text-purple-600 mr-4 md:mr-5 group-hover:bg-purple-500 group-hover:text-white transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Công Việc</p><p className="text-xs text-slate-500 mt-1">Báo cáo ngày &amp; Xuất KPI</p></div>
                </button>
+
                <button onClick={() => setView('kpi_report')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-violet-300 transition-all active:scale-95 text-left group">
                   <div className="bg-violet-100 p-4 md:p-5 rounded-2xl text-violet-600 mr-4 md:mr-5 group-hover:bg-violet-600 group-hover:text-white transition-colors"><BarChart3 className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Báo Cáo KPI Bảo Trì</p><p className="text-xs md:text-sm text-slate-500 mt-1">Đánh giá PM, CM SLA & MTTR</p></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Báo Cáo KPI Bảo Trì</p><p className="text-xs text-slate-500 mt-1">Bảng tính &amp; Phiếu ký chuẩn</p></div>
                </button>
+
                <button onClick={() => setView('utility_history')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-cyan-300 transition-all active:scale-95 text-left group">
                   <div className="bg-cyan-100 p-4 md:p-5 rounded-2xl text-cyan-600 mr-4 md:mr-5 group-hover:bg-cyan-500 group-hover:text-white transition-colors"><Droplets className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Điện Nước</p><p className="text-xs md:text-sm text-slate-500 mt-1">Lịch sử chỉ số</p></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Sổ Ghi Điện / Nước</p><p className="text-xs text-slate-500 mt-1">Lịch sử tiêu thụ tháng</p></div>
                </button>
-               <button onClick={() => setView('settings')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-green-300 transition-all active:scale-95 text-left group">
-                  <div className="bg-green-100 p-4 md:p-5 rounded-2xl text-green-600 mr-4 md:mr-5 group-hover:bg-green-500 group-hover:text-white transition-colors"><FileSpreadsheet className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-bold text-slate-800 text-base md:text-lg">Cài đặt & SLA</p><p className="text-xs md:text-sm text-slate-500 mt-1">Google Sheet & Thời gian lỗi</p></div>
+
+               <button onClick={() => setView('settings')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-slate-400 transition-all active:scale-95 text-left group">
+                  <div className="bg-slate-100 p-4 md:p-5 rounded-2xl text-slate-600 mr-4 md:mr-5 group-hover:bg-slate-700 group-hover:text-white transition-colors"><Settings className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Cài đặt Hệ thống</p><p className="text-xs text-slate-500 mt-1">Kỳ tháng, Google Sheet, SLA</p></div>
                </button>
-               <button onClick={() => setView('home')} className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl border border-blue-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 text-left group lg:col-span-3 xl:col-span-2">
-                  <div className="bg-blue-600 p-4 md:p-5 rounded-2xl text-white mr-4 md:mr-5 shadow-md"><Wrench className="w-6 h-6 md:w-8 md:h-8" /></div>
-                  <div className="flex-1"><p className="font-black text-blue-900 text-base md:text-xl">Màn hình Kỹ thuật viên</p><p className="text-xs md:text-sm text-blue-700 mt-1">Vào giao diện vận hành app</p></div>
+
+               <button onClick={() => setView('home')} className="bg-white rounded-3xl border border-slate-200 shadow-sm w-full flex items-center p-5 md:p-6 hover:shadow-md hover:border-indigo-300 transition-all active:scale-95 text-left group">
+                  <div className="bg-indigo-100 p-4 md:p-5 rounded-2xl text-indigo-600 mr-4 md:mr-5 group-hover:bg-indigo-600 group-hover:text-white transition-colors"><QrCode className="w-6 h-6 md:w-8 md:h-8" /></div>
+                  <div><p className="font-bold text-slate-800 text-base md:text-lg">Giao Diện Kỹ Thuật</p><p className="text-xs text-slate-500 mt-1">Quét QR &amp; Nhập báo cáo</p></div>
                </button>
             </div>
           </div>
@@ -1146,10 +1408,48 @@ const DashboardView = ({ user, machines, dailyTasks, utilityLogs, logs, handleLo
   );
 };
 
-const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, setMachineFilter, setTaskFilter, setInitialTaskData, setEditTaskData }) => {
+const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, setMachineFilter, setTaskFilter, setInitialTaskData, setEditTaskData, sysSettings }) => {
   const machinesOperational = machines.filter(m => m.status === 'operational').length;
   const machinesIssue = machines.filter(m => m.status === 'maintenance' || m.status === 'broken').length;
   const totalPending = dailyTasks.filter(t => t.status !== 'Hoàn thành').length;
+
+  const monthStartDay = Math.min(28, Math.max(1, Number(sysSettings?.month_config?.startDay) || 16));
+  const activeMonth = getActiveReportMonth(sysSettings);
+  const cycleInfo = getMonthCycleRange(activeMonth, monthStartDay);
+  const unmergedTasks = expandMergedTaskEntries(dailyTasks);
+
+  const isTechnician = user && user.role !== 'admin';
+  const todayStr = getTodayDateStr();
+  const isTodaySunday = new Date().getDay() === 0;
+
+  const currentCycleAttendance = isTechnician
+    ? analyzeEmployeeAttendanceInRange(user, unmergedTasks, cycleInfo.startDate, cycleInfo.endDate, sysSettings)
+    : { missingDates: [], leaveDates: [] };
+
+  // Nếu vừa bước sang kỳ mới trong vòng 5 ngày đầu, kiểm tra thêm các ngày thiếu của kỳ vừa kết thúc
+  const prevCycleMissing = (() => {
+    if (!isTechnician || monthStartDay <= 1) return [];
+    const todayDay = new Date().getDate();
+    if (todayDay < monthStartDay || todayDay > monthStartDay + 5) return [];
+    const [y, m] = activeMonth.split('-').map(Number);
+    const prevY = m === 1 ? y - 1 : y;
+    const prevM = m === 1 ? 12 : m - 1;
+    const prevMonthStr = `${prevY}-${String(prevM).padStart(2, '0')}`;
+    const prevCycle = getMonthCycleRange(prevMonthStr, monthStartDay);
+    return analyzeEmployeeAttendanceInRange(user, unmergedTasks, prevCycle.startDate, prevCycle.endDate, sysSettings).missingDates;
+  })();
+
+  const allMissingDates = Array.from(new Set([...prevCycleMissing, ...currentCycleAttendance.missingDates])).sort();
+
+  const hasReportedToday = isTechnician && unmergedTasks.some(
+    t => t && String(t.date || '') === todayStr && (t.username === user.username || t.technicianName === user.name || t.technicianName === user.username)
+  );
+
+  const handleOpenFillMissingDate = (targetDate) => {
+    setInitialTaskData({ date: targetDate, isMissingFill: true });
+    setEditTaskData(null);
+    setView('daily_task_form');
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-100 md:bg-slate-50 animate-fade-in">
@@ -1190,6 +1490,70 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
                  </button>
              </div>
 
+             {isTechnician && allMissingDates.length > 0 && (
+               <div className="bg-rose-50 border-2 border-rose-300 rounded-3xl p-4 md:p-6 shadow-md animate-fade-in space-y-3">
+                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                   <div className="flex items-start gap-3">
+                     <div className="bg-rose-600 text-white p-3 rounded-2xl shrink-0 shadow-sm animate-pulse">
+                       <AlertTriangle className="w-6 h-6" />
+                     </div>
+                     <div>
+                       <div className="flex flex-wrap items-center gap-2">
+                         <h3 className="font-black text-rose-900 text-base md:text-lg">
+                           Cảnh báo: Bạn đang nhập thiếu {allMissingDates.length} ngày báo cáo!
+                         </h3>
+                         <span className="text-[11px] font-bold bg-rose-600 text-white px-2.5 py-0.5 rounded-full">
+                           Trừ % KPI
+                         </span>
+                       </div>
+                       <p className="text-xs md:text-sm text-rose-700 mt-1 leading-relaxed">
+                         Các ngày làm việc chưa có báo cáo (trừ Chủ nhật &amp; Nghỉ phép) sẽ bị đánh giá <b>Không hoàn thành</b> và trừ điểm KPI tháng. Chạm vào từng ngày bên dưới để nhập bổ sung ngay:
+                       </p>
+                     </div>
+                   </div>
+                   <button
+                     onClick={() => handleOpenFillMissingDate(allMissingDates[0])}
+                     className="shrink-0 bg-rose-600 hover:bg-rose-700 text-white px-4 py-3 rounded-2xl text-xs md:text-sm font-black shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5"
+                   >
+                     <Plus className="w-4 h-4" /> Nhập bổ sung ({formatDateVi(allMissingDates[0])})
+                   </button>
+                 </div>
+
+                 <div className="flex flex-wrap gap-2 pt-1">
+                   {allMissingDates.map((mDate) => (
+                     <button
+                       key={mDate}
+                       onClick={() => handleOpenFillMissingDate(mDate)}
+                       className="bg-white hover:bg-rose-600 text-rose-800 hover:text-white border border-rose-300 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
+                       title="Bấm để nhập báo cáo bổ sung hoặc khai báo nghỉ phép cho ngày này"
+                     >
+                       <CalendarClock className="w-3.5 h-3.5" />
+                       <span>{getVietnameseDayName(mDate)}, {formatDateVi(mDate)}</span>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             )}
+
+             {isTechnician && allMissingDates.length === 0 && !isTodaySunday && !hasReportedToday && (
+               <div className="bg-amber-50 border border-amber-200 rounded-3xl p-4 md:px-6 md:py-4 shadow-sm flex flex-wrap items-center justify-between gap-3 animate-fade-in">
+                 <div className="flex items-center gap-3">
+                   <div className="bg-amber-100 text-amber-700 p-2.5 rounded-xl shrink-0">
+                     <Clock className="w-5 h-5" />
+                   </div>
+                   <p className="text-xs md:text-sm text-amber-900 font-medium">
+                     Nhắc nhở: Hôm nay (<b>{formatDateVi(todayStr)}</b>) bạn chưa nhập báo cáo công việc ngày.
+                   </p>
+                 </div>
+                 <button
+                   onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
+                   className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-xs transition-all active:scale-95"
+                 >
+                   Nhập báo cáo hôm nay
+                 </button>
+               </div>
+             )}
+
              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-6">
                  <button onClick={() => { setMachineFilter('all'); setView('manual_select'); }} className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:border-blue-400 transition-all active:scale-95 group">
                      <div className="bg-blue-50 p-3.5 md:p-4 rounded-2xl group-hover:bg-blue-500 transition-colors"><ListFilter className="w-6 h-6 md:w-8 md:h-8 text-blue-600 group-hover:text-white"/></div>
@@ -1201,7 +1565,12 @@ const HomeView = ({ user, machines, dailyTasks, logs, setView, handleLogout, set
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-slate-800">Kho Vật Tư</p><p className="text-[10px] md:text-xs text-slate-500 mt-1">Xem tồn kho linh kiện</p></div>
                  </button>
 
-                 <button onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }} className="bg-purple-50 p-5 md:p-6 rounded-3xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:bg-purple-100 hover:border-purple-300 transition-all active:scale-95 group">
+                 <button onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }} className="relative bg-purple-50 p-5 md:p-6 rounded-3xl border border-purple-100 shadow-sm flex flex-col items-start gap-3 md:gap-4 hover:shadow-md hover:bg-purple-100 hover:border-purple-300 transition-all active:scale-95 group">
+                     {isTechnician && allMissingDates.length > 0 && (
+                       <span className="absolute top-3 right-3 bg-rose-600 text-white text-[10px] md:text-xs font-black px-2.5 py-1 rounded-full shadow-sm animate-bounce">
+                         Thiếu {allMissingDates.length} ngày
+                       </span>
+                     )}
                      <div className="bg-purple-200 p-3.5 md:p-4 rounded-2xl group-hover:bg-purple-600 transition-colors"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 text-purple-700 group-hover:text-white"/></div>
                      <div className="text-left"><p className="font-bold text-sm md:text-lg text-purple-900">Báo Cáo Ngày</p><p className="text-[10px] md:text-xs text-purple-600 mt-1">Việc ngoài / không QR</p></div>
                  </button>
@@ -1556,19 +1925,24 @@ const UtilityHistoryView = ({ utilityLogs, usersList, setView, user, setEditData
                        <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
                        <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                    </div>
-                   <div className="flex-1 relative"><input type="month" value={filterMonth} onChange={e => setFilterMonth(e.target.value)} className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold" /></div>
+                   <div className="flex-1 relative">
+                       <VietnameseMonthPicker
+                           value={filterMonth}
+                           onChange={(val) => setFilterMonth(val)}
+                           className="w-full px-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-cyan-500 text-slate-700 font-bold"
+                       />
+                   </div>
                 </div>
             </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4">
-                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth} ({sortedFilteredLogs.length} bản ghi)</span></div>
-                
+                <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-2"><span>Tháng {filterMonth.split('-').reverse().join('/')} ({sortedFilteredLogs.length} bản ghi)</span></div>
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
                     <div className="overflow-x-auto custom-scrollbar">
                         <table className="w-full text-sm text-left text-slate-600">
-                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200 whitespace-nowrap">
                                 <tr>
                                     <th className="px-4 py-4 font-bold whitespace-nowrap">Ngày</th>
                                     <th className="px-4 py-4 font-bold whitespace-nowrap">KTV</th>
@@ -2253,10 +2627,9 @@ const SettingsView = ({ setView, showNotification, googleSheetUrl, sysSettings, 
                       </select>
                       {!monthConfig.autoDetectMonth && (
                           <div className="mt-2.5">
-                              <input
-                                  type="month"
+                              <VietnameseMonthPicker
                                   value={monthConfig.defaultMonth}
-                                  onChange={(e) => setMonthConfig({ ...monthConfig, defaultMonth: e.target.value })}
+                                  onChange={(val) => setMonthConfig({ ...monthConfig, defaultMonth: val })}
                                   className="w-full p-3 border border-purple-300 rounded-xl text-sm font-bold bg-purple-50 text-purple-900 outline-none focus:ring-2 focus:ring-purple-500"
                               />
                           </div>
@@ -2327,6 +2700,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const [isExporting, setIsExporting] = useState(false);
   const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
   const [selectedKpiUsers, setSelectedKpiUsers] = useState([]);
+  const [attendanceModalInfo, setAttendanceModalInfo] = useState(null);
 
   const techUsers = usersList.filter(u => u.role !== 'admin');
 
@@ -2349,6 +2723,15 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
   // Tự động tách các phiếu có ghi chú gộp "--- [Ngày] ... tiếp tục ---" thành từng dòng phiếu riêng biệt
   const unmergedDailyTasks = expandMergedTaskEntries(dailyTasks);
+
+  // Kiểm tra ngày nhập thiếu của nhân sự đang chọn (hoặc của chính KTV đang đăng nhập)
+  const targetUserForMissing = user.role !== 'admin'
+    ? user
+    : (filterTech !== 'all' ? techUsers.find(u => u.username === filterTech || u.name === filterTech) : null);
+
+  const historyMissingDates = (taskFilter !== 'pending' && targetUserForMissing && startDate && endDate)
+    ? analyzeEmployeeAttendanceInRange(targetUserForMissing, unmergedDailyTasks, startDate, endDate, sysSettings).missingDates
+    : [];
 
   const filteredTasks = unmergedDailyTasks.filter(t => {
       if (!t) return false;
@@ -2527,11 +2910,25 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
       sheet.getRow(7).height = 28;
       sheet.getRow(8).height = 30;
 
+      // Kiểm tra ngày nhập thiếu (trừ Chủ nhật) & ngày nghỉ phép trong kỳ xuất KPI
+      const attendanceInfo = analyzeEmployeeAttendanceInRange(
+          selectedUser,
+          unmergedDailyTasks,
+          startDate,
+          endDate,
+          sysSettings
+      );
+      const missingDates = attendanceInfo.missingDates || [];
+      const leaveDates = attendanceInfo.leaveDates || [];
+
       // Tính toán số liệu thực tế từ Sổ công việc của nhân viên này
       let B = 0, C = 0, A = 0;
       let cmTotal = 0, K = 0;
 
       userTasks.forEach(t => {
+          const isLeave = String(t.type || '').trim().toLowerCase() === 'nghỉ phép';
+          if (isLeave) return; // Ngày nghỉ phép không trừ và không tính vào mẫu số PM
+
           const isCM = !!getNormalizedErrorLevel(t);
           if (isCM) {
               cmTotal++;
@@ -2545,6 +2942,9 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               }
           }
       });
+
+      // Mỗi ngày nhập thiếu (trừ Chủ nhật & Nghỉ phép) bị đánh giá Không hoàn thành (+1 vào Kế hoạch B, +0 vào Đạt A)
+      B += missingDates.length;
 
       const pmValidPlan = B - C;
       const pmRate = pmValidPlan > 0 ? (A / pmValidPlan) : (B === 0 ? 1 : 0);
@@ -2602,13 +3002,37 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           cell.border = thinBorder;
       });
 
-      userTasks.forEach(t => {
-          const realTime = calculateWorkTime(t.startTime, t.endTime);
-          const errLvlStr = getErrorLevelDisplay(t);
-          const statusStr = evaluateTaskKpiStatus(t, sysSettings);
+      // Gộp các dòng công việc thực tế với các dòng ngày nhập thiếu (đánh giá Không hoàn thành)
+      const missingTaskRows = missingDates.map(mDate => ({
+          id: `MISSING-${mDate}`,
+          date: mDate,
+          startTime: '--',
+          endTime: '--',
+          type: 'Báo cáo ngày',
+          taskName: `Nhập thiếu báo cáo công việc ngày (${getVietnameseDayName(mDate)})`,
+          note: 'Không có dữ liệu công việc trong ngày - Đánh giá không hoàn thành (Trừ % KPI)',
+          status: 'Không hoàn thành',
+          isMissingDayRow: true
+      }));
+
+      const combinedRowsForSheet = [...userTasks, ...missingTaskRows].sort((a, b) => {
+          if (a.date !== b.date) return new Date(b.date) - new Date(a.date);
+          return String(b.startTime || '').localeCompare(String(a.startTime || ''));
+      });
+
+      combinedRowsForSheet.forEach(t => {
+          const isLeave = String(t.type || '').trim().toLowerCase() === 'nghỉ phép';
+          const isMissing = Boolean(t.isMissingDayRow);
+          const realTime = isMissing || isLeave ? '0h' : calculateWorkTime(t.startTime, t.endTime);
+          const errLvlStr = isMissing || isLeave ? '' : getErrorLevelDisplay(t);
+          const statusStr = isMissing
+              ? 'Không đạt'
+              : isLeave
+              ? 'Nghỉ phép'
+              : evaluateTaskKpiStatus(t, sysSettings);
 
           const partsStr = t.parts && t.parts.length > 0 ? '\nVT: ' + t.parts.map(p => `${p.name} (${p.quantity} ${p.unit})`).join(', ') : '';
-          const earlyLateStr = calculateEarlyLateStr(t, sysSettings);
+          const earlyLateStr = isMissing || isLeave ? '' : calculateEarlyLateStr(t, sysSettings);
 
           const row = sheet.addRow([
               String(t.date || '').split('-').reverse().join('/'),
@@ -2624,7 +3048,15 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
           ]);
 
           row.eachCell({ includeEmpty: true }, (c, colNumber) => {
-              c.font = { name: fontName, size: 10 };
+              c.font = {
+                  name: fontName,
+                  size: 10,
+                  color: isMissing ? { argb: 'FFDC2626' } : (isLeave ? { argb: 'FF0D9488' } : undefined),
+                  bold: isMissing && colNumber === 9
+              };
+              if (isMissing) {
+                  c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+              }
               c.border = thinBorder;
               if (colNumber === 7 || colNumber === 8) {
                   c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
@@ -2893,16 +3325,16 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                            <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
                            <option value="Chế tạo máy">Chế tạo máy</option>
                            <option value="Sửa chữa đột xuất">Sửa chữa đột xuất</option>
+                           <option value="Nghỉ phép">Nghỉ phép</option>
                        </select>
                    </div>
                    {taskFilter !== 'pending' && (
                        <div className="flex items-center gap-1.5 shrink-0">
-                           <input
-                               type="month"
+                           <VietnameseMonthPicker
                                value={selectedReportMonth}
-                               onChange={e => handleSelectMonthPeriod(e.target.value)}
+                               onChange={(val) => handleSelectMonthPeriod(val)}
                                title={`Chọn nhanh kỳ tháng (Từ ngày ${monthStartDay} tháng trước đến ngày ${Number(monthStartDay) === 1 ? 'cuối tháng' : Number(monthStartDay) - 1 + ' tháng này'})`}
-                               className="px-2.5 py-2 md:py-3 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold"
+                               className="px-3 py-2 md:py-3 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold"
                            />
                            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[125px] md:w-[145px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
                            <span className="text-slate-400">-</span>
@@ -2924,6 +3356,34 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
         <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4 pb-20 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-4">
+                {historyMissingDates.length > 0 && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                        <div className="flex items-start gap-2.5">
+                            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-xs md:text-sm font-black text-rose-900">
+                                    Cảnh báo: {targetUserForMissing?.name} đang nhập thiếu {historyMissingDates.length} ngày báo cáo trong kỳ này!
+                                </p>
+                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                    {historyMissingDates.map(mDate => (
+                                        <button
+                                            key={mDate}
+                                            onClick={() => {
+                                                setInitialTaskData({ date: mDate, isMissingFill: true });
+                                                setEditTaskData(null);
+                                                setView('daily_task_form');
+                                            }}
+                                            className="bg-white hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-300 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-colors"
+                                        >
+                                            + {getVietnameseDayName(mDate)}, {formatDateVi(mDate)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex justify-between items-center text-xs md:text-sm text-slate-500 uppercase font-bold tracking-wider mb-4"><span>{taskFilter !== 'pending' ? `Từ ${startDate} đến ${endDate}` : 'Tất cả'} ({sortedTasks.length} bản ghi)</span></div>
                 
                 <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
@@ -2971,7 +3431,7 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
                                             <td className="px-4 py-4 align-top">
                                                 <h4 className="font-bold text-slate-800 text-base leading-tight mb-2 break-words">{task.taskName}</h4>
-                                                <span className="text-[10px] md:text-xs font-bold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-md uppercase tracking-wider inline-block">
+                                                <span className={`text-[10px] md:text-xs font-bold border px-2 py-1 rounded-md uppercase tracking-wider inline-block ${String(task.type || '').trim().toLowerCase() === 'nghỉ phép' ? 'text-teal-700 bg-teal-50 border-teal-200' : 'text-purple-700 bg-purple-50 border-purple-100'}`}>
                                                     {task.type}
                                                 </span>
                                                 {getNormalizedErrorLevel(task) && (
@@ -3052,16 +3512,17 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const dateStr = getTodayDateStr();
 
   const isEditing = !!editTaskData;
-  const isContinuing = !!initialTaskData;
-  const sourceData = editTaskData || initialTaskData;
+  const isMissingFill = Boolean(initialTaskData && initialTaskData.isMissingFill);
+  const isContinuing = Boolean(initialTaskData && !initialTaskData.isMissingFill);
+  const sourceData = editTaskData || (isContinuing ? initialTaskData : null);
 
   const [formData, setFormData] = useState({ 
       id: isEditing ? editTaskData.id : `DT-${Date.now()}`,
       technicianName: isEditing ? editTaskData.technicianName : (user?.name || ''),
       username: isEditing ? editTaskData.username : (user?.username || ''), 
-      date: isEditing ? editTaskData.date : dateStr, 
-      startTime: isEditing ? editTaskData.startTime : nowStr, 
-      endTime: isEditing ? editTaskData.endTime : nowStr,
+      date: isEditing ? editTaskData.date : (isMissingFill && initialTaskData.date ? initialTaskData.date : dateStr), 
+      startTime: isEditing ? editTaskData.startTime : (isMissingFill ? '07:30' : nowStr), 
+      endTime: isEditing ? editTaskData.endTime : (isMissingFill ? '17:00' : nowStr),
       taskName: sourceData ? sourceData.taskName : '', 
       type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
       errorLevel: sourceData && sourceData.errorLevel ? String(sourceData.errorLevel).replace(/\D/g, '') || '1' : '1',
@@ -3123,19 +3584,21 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   const isKpiPassed = actualMins <= maxMinutes;
 
   const submitForm = () => {
-      if (isInvalidTimeRange) {
+      const isLeaveType = String(formData.type || '').trim().toLowerCase() === 'nghỉ phép';
+      if (!isLeaveType && isInvalidTimeRange) {
           return showNotification('Giờ kết thúc phải lớn hơn giờ bắt đầu!', 'error');
       }
       const trimmedTaskName = (formData.taskName || '').trim();
       const trimmedNote = (formData.note || '').trim();
-      if (!trimmedTaskName && !trimmedNote) {
+      if (!isLeaveType && !trimmedTaskName && !trimmedNote) {
           return showNotification('Vui lòng nhập Tên công việc hoặc Ghi chú chi tiết!', 'error');
       }
       
       const finalData = {
           ...formData,
-          taskName: trimmedTaskName || trimmedNote,
-          note: trimmedNote || trimmedTaskName
+          taskName: trimmedTaskName || (isLeaveType ? 'Nghỉ phép' : trimmedNote),
+          note: trimmedNote || (isLeaveType ? 'Nghỉ phép theo quy định (Không trừ KPI)' : trimmedTaskName),
+          status: isLeaveType ? 'Hoàn thành' : formData.status
       };
 
       if (finalData.type === 'Sửa chữa đột xuất') {
@@ -3154,11 +3617,20 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
       <div className="p-4 md:p-6 border-b border-slate-200 bg-white shrink-0 shadow-sm z-10">
-          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tạo Phiếu Mới (Tiếp Tục Công Việc)' : 'Báo cáo Hằng ngày')}</h2></div>
+          <div className="max-w-3xl mx-auto flex items-center space-x-4"><button onClick={handleBack} className="p-2.5 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button><h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center"><CalendarClock className="w-6 h-6 md:w-8 md:h-8 mr-3 text-purple-600"/> {isEditing ? 'Sửa Báo Cáo Ngày' : (isContinuing ? 'Tạo Phiếu Mới (Tiếp Tục Công Việc)' : (isMissingFill ? 'Nhập Bổ Sung Báo Cáo Ngày Thiếu' : 'Báo cáo Hằng ngày'))}</h2></div>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 md:pb-40 custom-scrollbar">
           <div className="max-w-3xl mx-auto space-y-6">
+              {isMissingFill && initialTaskData?.date && (
+                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-start gap-3 animate-fade-in">
+                      <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="text-xs md:text-sm text-rose-900">
+                          <p className="font-bold">Đang nhập bổ sung cho ngày bị thiếu: {getVietnameseDayName(initialTaskData.date)}, {formatDateVi(initialTaskData.date)}</p>
+                          <p className="text-rose-700 mt-0.5">Nếu ngày này bạn nghỉ phép, hãy chọn <b>Phân loại: Nghỉ phép</b> để không bị trừ % điểm KPI.</p>
+                      </div>
+                  </div>
+              )}
               {isContinuing && initialTaskData && (
                   <div className="bg-purple-50 border border-purple-200 p-4 rounded-2xl flex items-start gap-3 animate-fade-in">
                       <CheckCircle className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
@@ -3176,13 +3648,41 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                       <div><label className="block text-sm font-bold text-slate-600 mb-2">Ngày thực hiện</label><input type="date" className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} /></div>
                       <div>
                           <label className="block text-sm font-bold text-slate-600 mb-2">Phân loại</label>
-                          <select className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all text-slate-700" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                          <select
+                              className="w-full p-4 rounded-2xl border border-slate-300 text-base font-medium focus:ring-2 focus:ring-purple-500 outline-none bg-white transition-all text-slate-700"
+                              value={formData.type}
+                              onChange={e => {
+                                  const nextType = e.target.value;
+                                  if (nextType === 'Nghỉ phép') {
+                                      setFormData({
+                                          ...formData,
+                                          type: nextType,
+                                          taskName: formData.taskName || 'Nghỉ phép',
+                                          note: formData.note || 'Nghỉ phép theo quy định',
+                                          status: 'Hoàn thành'
+                                      });
+                                  } else {
+                                      setFormData({ ...formData, type: nextType });
+                                  }
+                              }}
+                          >
                                 <option>Bảo dưỡng định kỳ</option>
                                 <option>Chế tạo máy</option>
                                 <option>Sửa chữa đột xuất</option>
+                                <option>Nghỉ phép</option>
                           </select>
                       </div>
                   </div>
+
+                  {formData.type === 'Nghỉ phép' && (
+                      <div className="bg-teal-50 border border-teal-200 p-4 rounded-2xl flex items-start gap-3 animate-fade-in">
+                          <CheckCircle className="w-5 h-5 text-teal-600 shrink-0 mt-0.5" />
+                          <div className="text-xs md:text-sm text-teal-900">
+                              <p className="font-bold">Chế độ khai báo Nghỉ phép:</p>
+                              <p className="text-teal-700 mt-0.5">Ngày <b>{formatDateVi(formData.date)}</b> sẽ được ghi nhận là ngày nghỉ phép hợp lệ và <b>không bị đánh giá thiếu báo cáo hay trừ % điểm KPI</b>.</p>
+                          </div>
+                      </div>
+                  )}
 
                   <div className={`p-4 md:p-6 rounded-3xl border space-y-3 transition-colors ${isInvalidTimeRange ? 'bg-red-50/70 border-red-300' : 'bg-purple-50 border-purple-100'}`}>
                       <div className="grid grid-cols-2 gap-3 md:gap-6">
@@ -3295,7 +3795,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 border-t border-slate-200 bg-white/95 backdrop-blur-xl shadow-[0_-20px_25px_-5px_rgba(0,0,0,0.05)] z-20">
           <div className="max-w-3xl mx-auto w-full">
             <button onClick={submitForm} className="w-full bg-purple-600 text-white py-4 md:py-5 rounded-2xl md:rounded-3xl text-lg md:text-xl font-black shadow-lg shadow-purple-500/40 flex items-center justify-center gap-3 hover:bg-purple-700 transition-all hover:shadow-xl active:scale-[0.98]">
-                <Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Báo Cáo' : (initialTaskData ? 'Lưu Tiến Độ Mới' : 'Lưu Báo Cáo Ngày')}
+                <Save className="w-6 h-6 md:w-7 md:h-7" /> {isEditing ? 'Cập Nhật Báo Cáo' : (isContinuing ? 'Lưu Tiến Độ Mới' : 'Lưu Báo Cáo Ngày')}
             </button>
           </div>
       </div>
@@ -3573,6 +4073,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   const [currentPeriod, setCurrentPeriod] = useState('month'); // 'month' | 0 | 1 | 2 | 3
   const [selectedEmpUsername, setSelectedEmpUsername] = useState('');
   const [weeklyModalEmpUsername, setWeeklyModalEmpUsername] = useState(null);
+  const [attendanceModalEmpUsername, setAttendanceModalEmpUsername] = useState(null);
+  const [newLeaveDateInput, setNewLeaveDateInput] = useState('');
   const [isMonthConfigOpen, setIsMonthConfigOpen] = useState(false);
   const [tempStartDay, setTempStartDay] = useState(monthStartDay);
   const [tempAutoDetect, setTempAutoDetect] = useState(sysSettings?.month_config?.autoDetectMonth !== false);
@@ -3604,13 +4106,50 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   // Dữ liệu tuần đã lưu/tùy chỉnh cho tháng đang chọn
   const savedMonthData = sysSettings?.kpi_weekly_data?.[selectedMonth] || {};
 
+  // Hàm kiểm tra ngày nhập thiếu (trừ Chủ nhật) & ngày nghỉ phép trong toàn chu kỳ tháng
+  const getEmployeeAttendance = (emp) => {
+    return analyzeEmployeeAttendanceInRange(
+      emp,
+      unmergedTasks,
+      cycleInfo.startDate,
+      cycleInfo.endDate,
+      sysSettings
+    );
+  };
+
+  // Bật/tắt trạng thái Nghỉ phép cho 1 ngày cụ thể của nhân viên
+  const handleToggleLeaveDate = (empUsername, dateIso) => {
+    if (!isAdmin || !empUsername || !dateIso) return;
+    const currentList = Array.isArray(sysSettings?.kpi_leave_days?.[empUsername])
+      ? sysSettings.kpi_leave_days[empUsername]
+      : [];
+    const exists = currentList.includes(dateIso);
+    const updatedList = exists
+      ? currentList.filter(d => d !== dateIso)
+      : [...currentList, dateIso].sort();
+
+    const updatedSettings = {
+      ...sysSettings,
+      kpi_leave_days: {
+        ...(sysSettings?.kpi_leave_days || {}),
+        [empUsername]: updatedList
+      }
+    };
+    saveSettings(googleSheetUrl, updatedSettings);
+    showNotification(
+      exists
+        ? `Đã hủy nghỉ phép ngày ${formatDateVi(dateIso)} (Tính lại ngày thiếu báo cáo)`
+        : `Đã duyệt nghỉ phép ngày ${formatDateVi(dateIso)} (Không trừ KPI)`
+    );
+  };
+
   // Hàm lấy chỉ số tự động từ Sổ Ghi Công Việc chia theo 4 tuần của chu kỳ tháng
   const getAutoWeeklyMetricsFromTasks = (emp) => {
     const weeks = [
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 },
-      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0 }
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 },
+      { pmPlan: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 }
     ];
 
     const empTasks = monthTasks.filter(t =>
@@ -3618,6 +4157,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
     );
 
     empTasks.forEach(t => {
+      const isLeave = String(t.type || '').trim().toLowerCase() === 'nghỉ phép';
+      if (isLeave) return; // Ngày nghỉ phép không cộng vào kế hoạch PM và không trừ KPI
+
       const dStr = String(t.date || '');
       let wIdx = 0;
       for (let i = 0; i < cycleInfo.weeks.length; i++) {
@@ -3637,6 +4179,27 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
         weeks[wIdx].pmPlan += 1;
         if (t.status === 'Hoàn thành') {
           weeks[wIdx].pmDone += 1;
+        }
+      }
+    });
+
+    // Phân bổ các ngày nhập thiếu (trừ Chủ nhật) và ngày nghỉ phép vào đúng từng tuần
+    const { missingDates, leaveDates } = getEmployeeAttendance(emp);
+
+    missingDates.forEach(mDate => {
+      for (let i = 0; i < cycleInfo.weeks.length; i++) {
+        if (mDate >= cycleInfo.weeks[i].startDate && mDate <= cycleInfo.weeks[i].endDate) {
+          weeks[i].missingDays += 1;
+          break;
+        }
+      }
+    });
+
+    leaveDates.forEach(lObj => {
+      for (let i = 0; i < cycleInfo.weeks.length; i++) {
+        if (lObj.date >= cycleInfo.weeks[i].startDate && lObj.date <= cycleInfo.weeks[i].endDate) {
+          weeks[i].leaveDays += 1;
+          break;
         }
       }
     });
@@ -3677,7 +4240,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
         pmPostponed: savedW.pmPostponed !== undefined ? Number(savedW.pmPostponed) : 0,
         pmDone: savedW.pmDone !== undefined ? Number(savedW.pmDone) : autoW.pmDone,
         cmTotal: savedW.cmTotal !== undefined ? Number(savedW.cmTotal) : autoW.cmTotal,
-        cmDone: savedW.cmDone !== undefined ? Number(savedW.cmDone) : autoW.cmDone
+        cmDone: savedW.cmDone !== undefined ? Number(savedW.cmDone) : autoW.cmDone,
+        missingDays: autoW.missingDays,
+        leaveDays: autoW.leaveDays
       };
     });
   };
@@ -3691,8 +4256,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       acc.pmDone += (w.pmDone || 0);
       acc.cmTotal += (w.cmTotal || 0);
       acc.cmDone += (w.cmDone || 0);
+      acc.missingDays += (w.missingDays || 0);
+      acc.leaveDays += (w.leaveDays || 0);
       return acc;
-    }, { errors: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0 });
+    }, { errors: 0, pmPlan: 0, pmPostponed: 0, pmDone: 0, cmTotal: 0, cmDone: 0, missingDays: 0, leaveDays: 0 });
   };
 
   // Công thức tính điểm KPI chuẩn theo bảng mẫu (20% Kỷ luật & 5S | 70% PM >95% | 10% CM SLA 90%)
@@ -3703,7 +4270,11 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
     const rateI = scoreI / 100;
 
     // 2. Mục II.1: Bảo dưỡng định kỳ PM (70%, mục tiêu >= 95%)
-    const effectivePM = Math.max(0, (metrics.pmPlan || 0) - (metrics.pmPostponed || 0));
+    // Mỗi ngày nhập thiếu (trừ Chủ nhật & Nghỉ phép) được đánh giá Không hoàn thành (+1 vào mẫu số Kế hoạch B, +0 vào Đạt A)
+    const missingDays = Number(metrics.missingDays || 0);
+    const leaveDays = Number(metrics.leaveDays || 0);
+    const effectiveTotalPlan = (metrics.pmPlan || 0) + missingDays;
+    const effectivePM = Math.max(0, effectiveTotalPlan - (metrics.pmPostponed || 0));
     let t1 = 1.0;
     if (effectivePM > 0) {
       t1 = (metrics.pmDone || 0) / effectivePM;
@@ -3744,6 +4315,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
 
     return {
       ...metrics,
+      missingDays,
+      leaveDays,
+      effectiveTotalPlan,
       scoreI,
       rateI,
       effectivePM,
@@ -3846,6 +4420,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   // Tính toán danh sách hiển thị cho bảng tổng hợp
   const computedRows = visibleUsers.map(emp => {
     const weeks = getEmployeeWeeks(emp);
+    const attendance = getEmployeeAttendance(emp);
     const monthlyMetrics = getAggregatedMonthlyMetrics(weeks);
     const monthlyResult = computeMetricsKPI(monthlyMetrics);
     const activeMetrics = currentPeriod === 'month' ? monthlyMetrics : weeks[currentPeriod];
@@ -3855,6 +4430,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
     return {
       emp,
       weeks,
+      attendance,
       monthlyResult,
       activeMetrics,
       activeResult,
@@ -3911,7 +4487,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
       const headers = [
         'STT', 'Mã NV', 'Họ và Tên',
         'Số Lỗi (I)', '% Mục I (20%)',
-        'Tổng KH PM (B)', 'Tổng Hoãn (C)', 'Tổng Đạt PM (A)', '% PM Tháng (70%)',
+        'Tổng KH PM (B)', 'Hoãn (C)', 'Nghỉ phép', 'Thiếu ngày', 'Tổng Đạt PM (A)', '% PM Tháng (70%)',
         'Tổng Sự Cố (ΣK)', 'Tổng CM Đạt (K)', '% CM Tháng (10%)',
         'Tổng Điểm KPI Tháng', 'Xếp Loại',
         `Tuần 1 (${cycleInfo.weeks[0]?.shortRange || ''})`,
@@ -3931,8 +4507,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
 
       sheet.columns = [
         { width: 6 }, { width: 12 }, { width: 22 },
-        { width: 12 }, { width: 14 },
-        { width: 12 }, { width: 11 }, { width: 12 }, { width: 14 },
+        { width: 11 }, { width: 13 },
+        { width: 13 }, { width: 10 }, { width: 11 }, { width: 11 }, { width: 13 }, { width: 14 },
         { width: 12 }, { width: 12 }, { width: 14 },
         { width: 16 }, { width: 12 },
         { width: 11 }, { width: 11 }, { width: 11 }, { width: 11 }
@@ -3947,8 +4523,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
           r.emp.name || '',
           res.errors,
           `${res.scoreI}%`,
-          res.pmPlan,
+          res.effectiveTotalPlan,
           res.pmPostponed,
+          res.leaveDays,
+          res.missingDays,
           res.pmDone,
           `${(res.t1 * 100).toFixed(1)}%`,
           res.cmTotal,
@@ -3960,7 +4538,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
         ]);
         row.height = 24;
         row.eachCell({ includeEmpty: true }, (cell, colNum) => {
-          cell.font = { name: 'Arial', size: 10, bold: colNum === 13 || colNum === 14 };
+          cell.font = { name: 'Arial', size: 10, bold: colNum === 15 || colNum === 16 };
           cell.border = thinBorder;
           cell.alignment = { vertical: 'middle', horizontal: colNum === 3 ? 'left' : 'center' };
         });
@@ -3985,6 +4563,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
   const singleSelectedRow = computedRows.find(r => r.emp.username === selectedEmpUsername) || computedRows[0];
   // Nhân viên đang mở Modal 4 Tuần
   const modalEmpRow = weeklyModalEmpUsername ? computedRows.find(r => r.emp.username === weeklyModalEmpUsername) : null;
+  // Nhân viên đang mở Modal Ngày Thiếu & Nghỉ Phép
+  const attendanceModalEmpRow = attendanceModalEmpUsername ? computedRows.find(r => r.emp.username === attendanceModalEmpUsername) : null;
 
   const copyFormulaText = (text) => {
     try {
@@ -4152,10 +4732,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                       </>
                     )}
                     <span className="text-xs font-bold text-slate-600">Tháng báo cáo:</span>
-                    <input
-                      type="month"
+                    <VietnameseMonthPicker
                       value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(e.target.value || getActiveReportMonth(sysSettings))}
+                      onChange={(val) => setSelectedMonth(val || getActiveReportMonth(sysSettings))}
                       className="border border-slate-300 rounded-lg px-2.5 py-1 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                     <span className="text-[11px] font-bold text-purple-800 bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg">
@@ -4191,10 +4770,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th rowSpan="2" className="p-2 border-r border-slate-200 w-10">STT</th>
                         <th colSpan="2" className="p-2 border-r border-slate-200 bg-slate-200/60">THÔNG TIN NHÂN SỰ</th>
                         <th colSpan="2" className="p-2 border-r border-slate-200 bg-amber-50 text-amber-900">MỤC I: KỶ LUẬT &amp; 5S (20%)</th>
-                        <th colSpan="4" className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MỤC II.1: BẢO DƯỠNG ĐỊNH KỲ - PM (70%)</th>
+                        <th colSpan="6" className="p-2 border-r border-slate-200 bg-blue-50 text-blue-900">MỤC II.1: BẢO DƯỠNG ĐỊNH KỲ - PM (70%)</th>
                         <th colSpan="3" className="p-2 border-r border-slate-200 bg-emerald-50 text-emerald-900">MỤC II.2: SỰ CỐ ĐỘT XUẤT - CM (10%)</th>
                         <th className="p-2 bg-purple-50 text-purple-900">TỔNG HỢP</th>
-                        <th rowSpan="2" className="p-2 border-l border-slate-200 w-20 no-print">Tác vụ</th>
+                        <th rowSpan="2" className="p-2 border-l border-slate-200 w-24 no-print">Tác vụ</th>
                       </tr>
                       {/* SUB HEADERS */}
                       <tr className="bg-slate-50 text-slate-600 border-b border-slate-300 text-center text-[11px] font-bold">
@@ -4206,10 +4785,12 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th className="p-2 border-r border-slate-200 w-20 bg-amber-50 font-black" title="Đạt 100% nếu 0 lỗi; Mất 20% điểm (0%) nếu ≥ 1 lỗi">% Mục I</th>
 
                         {/* KPI II.1 */}
-                        <th className="p-2 border-r border-slate-200 w-16" title="Tổng số việc giao theo lịch">K/Hoạch (B)</th>
-                        <th className="p-2 border-r border-slate-200 w-16" title="Số việc hoãn hợp lệ do khách quan">Hoãn (C)</th>
+                        <th className="p-2 border-r border-slate-200 w-20" title="Tổng số việc giao theo lịch (+ Số ngày nhập thiếu)">K/Hoạch (B)</th>
+                        <th className="p-2 border-r border-slate-200 w-14" title="Số việc hoãn hợp lệ do khách quan">Hoãn (C)</th>
+                        <th className="p-2 border-r border-slate-200 w-16 text-teal-700" title="Số ngày nghỉ phép hợp lệ (Không trừ KPI)">Nghỉ phép</th>
+                        <th className="p-2 border-r border-slate-200 w-16 text-rose-600" title="Số ngày nhập thiếu báo cáo (trừ Chủ nhật) -> Đánh giá Không hoàn thành & trừ % KPI">Thiếu ngày</th>
                         <th className="p-2 border-r border-slate-200 w-16" title="Số việc hoàn thành đúng hạn và nghiệm thu">Đạt (A)</th>
-                        <th className="p-2 border-r border-slate-200 w-20 bg-blue-50 font-black" title="Tỷ lệ A / (B - C)">% Đạt (T1)</th>
+                        <th className="p-2 border-r border-slate-200 w-20 bg-blue-50 font-black" title="Tỷ lệ A / (B + Thiếu ngày - C)">% Đạt (T1)</th>
 
                         {/* KPI II.2 */}
                         <th className="p-2 border-r border-slate-200 w-16" title="Tổng số ca sự cố phát sinh">Tổng (ΣK)</th>
@@ -4223,7 +4804,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <tbody className="divide-y divide-slate-200">
                       {computedRows.length === 0 ? (
                         <tr>
-                          <td colSpan="14" className="p-8 text-center text-slate-400">Chưa có dữ liệu nhân sự kỹ thuật.</td>
+                          <td colSpan="16" className="p-8 text-center text-slate-400">Chưa có dữ liệu nhân sự kỹ thuật.</td>
                         </tr>
                       ) : (
                         computedRows.map((row, idx) => {
@@ -4243,8 +4824,25 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                   <td className={`p-2 border-r border-slate-200 font-black ${activeMetrics.errors >= 1 ? 'bg-rose-100/70 text-rose-700' : 'bg-amber-50/70 text-amber-900'}`}>{activeResult.scoreI}%</td>
 
                                   {/* MỤC II.1 (AGGREGATED) */}
-                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch 4 tuần (Bấm để sửa từng tuần)" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPlan}</td>
+                                  <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng kế hoạch (bao gồm ngày thiếu báo cáo)" className="p-2 border-r border-slate-200 font-semibold cursor-pointer hover:bg-purple-50/60">
+                                    <div>{activeResult.effectiveTotalPlan}</div>
+                                    {activeResult.missingDays > 0 && (
+                                      <div className="text-[10px] font-normal text-rose-600">({activeMetrics.pmPlan}+{activeResult.missingDays} thiếu)</div>
+                                    )}
+                                  </td>
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoãn hợp lệ 4 tuần" className="p-2 border-r border-slate-200 text-slate-500 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmPostponed}</td>
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Xem/Duyệt ngày nghỉ phép (Không trừ KPI)" className="p-2 border-r border-slate-200 font-bold text-teal-700 cursor-pointer hover:bg-teal-50">
+                                    {activeResult.leaveDays > 0 ? <span className="bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-md">{activeResult.leaveDays}</span> : '0'}
+                                  </td>
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} title="Bấm để xem chi tiết các ngày nhập thiếu hoặc duyệt Nghỉ phép" className="p-2 border-r border-slate-200 font-bold cursor-pointer hover:bg-rose-50">
+                                    {activeResult.missingDays > 0 ? (
+                                      <span className="bg-rose-100 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-black">
+                                        {activeResult.missingDays}
+                                      </span>
+                                    ) : (
+                                      <span className="text-slate-400">0</span>
+                                    )}
+                                  </td>
                                   <td onClick={() => setWeeklyModalEmpUsername(emp.username)} title="Tổng hoàn thành 4 tuần" className="p-2 border-r border-slate-200 font-bold text-blue-700 cursor-pointer hover:bg-purple-50/60">{activeMetrics.pmDone}</td>
                                   <td className="p-2 border-r border-slate-200 font-black bg-blue-50/70 text-blue-900">{(activeResult.t1 * 100).toFixed(1)}%</td>
 
@@ -4267,6 +4865,12 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                                   </td>
                                   <td className="p-1 border-r border-slate-200">
                                     <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmPostponed} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmPostponed', e.target.value)} className="w-full text-center text-slate-500 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
+                                  </td>
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} className="p-2 border-r border-slate-200 font-bold text-teal-700 cursor-pointer hover:bg-teal-50">
+                                    {activeResult.leaveDays}
+                                  </td>
+                                  <td onClick={() => setAttendanceModalEmpUsername(emp.username)} className="p-2 border-r border-slate-200 font-bold cursor-pointer hover:bg-rose-50">
+                                    {activeResult.missingDays > 0 ? <span className="text-rose-600 font-black">{activeResult.missingDays}</span> : <span className="text-slate-400">0</span>}
                                   </td>
                                   <td className="p-1 border-r border-slate-200">
                                     <input disabled={!isAdmin} type="number" min="0" value={activeMetrics.pmDone} onChange={(e) => handleUpdateEmpWeek(emp, currentPeriod, 'pmDone', e.target.value)} className="w-full text-center font-bold text-blue-700 bg-white border border-slate-200 focus:ring-1 focus:ring-blue-500 rounded py-1 disabled:bg-slate-100" />
@@ -4291,7 +4895,14 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
 
                               {/* ACTIONS */}
                               <td className="p-2 border-l border-slate-200 no-print">
-                                <div className="flex items-center justify-center gap-1.5">
+                                <div className="flex items-center justify-center gap-1">
+                                  <button
+                                    onClick={() => setAttendanceModalEmpUsername(emp.username)}
+                                    title="Kiểm tra ngày nhập thiếu & duyệt Nghỉ phép"
+                                    className={`p-1.5 rounded-lg transition-colors ${row.monthlyResult.missingDays > 0 ? 'text-rose-600 bg-rose-50 hover:bg-rose-100' : 'text-teal-600 hover:bg-teal-50'}`}
+                                  >
+                                    <AlertTriangle className="w-4 h-4" />
+                                  </button>
                                   <button
                                     onClick={() => setWeeklyModalEmpUsername(emp.username)}
                                     title="Xem & Sửa chi tiết 4 tuần"
@@ -4327,7 +4938,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-amber-500 inline-block"></span> <b>70 - 84%:</b> Cải thiện</span>
                     <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> <b>&lt;70%:</b> Không đạt</span>
                   </div>
-                  <span className="italic text-[11px] text-slate-500">* Số liệu PM &amp; CM tự động lấy từ Sổ Ghi Công Việc; các hiệu chỉnh tuần tự động lưu và cộng dồn sang tháng.</span>
+                  <span className="italic text-[11px] text-slate-500">* Ngày nhập thiếu báo cáo (trừ Chủ nhật &amp; Nghỉ phép) tự động đánh giá Không hoàn thành (+1 vào Kế hoạch B) và trừ % KPI.</span>
                 </div>
               </div>
             </div>
@@ -4356,10 +4967,9 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                       </option>
                     ))}
                   </select>
-                  <input
-                    type="month"
+                  <VietnameseMonthPicker
                     value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value || '2026-09')}
+                    onChange={(val) => setSelectedMonth(val || getActiveReportMonth(sysSettings))}
                     className="border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
@@ -4392,8 +5002,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     </div>
                   </div>
                   <div className="text-center mt-4">
-                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-wide uppercase">BẢNG ĐÁNH GIÁ KẾT QUẢ HOÀN THÀNH CÔNG VIỆC</h2>
-                    <p className="text-sm font-bold text-slate-600 mt-1">Kỳ đánh giá: <span>{formattedMonthLabel}</span></p>
+                    <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-wide uppercase">
+                      BẢNG ĐÁNH GIÁ KẾT QUẢ HOÀN THÀNH CÔNG VIỆC
+                    </h2>
+                    <p className="text-sm font-bold text-slate-600 mt-1">Kỳ đánh giá: {formattedMonthLabel}</p>
                   </div>
                 </div>
 
@@ -4406,15 +5018,15 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <tbody>
                       <tr>
                         <td className="bg-slate-100 font-bold p-2.5 w-1/6 border-r border-b border-slate-300">Mã NV:</td>
-                        <td className="p-2.5 w-2/6 border-r border-b border-slate-300 font-semibold">{singleSelectedRow.emp.employeeId || singleSelectedRow.emp.id}</td>
+                        <td className="p-2.5 w-2/6 border-r border-b border-slate-300 font-bold">{singleSelectedRow.emp.employeeId || singleSelectedRow.emp.id}</td>
                         <td className="bg-slate-100 font-bold p-2.5 w-1/6 border-r border-b border-slate-300">Chức vụ:</td>
                         <td className="p-2.5 w-2/6 border-b border-slate-300 font-semibold">{singleSelectedRow.emp.position || 'Nhân viên kỹ thuật bảo trì'}</td>
                       </tr>
                       <tr>
                         <td className="bg-slate-100 font-bold p-2.5 border-r border-slate-300">Họ và tên:</td>
-                        <td className="p-2.5 border-r border-slate-300 font-bold text-blue-900 text-sm">{singleSelectedRow.emp.name}</td>
+                        <td className="p-2.5 border-r border-slate-300 font-black text-blue-900 text-sm">{singleSelectedRow.emp.name}</td>
                         <td className="bg-slate-100 font-bold p-2.5 border-r border-slate-300">Đơn vị:</td>
-                        <td className="p-2.5 font-semibold">{singleSelectedRow.emp.department || 'Bộ phận QLTB'}</td>
+                        <td className="p-2.5 font-semibold">{singleSelectedRow.emp.department || 'Bảo trì xưởng'}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -4439,7 +5051,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     </thead>
                     <tbody>
                       {/* Row I */}
-                      <tr className="border-b border-slate-300 bg-slate-50">
+                      <tr className="border-b border-slate-300 bg-slate-50/60">
                         <td className="p-2.5 font-bold text-center border-r border-slate-300">I</td>
                         <td className="p-2.5 font-bold border-r border-slate-300" colSpan="6">KPI ĐỊNH TÍNH</td>
                       </tr>
@@ -4456,17 +5068,21 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         </td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300">20%</td>
                         <td className="p-2.5 text-center border-r border-slate-300">100%</td>
-                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : 'text-blue-700'}`}>{singleSelectedRow.monthlyResult.scoreI}%</td>
-                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : ''}`}>{(singleSelectedRow.monthlyResult.weightedI * 100).toFixed(1)}%</td>
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : 'text-blue-700'}`}>
+                          {singleSelectedRow.monthlyResult.scoreI}%
+                        </td>
+                        <td className={`p-2.5 text-center font-bold border-r border-slate-300 ${singleSelectedRow.monthlyResult.errors >= 1 ? 'text-rose-600' : ''}`}>
+                          {(singleSelectedRow.monthlyResult.weightedI * 100).toFixed(1)}%
+                        </td>
                         <td className="p-2 text-[11px] text-slate-600">
                           {singleSelectedRow.monthlyResult.errors >= 1
-                            ? `Vi phạm ${singleSelectedRow.monthlyResult.errors} lỗi trong tháng (Mất 20% điểm)`
+                            ? `Vi phạm ${singleSelectedRow.monthlyResult.errors} lỗi (Mất 20% điểm)`
                             : 'Không vi phạm lỗi (Đạt tối đa 20%)'}
                         </td>
                       </tr>
 
                       {/* Row II */}
-                      <tr className="border-b border-slate-300 bg-slate-50">
+                      <tr className="border-b border-slate-300 bg-slate-50/60">
                         <td className="p-2.5 font-bold text-center border-r border-slate-300">II</td>
                         <td className="p-2.5 font-bold border-r border-slate-300" colSpan="6">KPI ĐỊNH LƯỢNG (KẾT QUẢ CÔNG VIỆC KỸ THUẬT)</td>
                       </tr>
@@ -4475,16 +5091,20 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <td className="p-2.5 border-r border-slate-300">
                           <p className="font-bold text-slate-800">Tỷ lệ thực hiện và hoàn thành đúng hạn công tác bảo trì định kỳ (PM)</p>
                           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                            Đo lường mức độ hoàn thành phiếu kiểm tra định kỳ (Master PM).<br />
+                            Đo lường mức độ hoàn thành phiếu kiểm tra định kỳ (Master PM) &amp; tuân thủ báo cáo ngày.<br />
                             <span className="text-blue-600 font-mono text-[10px]">
-                              (Tổng tháng: {singleSelectedRow.monthlyResult.pmDone} đạt / [{singleSelectedRow.monthlyResult.pmPlan} kế hoạch - {singleSelectedRow.monthlyResult.pmPostponed} hoãn] = {(singleSelectedRow.monthlyResult.t1 * 100).toFixed(1)}%)
+                              (Tổng tháng: {singleSelectedRow.monthlyResult.pmDone} đạt / [{singleSelectedRow.monthlyResult.pmPlan} kế hoạch{singleSelectedRow.monthlyResult.missingDays > 0 ? ` + ${singleSelectedRow.monthlyResult.missingDays} ngày thiếu` : ''} - {singleSelectedRow.monthlyResult.pmPostponed} hoãn] = {(singleSelectedRow.monthlyResult.t1 * 100).toFixed(1)}%{singleSelectedRow.monthlyResult.leaveDays > 0 ? ` | Nghỉ phép: ${singleSelectedRow.monthlyResult.leaveDays} ngày` : ''})
                             </span>
                           </p>
                         </td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300">70%</td>
                         <td className="p-2.5 text-center font-semibold border-r border-slate-300">&gt; 95%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{(singleSelectedRow.monthlyResult.scorePM * 100).toFixed(1)}%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedPM * 100).toFixed(1)}%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">
+                          {(singleSelectedRow.monthlyResult.scorePM * 100).toFixed(1)}%
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">
+                          {(singleSelectedRow.monthlyResult.weightedPM * 100).toFixed(1)}%
+                        </td>
                         <td className="p-2 text-[11px] text-slate-500">Nghiệm thu theo Phiếu bảo trì</td>
                       </tr>
                       <tr className="border-b border-slate-300">
@@ -4492,7 +5112,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <td className="p-2.5 border-r border-slate-300">
                           <p className="font-bold text-slate-800">Phản hồi và khắc phục sự cố kỹ thuật đột xuất kịp thời (CM)</p>
                           <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                            Có mặt ≤ 10 phút &amp; sửa hoàn thành đúng định mức SLA.<br />
+                            Có mặt &le; 10 phút &amp; sửa hoàn thành đúng định mức SLA.<br />
                             <span className="text-blue-600 font-mono text-[10px]">
                               {singleSelectedRow.monthlyResult.cmTotal > 0
                                 ? `(Tổng tháng: ${singleSelectedRow.monthlyResult.cmDone} đạt / ${singleSelectedRow.monthlyResult.cmTotal} ca = ${(singleSelectedRow.monthlyResult.t2 * 100).toFixed(1)}%)`
@@ -4502,8 +5122,12 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         </td>
                         <td className="p-2.5 text-center font-bold border-r border-slate-300">10%</td>
                         <td className="p-2.5 text-center font-semibold border-r border-slate-300">90%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">{(singleSelectedRow.monthlyResult.scoreCM * 100).toFixed(1)}%</td>
-                        <td className="p-2.5 text-center font-bold border-r border-slate-300">{(singleSelectedRow.monthlyResult.weightedCM * 100).toFixed(1)}%</td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300 text-blue-700">
+                          {(singleSelectedRow.monthlyResult.scoreCM * 100).toFixed(1)}%
+                        </td>
+                        <td className="p-2.5 text-center font-bold border-r border-slate-300">
+                          {(singleSelectedRow.monthlyResult.weightedCM * 100).toFixed(1)}%
+                        </td>
                         <td className="p-2 text-[11px] text-slate-500">Phiếu sửa chữa đột xuất</td>
                       </tr>
 
@@ -4516,7 +5140,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <td className="p-3 text-center text-sm font-black text-blue-900 border-r border-slate-300 bg-blue-50">
                           {(singleSelectedRow.monthlyResult.totalScore * 100).toFixed(1)}%
                         </td>
-                        <td className="p-3 text-center text-[11px] font-bold text-slate-700">
+                        <td className="p-3 text-center text-[11px] text-slate-700 font-bold">
                           {singleSelectedRow.monthlyResult.rank} ({singleSelectedRow.monthlyResult.salaryPct})
                         </td>
                       </tr>
@@ -4535,7 +5159,8 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                         <th className="p-1.5 border-r border-slate-300">Thời gian</th>
                         <th className="p-1.5 border-r border-slate-300">Số Lỗi (Mục I)</th>
                         <th className="p-1.5 border-r border-slate-300">Điểm Mục I</th>
-                        <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH - Hoãn)</th>
+                        <th className="p-1.5 border-r border-slate-300">PM: Đạt / (KH + Thiếu - Hoãn)</th>
+                        <th className="p-1.5 border-r border-slate-300">Thiếu / Phép</th>
                         <th className="p-1.5 border-r border-slate-300">% Đạt PM</th>
                         <th className="p-1.5 border-r border-slate-300">CM: Đạt / Tổng ca</th>
                         <th className="p-1.5 border-r border-slate-300">% Kịp CM</th>
@@ -4545,7 +5170,7 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                     <tbody className="divide-y divide-slate-300">
                       {singleSelectedRow.weeks.map((w, wIdx) => {
                         const wRes = computeMetricsKPI(w);
-                        const effPM = Math.max(0, (w.pmPlan || 0) - (w.pmPostponed || 0));
+                        const effPM = Math.max(0, (w.pmPlan || 0) + (w.missingDays || 0) - (w.pmPostponed || 0));
                         const wMeta = cycleInfo.weeks[wIdx];
                         return (
                           <tr key={wIdx}>
@@ -4555,7 +5180,10 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                             <td className={`p-1.5 border-r border-slate-300 ${w.errors >= 1 ? 'text-rose-600 font-bold' : ''}`}>{w.errors} lỗi</td>
                             <td className="p-1.5 border-r border-slate-300 font-semibold">{wRes.scoreI}%</td>
                             <td className="p-1.5 border-r border-slate-300">
-                              {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}-{w.pmPostponed})</span>
+                              {w.pmDone} / {effPM} <span className="text-[10px] text-slate-500">({w.pmPlan}+{w.missingDays || 0}-{w.pmPostponed})</span>
+                            </td>
+                            <td className="p-1.5 border-r border-slate-300 text-[10px]">
+                              <span className={w.missingDays > 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}>{w.missingDays || 0} thiếu</span> / <span className="text-teal-700 font-semibold">{w.leaveDays || 0} phép</span>
                             </td>
                             <td className="p-1.5 border-r border-slate-300 font-semibold">{(wRes.t1 * 100).toFixed(1)}%</td>
                             <td className="p-1.5 border-r border-slate-300">
@@ -4653,17 +5281,18 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="text-xs font-bold text-slate-800 uppercase flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-black">2</span>
-                    Tiêu chí II.1: Bảo dưỡng định kỳ PM (70%)
+                    Tiêu chí II.1: Bảo dưỡng định kỳ PM &amp; Chuyên cần ngày (70%)
                   </h4>
-                  <p className="text-xs text-slate-600">Ô <code>F5</code> là Kế hoạch (B), <code>G5</code> là Hoãn (C), <code>H5</code> là Đạt (A):</p>
+                  <p className="text-xs text-slate-600">Ô <code>F5</code> là Kế hoạch (B), <code>G5</code> là Hoãn (C), <code>H5</code> là Thiếu ngày (trừ CN &amp; Nghỉ phép), <code>I5</code> là Đạt (A):</p>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
-                    <code className="overflow-x-auto">=IF((F5 - G5) &gt; 0, H5 / (F5 - G5), 1)</code>
-                    <button onClick={() => copyFormulaText('=IF((F5 - G5) > 0, H5 / (F5 - G5), 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
+                    <code className="overflow-x-auto">=IF((F5 + H5 - G5) &gt; 0, I5 / (F5 + H5 - G5), 1)</code>
+                    <button onClick={() => copyFormulaText('=IF((F5 + H5 - G5) > 0, I5 / (F5 + H5 - G5), 1)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
                   <div className="bg-slate-900 text-emerald-400 p-2.5 rounded-xl font-mono text-xs flex justify-between items-center gap-2">
                     <code className="overflow-x-auto">=IF(T1 &gt;= 0.95, 1, T1 / 0.95)</code>
                     <button onClick={() => copyFormulaText('=IF(T1 >= 0.95, 1, T1 / 0.95)')} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-[11px] shrink-0">Copy</button>
                   </div>
+                  <p className="text-[11px] text-slate-500 italic">Mỗi ngày nhập thiếu (trừ Chủ nhật) cộng thêm 1 vào mẫu số (đánh giá Không hoàn thành); ngày Nghỉ phép không cộng vào mẫu số nên không bị trừ KPI.</p>
                 </div>
 
                 {/* KPI 2.2 */}
@@ -4784,6 +5413,145 @@ const KpiReportView = ({ user, usersList, dailyTasks, machines, sysSettings, sav
             <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
               <button onClick={() => setWeeklyModalEmpUsername(null)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-sm">
                 Hoàn tất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CHI TIẾT NGÀY THIẾU BÁO CÁO & DUYỆT NGHỈ PHÉP */}
+      {attendanceModalEmpRow && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[205] flex items-center justify-center p-4 no-print animate-fade-in" onClick={() => setAttendanceModalEmpUsername(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden flex flex-col max-h-[88vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 md:p-5 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div>
+                <h3 className="font-black text-sm md:text-base uppercase flex items-center gap-2">
+                  <CalendarClock className="w-5 h-5 text-amber-400" />
+                  Ngày Thiếu Báo Cáo &amp; Nghỉ Phép: {attendanceModalEmpRow.emp.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Kỳ {cycleInfo.monthLabel} ({cycleInfo.rangeText}) • Tự động loại trừ ngày Chủ nhật
+                </p>
+              </div>
+              <button onClick={() => setAttendanceModalEmpUsername(null)} className="text-slate-400 hover:text-white p-1.5 rounded-full hover:bg-slate-800">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar space-y-5 flex-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-3.5">
+                  <p className="text-xs font-bold text-rose-700 uppercase">Ngày thiếu báo cáo (Trừ KPI)</p>
+                  <p className="text-2xl font-black text-rose-800 mt-1">{attendanceModalEmpRow.attendance.missingDates.length} <span className="text-xs font-semibold">ngày</span></p>
+                  <p className="text-[11px] text-rose-600 mt-0.5">Mỗi ngày bị đánh giá Không hoàn thành</p>
+                </div>
+                <div className="bg-teal-50 border border-teal-200 rounded-2xl p-3.5">
+                  <p className="text-xs font-bold text-teal-700 uppercase">Ngày nghỉ phép (Không trừ)</p>
+                  <p className="text-2xl font-black text-teal-800 mt-1">{attendanceModalEmpRow.attendance.leaveDates.length} <span className="text-xs font-semibold">ngày</span></p>
+                  <p className="text-[11px] text-teal-600 mt-0.5">Được miễn trừ đánh giá KPI ngày</p>
+                </div>
+              </div>
+
+              {isAdmin && (
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-700">Thêm nhanh ngày nghỉ phép trong kỳ:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      min={cycleInfo.startDate}
+                      max={cycleInfo.endDate}
+                      value={newLeaveDateInput}
+                      onChange={(e) => setNewLeaveDateInput(e.target.value)}
+                      className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs font-bold bg-white outline-none focus:ring-2 focus:ring-teal-500"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!newLeaveDateInput) {
+                          showNotification('Vui lòng chọn ngày nghỉ phép!', 'error');
+                          return;
+                        }
+                        const [ly, lm, ld] = newLeaveDateInput.split('-').map(Number);
+                        if (new Date(ly, lm - 1, ld).getDay() === 0) {
+                          showNotification('Ngày Chủ nhật mặc định đã được miễn trừ!', 'error');
+                          return;
+                        }
+                        handleToggleLeaveDate(attendanceModalEmpRow.emp.username, newLeaveDateInput);
+                        setNewLeaveDateInput('');
+                      }}
+                      className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-sm"
+                    >
+                      + Duyệt phép
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* DANH SÁCH NGÀY NHẬP THIẾU */}
+              <div>
+                <h4 className="text-xs font-black uppercase text-rose-700 mb-2 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" /> Danh sách ngày nhập thiếu ({attendanceModalEmpRow.attendance.missingDates.length})
+                </h4>
+                {attendanceModalEmpRow.attendance.missingDates.length === 0 ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs font-bold text-emerald-700 text-center">
+                    Nhân viên đã nhập đầy đủ báo cáo cho tất cả các ngày làm việc!
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {attendanceModalEmpRow.attendance.missingDates.map((dIso) => (
+                      <div key={dIso} className="p-3 bg-rose-50/70 border border-rose-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-black text-slate-800 text-xs md:text-sm">{getVietnameseDayName(dIso)}, {formatDateVi(dIso)}</span>
+                          <span className="ml-2 text-[11px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-md border border-rose-200">
+                            Không hoàn thành (Trừ % KPI)
+                          </span>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleToggleLeaveDate(attendanceModalEmpRow.emp.username, dIso)}
+                            className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition shadow-sm"
+                          >
+                            Duyệt Nghỉ phép (Không trừ)
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* DANH SÁCH NGÀY NGHỈ PHÉP */}
+              {attendanceModalEmpRow.attendance.leaveDates.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-black uppercase text-teal-700 mb-2 flex items-center gap-1.5">
+                    <CheckCircle className="w-4 h-4" /> Danh sách ngày Nghỉ phép ({attendanceModalEmpRow.attendance.leaveDates.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {attendanceModalEmpRow.attendance.leaveDates.map((lObj) => (
+                      <div key={lObj.date} className="p-3 bg-teal-50/70 border border-teal-200 rounded-xl flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-black text-slate-800 text-xs md:text-sm">{getVietnameseDayName(lObj.date)}, {formatDateVi(lObj.date)}</span>
+                          <span className="ml-2 text-[11px] font-bold bg-teal-100 text-teal-800 px-2 py-0.5 rounded-md border border-teal-200">
+                            Nghỉ phép • Không trừ KPI ({lObj.source === 'task' ? 'Từ Sổ CV' : 'Admin duyệt'})
+                          </span>
+                        </div>
+                        {isAdmin && lObj.source === 'admin' && (
+                          <button
+                            onClick={() => handleToggleLeaveDate(attendanceModalEmpRow.emp.username, lObj.date)}
+                            className="px-3 py-1.5 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition"
+                          >
+                            Hủy nghỉ phép
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end shrink-0">
+              <button onClick={() => setAttendanceModalEmpUsername(null)} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-sm">
+                Đóng
               </button>
             </div>
           </div>
@@ -5318,7 +6086,7 @@ function MainApp() {
           
           if (!isEditingRecord) { 
               // Tự động Đóng (chuyển trạng thái thành Hoàn thành) phiếu cũ khi nhấn "Tiếp"
-              if (initialTaskData) {
+              if (initialTaskData && !initialTaskData.isMissingFill) {
                  const oldId = initialTaskData.originalTaskId || initialTaskData.id;
                  const originalTaskObj = dailyTasks.find(t => String(t.id) === String(oldId)) || initialTaskData;
                  const cleanedOldNote = String(originalTaskObj.note || '').split(/\n*---\s*\[\d{4}-\d{2}-\d{2}\]/i)[0].trim();
@@ -5353,7 +6121,7 @@ function MainApp() {
               });
           }
           
-          const wasContinuing = !!initialTaskData;
+          const wasContinuing = Boolean(initialTaskData && !initialTaskData.isMissingFill);
           setInitialTaskData(null); 
           setEditTaskData(null);
           showNotification(isEditingRecord ? 'Đã lưu cập nhật báo cáo!' : (wasContinuing ? 'Đã đóng phiếu cũ và tạo phiếu mới thành công!' : 'Đã lưu báo cáo hằng ngày thành công!')); 
@@ -5494,12 +6262,12 @@ function MainApp() {
       <div className="w-full max-w-[1600px] h-full bg-slate-50 flex flex-col relative overflow-hidden md:shadow-[0_0_50px_rgba(0,0,0,0.1)] md:border-x border-slate-300 print-container-reset">
         <div className="h-1 md:h-1.5 bg-blue-600 w-full shrink-0 z-50 no-print"></div>
         <div className="flex-1 overflow-hidden relative flex flex-col print-container-reset">
-          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} />}
+          {view === 'dashboard' && <DashboardView user={user} machines={machines} dailyTasks={dailyTasks} utilityLogs={utilityLogs} logs={logs} handleLogout={handleLogout} setView={setView} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} sysSettings={sysSettings} usersList={usersList} />}
           {view === 'user_management' && <UserManagementView usersList={usersList} setView={setView} showNotification={showNotification} saveUserData={saveUserData} handleDeleteUser={handleDeleteUser} />}
           {view === 'machines' && <MachineManagementView machines={machines} logs={logs} setView={setView} showNotification={showNotification} saveMachineData={saveMachineData} machineFilter={machineFilter} handleDeleteMachineApp={handleDeleteMachineApp} user={user} categoryList={categoryList} saveCategoryListData={saveCategoryListData} />}
           {view === 'settings' && <SettingsView setView={setView} showNotification={showNotification} googleSheetUrl={googleSheetUrl} sysSettings={sysSettings} saveSettings={saveSettings} />}
           {view === 'inventory' && <InventoryView inventory={inventory} setView={setView} showNotification={showNotification} saveInventoryData={saveInventoryData} user={user} db={db} />}
-          {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} />}
+          {view === 'home' && <HomeView user={user} machines={machines} dailyTasks={dailyTasks} logs={logs} setView={setView} handleLogout={handleLogout} db={db} setMachineFilter={setMachineFilter} setTaskFilter={setTaskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings} />}
           {view === 'daily_task_form' && <DailyTaskFormView user={user} inventory={inventory} setView={setView} showNotification={showNotification} handleSaveDailyTask={handleSaveDailyTask} initialTaskData={initialTaskData} setInitialTaskData={setInitialTaskData} editTaskData={editTaskData} setEditTaskData={setEditTaskData} sysSettings={sysSettings}/>}
           {view === 'daily_task_history' && <DailyTaskHistoryView dailyTasks={dailyTasks} usersList={usersList} setView={setView} user={user} taskFilter={taskFilter} setInitialTaskData={setInitialTaskData} setEditTaskData={setEditTaskData} handleDeleteDailyTaskApp={handleDeleteDailyTaskApp} showNotification={showNotification} setZoomedImage={setZoomedImage} sysSettings={sysSettings} handleSyncAllDailyTasksToSheet={handleSyncAllDailyTasksToSheet} />}
           {view === 'kpi_report' && <KpiReportView user={user} usersList={usersList} dailyTasks={dailyTasks} machines={machines} sysSettings={sysSettings} saveSettings={saveSettings} googleSheetUrl={googleSheetUrl} setView={setView} showNotification={showNotification} />}
