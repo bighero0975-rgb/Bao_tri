@@ -425,13 +425,17 @@ const getErrorLevelDisplay = (task) => {
 
 const evaluateTaskKpiStatus = (task, sysSettings) => {
   if (!task) return 'Không đạt';
+  const status = String(task.status || '').trim();
+  if (status !== 'Hoàn thành') {
+    return status === 'Đang xử lý' ? 'Chưa đạt (Đang xử lý)' : 'Không đạt';
+  }
   const lvl = getNormalizedErrorLevel(task);
   if (lvl) {
     const actualMins = getActualWorkMinutes(task.startTime, task.endTime);
     const targetMins = getTargetSlaMinutes(task, sysSettings);
     return actualMins <= targetMins ? 'Đạt' : 'Không đạt';
   }
-  return task.status === 'Hoàn thành' ? 'Đạt' : 'Không đạt';
+  return 'Đạt';
 };
 
 const calculateEarlyLateStr = (task, sysSettings) => {
@@ -3468,30 +3472,45 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
         )}
 
         <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
-            <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-                <div className="flex items-center justify-between gap-3 shrink-0">
+            <div className="max-w-7xl mx-auto space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center space-x-3">
                         <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
                         <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2>
+                        <button
+                            onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
+                        >
+                            <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                            <span>Tạo báo cáo mới</span>
+                        </button>
                     </div>
-                    <button
-                        onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5"
-                    >
-                        <Plus className="w-4 h-4 md:w-5 md:h-5" />
-                        <span>Tạo báo cáo mới</span>
-                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {taskFilter !== 'pending' && (
+                            <button disabled={isExporting} onClick={openKpiExportModal} className="shrink-0 bg-purple-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span>Xuất KPI</span>
+                            </button>
+                        )}
+                        <button disabled={isExporting} onClick={() => handleSyncAllDailyTasksToSheet(dailyTasks)} className="shrink-0 bg-blue-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50" title="Đẩy toàn bộ dữ liệu Sổ ghi công việc hiện tại lên Google Sheet">
+                            <Cloud className="w-4 h-4 md:w-5 md:h-5"/> <span>Đồng bộ Sheet</span>
+                        </button>
+                        <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                            <Download className="w-4 h-4 md:w-5 md:h-5"/> <span>Xuất Excel</span>
+                        </button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-x-auto flex items-center gap-2 md:gap-3 xl:justify-end pb-2 xl:pb-0 custom-scrollbar">
+
+                <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-100">
                    {user.role === 'admin' && (
-                      <div className="relative shrink-0">
-                          <Filter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-36 md:w-44 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                      <div className="relative min-w-[180px] flex-1 sm:flex-initial">
+                          <Filter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
-                   <div className="relative shrink-0">
-                       <ListFilter className="absolute left-3 top-2.5 md:top-3.5 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                       <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-44 md:w-52 pl-9 md:pl-10 pr-3 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm md:text-base outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
+                   <div className="relative min-w-[190px] flex-1 sm:flex-initial">
+                       <ListFilter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+                       <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
                            <option value="all">Tất cả phân loại</option>
                            <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
                            <option value="Chế tạo máy">Chế tạo máy</option>
@@ -3500,27 +3519,20 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                        </select>
                    </div>
                    {taskFilter !== 'pending' && (
-                       <div className="flex items-center gap-1.5 shrink-0">
+                       <div className="flex flex-wrap items-center gap-2">
                            <VietnameseMonthPicker
                                value={selectedReportMonth}
                                onChange={(val) => handleSelectMonthPeriod(val)}
                                title={`Chọn nhanh kỳ tháng (Từ ngày ${monthStartDay} tháng trước đến ngày ${Number(monthStartDay) === 1 ? 'cuối tháng' : Number(monthStartDay) - 1 + ' tháng này'})`}
-                               className="px-3 py-2 md:py-3 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold"
+                               className="px-3.5 py-2 md:py-2.5 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold shrink-0"
                            />
-                           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-[125px] md:w-[145px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
-                           <span className="text-slate-400">-</span>
-                           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-[125px] md:w-[145px] px-2 py-2 md:py-3 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold" />
+                           <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
+                               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-xs md:text-sm outline-none text-slate-700 font-bold" />
+                               <span className="text-slate-400 font-bold">-</span>
+                               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-xs md:text-sm outline-none text-slate-700 font-bold" />
+                           </div>
                        </div>
                    )}
-                   {taskFilter !== 'pending' && (
-                       <button disabled={isExporting} onClick={openKpiExportModal} className="shrink-0 bg-purple-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-2 disabled:opacity-50">
-                           <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất KPI</span>
-                       </button>
-                   )}
-                   <button disabled={isExporting} onClick={() => handleSyncAllDailyTasksToSheet(dailyTasks)} className="shrink-0 bg-blue-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50" title="Đẩy toàn bộ dữ liệu Sổ ghi công việc hiện tại lên Google Sheet">
-                       <Cloud className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Đồng bộ Sheet</span>
-                   </button>
-                   <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3 py-2 md:py-3 rounded-xl text-sm md:text-base font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"><Download className="w-4 h-4 md:w-5 md:h-5"/> <span className="hidden md:inline">Xuất Excel</span></button>
                 </div>
             </div>
         </div>
@@ -3602,13 +3614,22 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
 
                                             <td className="px-4 py-4 align-top">
                                                 <h4 className="font-bold text-slate-800 text-base leading-tight mb-2 break-words">{task.taskName}</h4>
-                                                <span className={`text-[10px] md:text-xs font-bold border px-2 py-1 rounded-md uppercase tracking-wider inline-block ${String(task.type || '').trim().toLowerCase() === 'nghỉ phép' ? 'text-teal-700 bg-teal-50 border-teal-200' : 'text-purple-700 bg-purple-50 border-purple-100'}`}>
-                                                    {task.type}
-                                                </span>
+                                                <div className="flex gap-1.5 flex-wrap items-center">
+                                                    <span className={`text-[10px] md:text-xs font-bold border px-2 py-1 rounded-md uppercase tracking-wider inline-block ${String(task.type || '').trim().toLowerCase() === 'nghỉ phép' ? 'text-teal-700 bg-teal-50 border-teal-200' : 'text-purple-700 bg-purple-50 border-purple-100'}`}>
+                                                        {task.type}
+                                                    </span>
+                                                    {task.status === 'Đang xử lý' && String(task.type || '').trim().toLowerCase() !== 'nghỉ phép' && (
+                                                        <span className="text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200">
+                                                            KPI: Chưa đạt (Đang xử lý)
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 {getNormalizedErrorLevel(task) && (
                                                     <div className="mt-2 flex gap-1 flex-wrap">
                                                         <span className="text-[10px] bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">{getErrorLevelDisplay(task)}</span>
-                                                        <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${evaluateTaskKpiStatus(task, sysSettings) === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {evaluateTaskKpiStatus(task, sysSettings)}</span>
+                                                        {task.status === 'Hoàn thành' && (
+                                                            <span className={`text-[10px] px-2 py-1 rounded-md font-bold border whitespace-nowrap ${evaluateTaskKpiStatus(task, sysSettings) === 'Đạt' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>KPI: {evaluateTaskKpiStatus(task, sysSettings)}</span>
+                                                        )}
                                                         <span className="text-[10px] bg-slate-100 text-slate-700 border border-slate-200 px-2 py-1 rounded-md font-bold whitespace-nowrap">
                                                             Trễ/Sớm: {calculateEarlyLateStr(task, sysSettings)}
                                                         </span>
@@ -3773,7 +3794,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       };
 
       if (finalData.type === 'Sửa chữa đột xuất') {
-          finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
+          finalData.kpiStatus = finalData.status === 'Hoàn thành' && isKpiPassed ? 'Đạt' : 'Không đạt';
       } else {
           delete finalData.errorLevel;
           delete finalData.approvedTime;
@@ -4044,7 +4065,7 @@ const MachineLogFormView = ({ user, inventory, selectedMachine, setView, showNot
       
       const finalData = { ...formData };
       if (finalData.type === 'Sửa chữa đột xuất') {
-          finalData.kpiStatus = isKpiPassed ? 'Đạt' : 'Không đạt';
+          finalData.kpiStatus = finalData.status === 'Hoàn thành' && isKpiPassed ? 'Đạt' : 'Không đạt';
       } else {
           delete finalData.errorLevel;
           delete finalData.approvedTime;
