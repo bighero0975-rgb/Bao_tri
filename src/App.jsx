@@ -184,6 +184,8 @@ const formatDurationMinutes = (mins) => {
   return `${hours}h ${m}p`;
 };
 
+const calculateWorkTime = (start, end) => formatDurationMinutes(getActualWorkMinutes(start, end));
+
 const getNormalizedErrorLevel = (task) => {
   if (!task || !task.type || !String(task.type).trim().toLowerCase().includes('đột xuất')) return '';
   if (!task.errorLevel) return '1';
@@ -2864,6 +2866,19 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
   const [isKpiModalOpen, setIsKpiModalOpen] = useState(false);
   const [selectedKpiUsers, setSelectedKpiUsers] = useState([]);
   const [attendanceModalInfo, setAttendanceModalInfo] = useState(null);
+  const [isMobileActionMenuOpen, setIsMobileActionMenuOpen] = useState(false);
+  const [showMobileExtraFilters, setShowMobileExtraFilters] = useState(false);
+  const mobileMenuRef = useRef(null);
+
+  useEffect(() => {
+      const handleClickOutsideMenu = (event) => {
+          if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
+              setIsMobileActionMenuOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutsideMenu);
+      return () => document.removeEventListener('mousedown', handleClickOutsideMenu);
+  }, []);
 
   const techUsers = usersList.filter(u => u.role !== 'admin');
 
@@ -3361,156 +3376,256 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
               ]);
 
               // Apply style viền, căn lề và wrap text
-              row.eachCell(c => {
-                  c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+              row.eachCell({ includeEmpty: true }, (c, colNumber) => {
                   c.border = thinBorder;
+                  if (colNumber === 7 || colNumber === 8) {
+                      c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                  } else {
+                      c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                  }
               });
-
-              // Căn giữa cho các cột như hình yêu cầu
-              row.getCell(1).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(2).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(3).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(4).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(5).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(6).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-              row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           });
 
-          // Xuất và tải file 
           const buffer = await workbook.xlsx.writeBuffer();
           const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
-          link.download = `So_Cong_Viec_${startDate}_den_${endDate}.xlsx`;
+          link.download = `So_Ghi_Cong_Viec_${startDate || 'all'}_${endDate || 'all'}.xlsx`;
           link.click();
-          showNotification('Đã xuất file Excel thành công!');
+          showNotification('Đã xuất file Excel Sổ Ghi Công Việc thành công!');
       } catch (err) {
           console.error(err);
-          showNotification('Lỗi xuất file. Đang tải lại thư viện...', 'error');
+          showNotification('Lỗi khi xuất file Excel!', 'error');
       } finally {
           setIsExporting(false);
       }
   };
 
-  const calculateWorkTime = (start, end) => {
-      if (!start || !end) return '--';
-      const actualMins = getActualWorkMinutes(start, end);
-      return formatDurationMinutes(actualMins);
-  };
-
   return (
     <div className="flex flex-col h-full bg-slate-50 relative animate-fade-in">
-        <CustomConfirmModal isOpen={deleteModal.isOpen} title="Xóa công việc" message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác." onConfirm={handleConfirmDelete} onCancel={() => setDeleteModal({ isOpen: false, id: null })} />
+        <CustomConfirmModal
+            isOpen={deleteModal.isOpen}
+            title="Xóa công việc"
+            message="Bạn có chắc chắn muốn xóa báo cáo công việc này? Hành động này không thể hoàn tác."
+            onConfirm={handleConfirmDelete}
+            onCancel={() => setDeleteModal({ isOpen: false, id: null })}
+        />
 
         {isKpiModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm animate-fade-in">
-                <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-lg shadow-2xl border border-slate-100 flex flex-col max-h-[85vh]">
-                    <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-purple-100 text-purple-600 p-3 rounded-2xl"><FileSpreadsheet className="w-6 h-6" /></div>
-                            <div>
-                                <h3 className="font-bold text-lg md:text-xl text-slate-800">Xuất Báo Cáo KPI (Excel)</h3>
-                                <p className="text-xs text-slate-500 mt-0.5">Mỗi nhân sự được chọn sẽ xuất thành 1 Sheet riêng</p>
-                            </div>
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fade-in" onClick={() => setIsKpiModalOpen(false)}>
+                <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-5 bg-purple-700 text-white flex items-center justify-between">
+                        <div>
+                            <h3 className="font-black text-base md:text-lg flex items-center gap-2">
+                                <FileSpreadsheet className="w-5 h-5" /> Xuất Báo Cáo KPI (Excel)
+                            </h3>
+                            <p className="text-xs text-purple-100 mt-0.5">Chọn nhân sự cần xuất phiếu đánh giá KPI</p>
                         </div>
-                        <button onClick={() => setIsKpiModalOpen(false)} className="p-2 text-slate-400 hover:text-red-500 rounded-full hover:bg-slate-100 transition-colors"><X className="w-6 h-6" /></button>
+                        <button onClick={() => setIsKpiModalOpen(false)} className="p-1.5 rounded-full hover:bg-purple-600 text-purple-100 hover:text-white">
+                            <X className="w-5 h-5" />
+                        </button>
                     </div>
 
-                    <div className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-2xl border border-purple-100 mb-4">
-                        <label className="flex items-center space-x-3 cursor-pointer flex-1" onClick={toggleSelectAllKpiUsers}>
-                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${selectedKpiUsers.length === techUsers.length && techUsers.length > 0 ? 'bg-purple-600 border-purple-600' : 'bg-white border-slate-300'}`}>
-                                {selectedKpiUsers.length === techUsers.length && techUsers.length > 0 && <CheckCircle className="w-4 h-4 text-white" />}
-                            </div>
-                            <span className="font-bold text-purple-900 text-sm md:text-base">Chọn tất cả nhân sự ({techUsers.length})</span>
-                        </label>
-                        <span className="text-xs font-bold text-purple-700 bg-white px-2.5 py-1 rounded-lg border border-purple-200">
-                            Đã chọn: {selectedKpiUsers.length}
+                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-600">
+                            Đã chọn: <b className="text-purple-700">{selectedKpiUsers.length}</b> / {techUsers.length} KTV
                         </span>
+                        <button
+                            type="button"
+                            onClick={toggleSelectAllKpiUsers}
+                            className="text-xs font-bold text-purple-700 hover:text-purple-900 bg-purple-100 px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                            {selectedKpiUsers.length === techUsers.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                        </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 mb-6">
-                        {techUsers.length === 0 ? (
-                            <div className="text-center text-slate-400 py-8">Chưa có tài khoản Kỹ thuật viên nào.</div>
-                        ) : (
-                            techUsers.map(u => {
-                                const isChecked = selectedKpiUsers.includes(u.username);
-                                return (
-                                    <div key={u.id} onClick={() => toggleSelectKpiUser(u.username)} className={`p-3.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${isChecked ? 'bg-purple-50/60 border-purple-300 shadow-sm' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}>
-                                        <div className="flex items-center space-x-3 overflow-hidden">
-                                            <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isChecked ? 'bg-purple-600 border-purple-600' : 'bg-white border-slate-300'}`}>
-                                                {isChecked && <CheckCircle className="w-4 h-4 text-white" />}
-                                            </div>
-                                            <div className="truncate">
-                                                <p className={`font-bold text-sm md:text-base truncate ${isChecked ? 'text-purple-900' : 'text-slate-700'}`}>{u.name}</p>
-                                                <p className="text-xs text-slate-500 truncate">
-                                                    {u.employeeId ? `Mã NV: ${u.employeeId} • ` : ''}{u.position || 'Kỹ thuật viên'} {u.department ? `(${u.department})` : ''}
-                                                </p>
-                                            </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
+                        {techUsers.map((u) => {
+                            const isChecked = selectedKpiUsers.includes(u.username);
+                            return (
+                                <div
+                                    key={u.id}
+                                    onClick={() => toggleSelectKpiUser(u.username)}
+                                    className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${isChecked ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-5 h-5 rounded-md border flex items-center justify-center ${isChecked ? 'bg-purple-600 border-purple-600 text-white' : 'border-slate-300 bg-white'}`}>
+                                            {isChecked && <CheckCircle className="w-3.5 h-3.5" />}
+                                        </div>
+                                        <div>
+                                            <p className="text-sm">{u.name}</p>
+                                            <p className="text-[11px] font-mono text-slate-500">{u.employeeId || u.username}</p>
                                         </div>
                                     </div>
-                                );
-                            })
-                        )}
+                                </div>
+                            );
+                        })}
                     </div>
 
-                    <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
-                        <button onClick={() => setIsKpiModalOpen(false)} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm md:text-base transition-colors">Hủy</button>
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                        <button onClick={() => setIsKpiModalOpen(false)} className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs md:text-sm font-bold hover:bg-slate-100">
+                            Hủy
+                        </button>
                         <button
-                            disabled={selectedKpiUsers.length === 0 || isExporting}
-                            onClick={() => {
-                                const usersToExport = techUsers.filter(u => selectedKpiUsers.includes(u.username));
-                                handleExportKPI(usersToExport);
-                            }}
-                            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-bold text-sm md:text-base shadow-lg shadow-purple-500/30 transition-all flex items-center gap-2"
+                            onClick={() => handleExportKPI(techUsers.filter(u => selectedKpiUsers.includes(u.username)))}
+                            className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs md:text-sm font-bold shadow-md flex items-center gap-1.5"
                         >
-                            <Download className="w-5 h-5" /> Xuất ({selectedKpiUsers.length} Sheet)
+                            <Download className="w-4 h-4" /> Xuất File KPI
                         </button>
                     </div>
                 </div>
             </div>
         )}
 
-        <div className="p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-10">
-            <div className="max-w-7xl mx-auto space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center space-x-3">
-                        <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-2 -ml-2 hover:bg-slate-100 rounded-full transition-colors"><ArrowLeft className="w-6 h-6 md:w-7 md:h-7 text-slate-600" /></button>
-                        <h2 className="font-bold text-slate-800 text-lg md:text-2xl flex items-center">{viewTitle}</h2>
-                        <button
-                            onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
-                        >
-                            <Plus className="w-4 h-4 md:w-5 md:h-5" />
-                            <span>Tạo báo cáo mới</span>
+        <div className="p-3 sm:p-4 md:p-6 border-b border-slate-100 bg-white shrink-0 shadow-sm z-20">
+            <div className="max-w-7xl mx-auto space-y-2.5 md:space-y-3">
+                {/* HÀNG 1: TIÊU ĐỀ & NÚT THAO TÁC (TINH GỌN TRÊN ĐIỆN THOẠI, ĐẦY ĐỦ TRÊN MÁY TÍNH) */}
+                <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <button onClick={() => setView(user.role === 'admin' ? 'dashboard' : 'home')} className="p-1.5 sm:p-2 -ml-1.5 hover:bg-slate-100 rounded-full transition-colors shrink-0">
+                            <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 text-slate-600" />
                         </button>
+                        <h2 className="font-bold text-slate-800 text-base sm:text-xl md:text-2xl truncate whitespace-nowrap">{viewTitle}</h2>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                        {taskFilter !== 'pending' && (
-                            <button disabled={isExporting} onClick={openKpiExportModal} className="shrink-0 bg-purple-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
-                                <FileSpreadsheet className="w-4 h-4 md:w-5 md:h-5"/> <span>Xuất KPI</span>
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                        <button
+                            onClick={() => { setInitialTaskData(null); setEditTaskData(null); setView('daily_task_form'); }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-xs hover:shadow-md transition-all active:scale-95 flex items-center gap-1.5 shrink-0"
+                        >
+                            <Plus className="w-4 h-4 md:w-5 md:h-5" />
+                            <span className="md:hidden">Tạo mới</span>
+                            <span className="hidden md:inline">Tạo báo cáo mới</span>
+                        </button>
+
+                        {/* MENU TÁC VỤ GỌN CHO ĐIỆN THOẠI (XUẤT KPI, ĐỒNG BỘ SHEET, XUẤT EXCEL) */}
+                        <div className="relative md:hidden" ref={mobileMenuRef}>
+                            <button
+                                type="button"
+                                onClick={() => setIsMobileActionMenuOpen(prev => !prev)}
+                                className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors"
+                                title="Xuất báo cáo & Đồng bộ"
+                            >
+                                <FileSpreadsheet className="w-4 h-4 text-purple-600" />
+                                <span>Xuất</span>
+                                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isMobileActionMenuOpen ? 'rotate-180' : ''}`} />
                             </button>
-                        )}
-                        <button disabled={isExporting} onClick={() => handleSyncAllDailyTasksToSheet(dailyTasks)} className="shrink-0 bg-blue-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50" title="Đẩy toàn bộ dữ liệu Sổ ghi công việc hiện tại lên Google Sheet">
-                            <Cloud className="w-4 h-4 md:w-5 md:h-5"/> <span>Đồng bộ Sheet</span>
-                        </button>
-                        <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
-                            <Download className="w-4 h-4 md:w-5 md:h-5"/> <span>Xuất Excel</span>
-                        </button>
+
+                            {isMobileActionMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fade-in">
+                                    {taskFilter !== 'pending' && (
+                                        <button
+                                            disabled={isExporting}
+                                            onClick={() => { setIsMobileActionMenuOpen(false); openKpiExportModal(); }}
+                                            className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-purple-700 hover:bg-purple-50 flex items-center gap-2.5 disabled:opacity-50"
+                                        >
+                                            <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                                            <span>Xuất Báo Cáo KPI</span>
+                                        </button>
+                                    )}
+                                    <button
+                                        disabled={isExporting}
+                                        onClick={() => { setIsMobileActionMenuOpen(false); handleSyncAllDailyTasksToSheet(dailyTasks); }}
+                                        className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-blue-700 hover:bg-blue-50 flex items-center gap-2.5 disabled:opacity-50"
+                                    >
+                                        <Cloud className="w-4 h-4 shrink-0" />
+                                        <span>Đồng bộ Google Sheet</span>
+                                    </button>
+                                    <button
+                                        disabled={isExporting}
+                                        onClick={() => { setIsMobileActionMenuOpen(false); handleExportExcel(); }}
+                                        className="w-full px-3.5 py-2.5 text-left text-xs font-bold text-emerald-700 hover:bg-emerald-50 flex items-center gap-2.5 disabled:opacity-50"
+                                    >
+                                        <Download className="w-4 h-4 shrink-0" />
+                                        <span>Xuất Excel Sổ CV</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* CỤM NÚT ĐẦY ĐỦ TRÊN MÁY TÍNH */}
+                        <div className="hidden md:flex items-center gap-2">
+                            {taskFilter !== 'pending' && (
+                                <button disabled={isExporting} onClick={openKpiExportModal} className="shrink-0 bg-purple-600 text-white px-3.5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-purple-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                    <FileSpreadsheet className="w-5 h-5"/> <span>Xuất KPI</span>
+                                </button>
+                            )}
+                            <button disabled={isExporting} onClick={() => handleSyncAllDailyTasksToSheet(dailyTasks)} className="shrink-0 bg-blue-600 text-white px-3.5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-blue-700 transition-colors flex items-center gap-1.5 disabled:opacity-50" title="Đẩy toàn bộ dữ liệu Sổ ghi công việc hiện tại lên Google Sheet">
+                                <Cloud className="w-5 h-5"/> <span>Đồng bộ Sheet</span>
+                            </button>
+                            <button disabled={isExporting} onClick={handleExportExcel} className="shrink-0 bg-green-600 text-white px-3.5 py-2.5 rounded-xl text-sm font-bold shadow-sm hover:bg-green-700 transition-colors flex items-center gap-1.5 disabled:opacity-50">
+                                <Download className="w-5 h-5"/> <span>Xuất Excel</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-100">
+                {/* HÀNG 2 (ĐIỆN THOẠI): THANH LỌC 1 DÒNG SIÊU GỌN + NÚT MỞ RỘNG KTV/NGÀY */}
+                <div className="md:hidden space-y-2 pt-2 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                        {taskFilter !== 'pending' && (
+                            <VietnameseMonthPicker
+                                value={selectedReportMonth}
+                                onChange={(val) => handleSelectMonthPeriod(val)}
+                                className="px-2.5 py-1.5 bg-purple-50 border border-purple-200 rounded-xl text-xs outline-none text-purple-900 font-bold shrink-0"
+                            />
+                        )}
+                        <select
+                            value={filterType}
+                            onChange={e => setFilterType(e.target.value)}
+                            className="flex-1 min-w-0 px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold truncate"
+                        >
+                            <option value="all">Tất cả phân loại</option>
+                            <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
+                            <option value="Chế tạo máy">Chế tạo máy</option>
+                            <option value="Sửa chữa đột xuất">Sửa chữa đột xuất</option>
+                            <option value="Nghỉ phép">Nghỉ phép</option>
+                        </select>
+                        <button
+                            type="button"
+                            onClick={() => setShowMobileExtraFilters(prev => !prev)}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1 shrink-0 transition-colors ${showMobileExtraFilters || filterTech !== 'all' ? 'bg-purple-100 text-purple-800 border-purple-300' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+                        >
+                            <Filter className="w-3.5 h-3.5" />
+                            <span>Lọc</span>
+                            {filterTech !== 'all' && <span className="w-1.5 h-1.5 rounded-full bg-purple-600"></span>}
+                        </button>
+                    </div>
+
+                    {showMobileExtraFilters && (
+                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-2 animate-fade-in">
+                            {user.role === 'admin' && (
+                                <select
+                                    value={filterTech}
+                                    onChange={e => setFilterTech(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"
+                                >
+                                    <option value="all">Tất cả KTV</option>
+                                    {usersList.filter(u => u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}
+                                </select>
+                            )}
+                            {taskFilter !== 'pending' && (
+                                <div className="flex items-center justify-between gap-1.5 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
+                                    <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 min-w-0 bg-transparent text-xs outline-none text-slate-700 font-bold" />
+                                    <span className="text-slate-400 font-bold">-</span>
+                                    <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 min-w-0 bg-transparent text-xs outline-none text-slate-700 font-bold" />
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                {/* HÀNG 2 (MÁY TÍNH): BỘ LỌC ĐẦY ĐỦ NHÂN VIÊN, PHÂN LOẠI & THỜI GIAN */}
+                <div className="hidden md:flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-100">
                    {user.role === 'admin' && (
-                      <div className="relative min-w-[180px] flex-1 sm:flex-initial">
-                          <Filter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
+                      <div className="relative min-w-[180px]">
+                          <Filter className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                          <select value={filterTech} onChange={e => setFilterTech(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold"><option value="all">Tất cả KTV</option>{usersList.filter(u=>u.role !== 'admin').map(u => <option key={u.id} value={u.username}>{u.name}</option>)}</select>
                       </div>
                    )}
-                   <div className="relative min-w-[190px] flex-1 sm:flex-initial">
-                       <ListFilter className="absolute left-3 top-2.5 md:top-3 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                       <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full pl-9 md:pl-10 pr-4 py-2 md:py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
+                   <div className="relative min-w-[190px]">
+                       <ListFilter className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
+                       <select value={filterType} onChange={e => setFilterType(e.target.value)} className="w-full pl-10 pr-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500 text-slate-700 font-bold">
                            <option value="all">Tất cả phân loại</option>
                            <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
                            <option value="Chế tạo máy">Chế tạo máy</option>
@@ -3524,12 +3639,12 @@ const DailyTaskHistoryView = ({ dailyTasks, usersList, setView, user, taskFilter
                                value={selectedReportMonth}
                                onChange={(val) => handleSelectMonthPeriod(val)}
                                title={`Chọn nhanh kỳ tháng (Từ ngày ${monthStartDay} tháng trước đến ngày ${Number(monthStartDay) === 1 ? 'cuối tháng' : Number(monthStartDay) - 1 + ' tháng này'})`}
-                               className="px-3.5 py-2 md:py-2.5 bg-purple-50 border border-purple-200 rounded-xl text-xs md:text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold shrink-0"
+                               className="px-3.5 py-2.5 bg-purple-50 border border-purple-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-500 text-purple-900 font-bold shrink-0"
                            />
                            <div className="flex items-center gap-1.5 bg-slate-100 border border-slate-200 rounded-xl px-2.5 py-1.5 shrink-0">
-                               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-xs md:text-sm outline-none text-slate-700 font-bold" />
+                               <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent text-sm outline-none text-slate-700 font-bold" />
                                <span className="text-slate-400 font-bold">-</span>
-                               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-xs md:text-sm outline-none text-slate-700 font-bold" />
+                               <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent text-sm outline-none text-slate-700 font-bold" />
                            </div>
                        </div>
                    )}
