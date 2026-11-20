@@ -3831,7 +3831,7 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
       startTime: isEditing ? editTaskData.startTime : (isMissingFill ? '07:30' : nowStr), 
       endTime: isEditing ? editTaskData.endTime : (isMissingFill ? '17:00' : nowStr),
       taskName: sourceData ? sourceData.taskName : '', 
-      type: sourceData ? sourceData.type : 'Bảo dưỡng định kỳ', 
+      type: sourceData ? sourceData.type : 'Sửa chữa đột xuất', 
       errorLevel: sourceData && sourceData.errorLevel ? String(sourceData.errorLevel).replace(/\D/g, '') || '1' : '1',
       approvedTime: sourceData && sourceData.approvedTime ? sourceData.approvedTime : (sysSettings?.error_times?.level3 || 24),
       note: isEditing ? editTaskData.note : '', 
@@ -3973,10 +3973,10 @@ const DailyTaskFormView = ({ user, inventory, setView, showNotification, handleS
                                   }
                               }}
                           >
-                                <option>Bảo dưỡng định kỳ</option>
-                                <option>Chế tạo máy</option>
-                                <option>Sửa chữa đột xuất</option>
-                                <option>Nghỉ phép</option>
+                                <option value="Sửa chữa đột xuất">Sửa chữa đột xuất</option>
+                                <option value="Bảo dưỡng định kỳ">Bảo dưỡng định kỳ</option>
+                                <option value="Chế tạo máy">Chế tạo máy</option>
+                                <option value="Nghỉ phép">Nghỉ phép</option>
                           </select>
                       </div>
                   </div>
